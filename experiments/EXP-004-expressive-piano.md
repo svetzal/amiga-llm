@@ -590,7 +590,9 @@ percentiles are weighted by time. The survey reproduces the table at the
 top of this file for keys held, the ringing maximum and the pedal share,
 but gives the nocturne's ringing 95th percentile as 31, not 21. The script
 behind that first table was not kept, so I cannot say which is the
-earlier method's slip; the survey's is in code, with tests.
+earlier method's slip; the survey's is in code, with tests. (Later: the
+script was kept after all; see "the first polyphony table's method"
+below.)
 
 The ten pieces, in menu order. "Cut" is notes cut while held at Paula
 volume 4 or more, a minute; "melody" is the part of those stolen while
@@ -791,3 +793,304 @@ nothing in the register writes.
 Next: Stacey chooses pieces from the menu in the emulator, and then boots
 the floppy on her A500, where each piece's CPU figures and free memory are
 printed when it ends.
+
+### 2026-11-07: the first polyphony table's method (host tier)
+
+The polyphony columns of the table at the top of this file came from
+`runs/exp004/scripts/first-table-poly.py` (not tracked; Stacey kept it).
+It takes the counts after every MIDI message, so its percentiles are
+weighted by events, and the events include the pedal and other control
+messages: the nocturne has 2,901 sustain messages against 1,498 notes, and
+most of them fall while the pedal is changing. The survey
+(`survey.polyphony`) weights each count by how long it lasts. That is why
+the nocturne's ringing 95th percentile is 21 in the first table and 31 in
+the survey. The survey's measure, weighted by time, is the one this
+experiment uses from "More pieces" on.
+
+### 2026-11-07: the player's own screen (host and machine tier)
+
+Stacey's design (2026-11-07): replace the CLI menu with a screen. The
+title picture with the song list drawn into it, the playing piece's line
+in gold, five scopes on the floor, a click or a key to choose, and full
+credits on the disk. Machine-tier runs are Amiberry 8.5.0 on the Mac, the
+`a500` machine as before (Kickstart 1.2, 68000 at the NTSC clock, OCS,
+512 KB chip plus 512 KB slow RAM, cycle-exact). Nothing has run on the real
+A500 yet.
+
+#### The picture (host tier)
+
+`examples/piano/art/piano-title-master.png` (1536x1024, generated with
+OpenAI's image API from `piano-title.json`, Stacey's files) becomes the
+screen in `tools/amiga_env/piano/picture.py`, as Stacey specified: the
+left 4:3 area (x 0 to 1365), Lanczos to 320x200, gamma 0.8, k-means of 13
+colours weighted by 1 + 6 x luminance / 255 (seed 1, 40 iterations), each
+colour snapped to OCS 12-bit (multiples of 17), the distinct ones sorted by
+luminance, and Floyd-Steinberg over the whole picture. Its pixels are
+identical to the prototype's `runs/exp004/art/p3-fs.png` (mode `all`):
+none of the 64,000 differ. It takes about 1 s on the Mac. The recipe's
+`[screen.picture]` table holds the settings.
+
+| Registers | Colours |
+| --- | --- |
+| 0 to 12, the picture | `$001 $012 $013 $112 $211 $223 $421 $136 $333 $654 $864 $B95 $EDB` |
+| 13, all list text | `$EDB`, the picture's ivory; `$B95`, the picture's gold, on the playing line |
+| 14, the four voice traces | `$5BC`, a soft cyan |
+| 15, the mixed trace | `$DB8`, a pale gold |
+
+All 13 colours survived the snapping, so registers 0 to 12 are full.
+
+#### The list and the attribution (host tier)
+
+`screen.py` draws the text into the picture before it is written, in
+register 13. The font is drawn for this project as text,
+`examples/piano/font.txt` (`font.py` reads it): 78 glyphs, 9 rows (capitals
+7, lower case 5, descenders 2), proportional, letters 1 to 5 pixels wide
+(3.9 on average) plus a 1-pixel gap. Not Topaz. Its licence: it is part of
+this repository, which has no licence file yet, and the disk's `Credits`
+shares it on the disk's terms (CC BY-NC-SA 4.0). Choosing the repository's
+licence is Stacey's decision.
+
+The titles are written in the recipe (`title` in each `[[piece]]`), no
+longer taken from MAESTRO's catalogue. The rows are the lines' tops on the
+screen; the player gets them in `screen.i` (`line_tops`).
+
+| Key | Row | Title on the screen | Width (pixels of 128) | MAESTRO's title |
+| --- | --- | --- | --- | --- |
+| 1 | 8 | Chopin  Nocturne Op. 9 No. 2 | 123 | Nocturne Op. 9 No. 2 in E-flat Major |
+| 2 | 19 | Bach  Prelude & Fugue in C | 117 | Prelude and Fugue in C Major, WTC II, BWV 846 (wrong book: BWV 846 is Book I) |
+| 3 | 30 | Bach  Duet in E minor | 91 | Duet in E Minor, BWV 802 |
+| 4 | 41 | Scarlatti  Sonata K. 145 | 101 | Sonata in D Major, K. 145 |
+| 5 | 52 | Haydn  Sonata Hob. XVI:23, I | 125 | Sonata in in F Major, Hob. XVI: 23, I. Allegro moderato ("in in") |
+| 6 | 63 | Mozart  Sonata K. 333, I | 106 | Sonata in B-flat Major, K. 333, I. Allegro |
+| 7 | 74 | Beethoven  Op. 31 No. 3, I | 112 | Sonata No. 18 in E-flat Major, Op. 31 No. 3, First Movement |
+| 8 | 85 | Schubert  Sonata D. 962 | 103 | Sonata in B-flat Major D. 962 |
+| 9 | 96 | Chopin  Nocturne in C# minor | 124 | Nocturne in C-Sharp Minor, Op. Posth. |
+| A | 107 | Debussy  Des pas sur la neige | 127 | Prelude No. 6, Book I, "Des pas sur la neige" |
+
+**Schubert "D. 962" is not verified.** D. 962 is not a Schubert sonata in
+the Deutsch catalogue as I know it (his B-flat sonata is D. 960), and the
+performance is 216 s, much shorter than any movement of D. 960 would
+suggest. The screen shows MAESTRO's label, shortened; which piece the
+recording is needs someone to listen to it. I have not guessed a title.
+
+Two lines of attribution follow the list, in the same font and register:
+"Piano: A. Holm, CC BY 3.0" at row 132 and "MAESTRO, CC BY-NC-SA 4.0" at
+row 143. Stacey's longer examples (160 and 140 pixels) did not fit the 128
+pixels right of the piano.
+
+Checked against the picture: the list sits on the dark wall right of the
+piano (columns 190 to 318; the piano's edge is at column 186) and the
+attribution on the dark floor. `screen.make` refuses text over any picture
+pixel brighter than luminance 50 (the wall's blue speckles, `$136`, are 46;
+the piano's highlights are far brighter). That check moved the attribution
+down: at rows 126 to 130 the floor meets the wall in a line of `$333`.
+`runs/exp004/title-preview.png` shows the result at 4:3 (looked at).
+
+#### The disk
+
+`make piano-disk` now also writes the picture as `title.ilbm` and copies
+`examples/piano/Credits` to the disk as `Credits` (lines of at most 60
+characters, so `type Credits` reads in the boot CLI window). `Credits`
+has the full notices: Salamander Grand Piano V3 by Alexander Holm, CC BY
+3.0, the source and licence URLs and what was changed; MAESTRO v3.0.0 by
+Google LLC (Magenta), recorded at the International Piano-e-Competition,
+CC BY-NC-SA 4.0 with its URL, changed into our score format, so the disk
+and its scores are shared under CC BY-NC-SA 4.0 and not for commercial
+use; the picture, generated with OpenAI's image model from the project's
+own description; and the font.
+
+**The picture's format: an uncompressed IFF ILBM** (`BMHD` 320x200, 4
+planes, no masking, no compression, aspect 10:11; `CAMG` 0; `CMAP` of 16;
+`BODY` with each row's four planes interleaved), 32,116 bytes. Chosen over
+raw planes because other Amiga programs can open it, at the cost of a
+short chunk walk in the player; uncompressed, so the player copies rows and
+does not need a ByteRun1 decoder. `picture.read_ilbm` reads it back in the
+tests.
+
+| Path | Bytes | |
+| --- | --- | --- |
+| `piano` | 338,572 (704 blocks) | the program, 3,244 bytes more than the menu's |
+| `title.ilbm` | 32,116 | |
+| `Credits` | 1,721 | |
+| `scores/...` | as before | |
+| Disk | 1,033 blocks used, 725 free | the test build's disk: 1,034 and 724 |
+
+#### The player (machine tier)
+
+`examples/piano/player.s` keeps the interrupts as they were (one
+millisecond of the model each, the same log) and replaces the CLI menu:
+
+- **The screen.** `OpenScreen` with a `NewScreen` of 320x200, 4 planes,
+  lowres, `CUSTOMSCREEN | SCREENQUIET`; a full-screen `BACKDROP |
+  BORDERLESS | ACTIVATE | RMBTRAP` window with IDCMP `MOUSEBUTTONS |
+  RAWKEY`; `ShowTitle(FALSE)`. The program reads `title.ilbm` with dos,
+  finds `BMHD`, `CMAP` and `BODY`, refuses anything but 320x200, 4 planes
+  and no compression, copies the rows into the screen's planes and loads
+  the 16 colours with `LoadRGB4`. The planes are Intuition's, in chip RAM.
+- **Choosing.** A left click (`SELECTDOWN`) at x 186 or more, on a line's
+  11 rows, chooses that piece; its key does too (1 to 9, then the
+  letters without Q, as many as there are pieces: A for the tenth; raw
+  codes from `keys.i`, which `piano-disk` writes); Esc or Q quits. A
+  choice while a piece plays stops it (its interrupts, Paula and score
+  given back, "stopped" in the status) and starts the new one. After Esc
+  or Q the player closes its window and screen and the boot CLI is back
+  with its prompt (screenshots `emulator-screen-*-end.png`).
+- **The gold line: a user copper list, verified on 1.2.** `UCopperListInit`
+  for 5 instructions: WAIT the line's first row, MOVE `COLOR13` `$B95`,
+  WAIT 9 rows on, MOVE `COLOR13` `$EDB`, CEND; set into the screen
+  viewport's `UCopIns` under `Forbid`, then `MakeScreen` and
+  `RethinkDisplay`; the old list is freed after a `WaitTOF`. How it was
+  verified: the copper list at `COP2LC` (read with Amiberry's
+  `GET_COPPER_STATE` and `READ_MEM`, decoded on the host) held `WAIT
+  74,0`, `MOVE $19A=$0B95`, `WAIT 83,0`, `MOVE $19A=$0EDB` for line 3 (row
+  30; the display starts at line 44), and every screenshot of a piece
+  playing shows its line in gold and the others ivory. Details in
+  `research/toolchain.md`.
+- **The scopes.** Four voice scopes, 36 columns each, at columns 8, 50, 92
+  and 134, and the mix, 132 columns from column 180, all centred on row
+  174 in the floor band (rows 152 to 196, checked against the picture:
+  dark floor, the golden reflection under the left ones). Paula cannot be
+  read, so the player now records, when it starts a channel, what Paula
+  plays: the sample, its period and the millisecond (`V_PSAMPLE`,
+  `V_PPERIOD`, `V_PSTART`), and clears the sample when it stops one. The
+  task copies those and each voice's Paula volume, and works out where
+  Paula is the tracker way: the timer's period is exactly 3,580 Paula
+  clocks, so (ms since the start) x 3,580 / period is the samples played,
+  through the whole sample once and then round its loop. A column is 960
+  Paula clocks (3 samples at period 320); a voice's trace is sample x
+  volume >> 7, clamped to 16 rows; the mix is half the four voices' sum,
+  clamped to 21. Silent voices draw a flat line.
+- **The picture under the scopes stays intact.** Decided: keep a copy of
+  the band (all four planes, 7,200 bytes, in slow RAM) and put back from
+  it. A pixel in register 14 or 15 must set all four planes, so drawing
+  over the picture cannot leave it as it was. Copying the whole band back
+  (with the blitter, and then with the CPU) and plotting after each
+  `WaitTOF` ran at 30 frames a second but tore: screenshots caught the
+  mixed scope half drawn (7 of 20 with the CPU version). Now each scope is a unit
+  that puts back its own last points (four bytes each, one per plane) and
+  plots its new ones; no unit starts while the beam is on the band or
+  within 64 lines above it; and the next traces are made, into a second
+  buffer, while the beam holds the drawing up. In the audio run 30
+  screenshots taken 0.3 s apart all showed every scope whole (`piano-run
+  --scope-shots 30`); the cost is the rate, about 20 frames a second.
+  The task draws; the interrupts never wait for it.
+
+#### The voice logs through the new screen
+
+| Run | How chosen | Piece | Model ticks | Emulator ticks | Result |
+| --- | --- | --- | --- | --- | --- |
+| `emulator-screen-log` | keys 1, 2 | Nocturne Op. 9 No. 2 | 13,380 | 13,380 | identical, every byte |
+| | | BWV 846 | 14,420 | 14,420 | identical, every byte |
+| `emulator-screen-switch` | clicks; the second click 20 s into the nocturne | Nocturne Op. 9 No. 2 | 13,380 | 1,290 (switched) | identical for the 1,290 ticks played |
+| | | BWV 846, after the switch | 14,420 | 14,420 | identical, every byte |
+
+So the screen, the copper list, the scopes and the switch did not change
+the music's register writes. Both runs used warp; the audio run below is
+in real time.
+
+#### The mouse through Amiberry's socket
+
+`SEND_MOUSE dx dy buttons` works: it is relative, and 50 counts moved the
+pointer 12 lowres pixels. `piano-run --click` steers by reading the
+pointer's position from the player's window (`wd_MouseX`, `wd_MouseY`; the
+status block gives the window's address), moving, and reading again, then
+presses and releases button 1. It clicked at (202, 12), (202, 23) and
+(202, 34), each a line's middle row, and the status counted each click.
+`SEND_MOUSE_ABS` replied "Absolute mouse input rejected (check
+coordinates, focus, and active tablet_mode)"; I did not pursue it. Recorded
+in the amiberry skill (plugin 0.6.0).
+
+#### CPU and the scope rate
+
+From the player's own E-clock counts (the scopes' time leaves out the
+player's interrupts and the waits for the beam, but includes the system's
+other interrupts). A frame is 1/60 s, 11,932 E-clock ticks.
+
+| Run, piece | Player | Scopes | Player and scopes | Scope frames a second | Scope frame: drawing / making traces (average E-clock ticks) | Worst millisecond of the player (of 716) |
+| --- | --- | --- | --- | --- | --- | --- |
+| log, nocturne | 18.3% | 54.5% | 72.8% | 19.9 | 11,881 / 7,743 | 708 |
+| log, BWV 846 | 18.4% | 54.5% | 73.0% | 20.0 | 11,663 / 7,842 | 662 |
+| switch, BWV 846 | 18.4% | 54.1% | 72.5% | 19.9 | 12,267 / 7,157 | 664 |
+| audio (real time), BWV 802 | 17.4% | 51.8% | 69.2% | 20.1 | 11,751 / 6,695 | 568 |
+
+Per 1/60 s frame that is about 2,200 E-clock ticks for the player and
+6,500 for the scopes. The scopes' work for one of their frames is about
+19,500 ticks (27 ms), over two frames of the display with the player's
+share added, so they come every third frame: 20 a second. The menu's
+player took 18.5% (nocturne, test build); with the screen it takes 18.3%.
+
+The worst millisecond is the one figure that rose: 639 and 660 E-clock
+ticks of 716 in step 4's test builds, 662 to 708 with the screen. It is measured from
+the timer running out, so it includes how late the interrupt was
+dispatched. A millisecond that ran over 716 would delay the next
+interrupt, not lose it, and the logs stayed identical; but the margin in
+the nocturne is now 8 ticks. Restoring the band with the blitter gave 711
+in the one nocturne run with it, against 663 in one run with the CPU, so I
+dropped the blitter, but two runs do not show that it was the cause. On the
+real A500 this is the number to watch.
+
+#### Memory
+
+| Chip RAM (512 KB, 524,288 bytes) | Bytes |
+| --- | --- |
+| Samples (the program's chip hunk, at `$12920`) | 328,796 |
+| The screen's four planes (Intuition's) | 32,000 |
+| Free while a piece plays (`AvailMem(MEMF_CHIP)`, with the screen open) | 87,296 |
+| Everything else: Kickstart 1.2's own use, the Workbench screen and CLI window, copper lists, the screen's other chip allocations | 76,196 |
+
+With the menu, 119,496 bytes of chip RAM were free while a piece played;
+opening the screen took 32,200 of them. The band copy (7,200), the trace
+table (16,640) and the score are in slow RAM; other memory free while a
+piece plays: 436,392 bytes in the player (BWV 802), about 31,000 in the
+test build with its 400,000-byte log.
+
+#### Audio through the screen
+
+`amiga-env piano-run examples/piano/piano.toml bwv802 --audio --click
+--scope-shots 30` clicked BWV 802's line, recorded the piece in real time
+and pressed Q: `runs/exp004/emulator-screen-audio.wav` (145.5 s; the 44.3 s
+of boot are dropped). Against the host render `runs/exp004/bwv802.wav`:
+RMS -34.0 and -33.4 dBFS, peak -17.1 and -16.6 dBFS, loudness envelopes
+in 10 ms frames correlated at 0.992 over the first 30 s once aligned and
+0.948 over the whole piece.
+
+#### Screenshots looked at
+
+| Screenshot | Shows |
+| --- | --- |
+| `runs/exp004/emulator-screen-switch-idle.png` | the picture, the ten titles and the attribution, all ivory; no scopes; the pointer top left |
+| `...-switch-nocturne-op9-2-clicked.png`, `-playing.png`, `-playing-2.png` | the nocturne's line in gold under the pointer; five scopes, different in the two shots taken a moment apart |
+| `...-switch-bwv846-clicked.png`, `-playing.png` | after a click on the second line while the nocturne played: Bach's line gold, the nocturne's ivory again |
+| `...-switch-bwv846-done.png` | BWV 846 ended: no gold line, no traces, the floor as in the picture |
+| `...-switch-end.png` | after Q: the boot CLI with both pieces' figures and the prompt |
+| `...-audio-bwv802-playing.png`, `-playing-2.png` | the same in real time |
+| `runs/exp004/title-preview.png` | the host's preview of `title.ilbm` |
+
+#### To play it in a window
+
+From the project folder:
+
+```sh
+uv run amiga-env a500 build/piano/piano.adf
+```
+
+The screen appears about 37 s after the boot. Click a title (or press its
+key); Esc or Q quits. `make piano piano-disk` rebuilds the floppy.
+
+#### Where the hypotheses stand
+
+Hypothesis 3 holds through the new screen for both original pieces, in
+full, and through a switch: the screen, the user copper list and the
+scopes do not change the register writes. Hypotheses 1 and 2 are
+unchanged.
+
+Open:
+
+- Schubert "D. 962": which piece the recording is (someone listens).
+- The repository has no licence file, so the font's own terms are only
+  "this disk's terms". Stacey's decision.
+- The worst millisecond, 708 of 716 in the nocturne: watch it on the real
+  A500.
+- The scopes run at 20 frames a second. Drawing is about 60% of their
+  work; fewer points (a narrower mix) or putting back a scope's bytes once
+  instead of once a point would buy 30.

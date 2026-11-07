@@ -139,13 +139,16 @@ an event stream from each MAESTRO performance, and a model of the 68000
 player and Paula that writes a voice log, a WAV and a report to
 `runs/exp004/`. `make piano-disk` assembles the 68000 player
 (`examples/piano/player.s`) onto one boot floppy, `build/piano/piano.adf`,
-with every piece's score as a file under `scores/` and a menu to choose
-from; `build/piano/piano-log.adf` holds the test build, which logs its
-voices. `amiga-env piano-run examples/piano/piano.toml PIECE... --log`
-boots the test build headless on the A500, chooses each piece from the
-menu with key presses, and compares each voice log with the model's;
+with every piece's score as a file under `scores/`, a title screen made on
+the host from `examples/piano/art/` (the song list drawn in, `title.ilbm`)
+and the full notices in `Credits`; `build/piano/piano-log.adf` holds the
+test build, which logs its voices. On the A500 a click on a title, or its
+key, plays it, with its line in gold and scopes on the floor; Esc or Q
+quits. `amiga-env piano-run examples/piano/piano.toml PIECE... --log` boots
+the test build headless on the A500, chooses each piece with a key press
+(or a click, `--click`), and compares each voice log with the model's;
 `--audio` records the player through Amiberry to
-`runs/exp004/emulator-menu.wav`. `amiga-env piano-survey
+`runs/exp004/emulator-screen.wav`. `amiga-env piano-survey
 examples/piano/piano.toml` measures every MAESTRO performance of 2 to 6
 minutes for four voices, for choosing pieces.
 
