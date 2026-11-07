@@ -1,0 +1,11 @@
+{
+  "name": "amiga-dev",
+  "version": "0.1.0",
+  "description": "Skills for developing Commodore Amiga software with an agent, starting with the Amiberry emulator.",
+  "author": {
+    "name": "Stacey Vetzal"
+  },
+  "homepage": "https://github.com/svetzal/amiga-llm",
+  "repository": "https://github.com/svetzal/amiga-llm",
+  "keywords": ["amiga", "amiberry", "emulation", "retrocomputing", "68000"]
+}

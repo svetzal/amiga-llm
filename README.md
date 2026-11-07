@@ -1,10 +1,27 @@
 # amiga-llm
 
-An environment for agent-driven language-model experiments on the Commodore
-Amiga. It follows [coco-llm](https://github.com/svetzal/coco-llm), which
-trained a small language model on a 1981 Tandy Color Computer, and changes
-what that project showed needed changing
-([`research/coco-llm-retrospective.md`](research/coco-llm-retrospective.md)).
+An environment for agent-driven development on the Commodore Amiga: write a
+program on the Mac, build it, boot it on Amiberry with no person at the
+keyboard, and read back what happened. It targets two real machines: a 1 MB
+Amiga 500 on Kickstart 1.2 for demos, games and hardware programs, and an
+Amiga 3000 for desktop applications in C and MUI.
+
+It started as a place for language-model experiments, following
+[coco-llm](https://github.com/svetzal/coco-llm), which trained a small
+language model on a 1981 Tandy Color Computer. Those experiments are still
+one of its uses. [`research/coco-llm-retrospective.md`](research/coco-llm-retrospective.md)
+records what that project showed needed changing.
+
+## Agent skills
+
+This repository is also a Claude Code plugin marketplace. The `amiga-dev`
+plugin holds skills that work in any Amiga project, starting with `amiberry`:
+installing, isolating, booting, driving and observing the emulator.
+
+```text
+/plugin marketplace add svetzal/amiga-llm
+/plugin install amiga-dev@amiga-llm
+```
 
 Status: skeleton. Amiberry installs and runs isolated from the host's own
 settings, licensed media migrates into the project, and a 68000 program
@@ -22,6 +39,7 @@ EXP-001, the headless boot, is still to be run as an experiment.
 - `research/`: durable findings: the emulator, the toolchain, the
   retrospective.
 - `examples/`: small programs for the Amiga, each a known-good boot test.
+- `plugins/amiga-dev/`: the published agent skills.
 - `.tools/` (ignored): downloaded and built tools: Amiberry, vasm, vlink.
 - `runs/` (ignored): emulator state, including Amiberry's private home.
 
@@ -49,10 +67,11 @@ Run Amiberry for this project with:
 uv run amiga-env run [amiberry options]
 ```
 
-To boot the baseline A500 (Kickstart 1.2, Workbench 1.2, NTSC) in a window:
+To boot one of the target machines in a window:
 
 ```sh
-make a500
+make a500     # Kickstart 1.2, Workbench 1.2, NTSC
+make a3000    # Kickstart 3.2, the 3.2 Install floppy, 8 MB fast RAM
 ```
 
 To write a program in 68000 assembly and boot it:

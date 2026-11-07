@@ -52,22 +52,13 @@ because its data directory is inside the bundle.
 `AMIBERRY_HOME_DIR` exists in the binary but did not override the global
 settings file when tried.
 
-## Command-line surface useful for automation
+## Driving Amiberry: see the skill
 
-From `amiberry --help` (v8.5.0):
-
-| Option | Use here |
-| --- | --- |
-| `-f <file>` | load a `.uae` configuration the tools generate |
-| `-G` | start emulation with no GUI |
-| `-s key=value` | set any configuration option directly |
-| `-m VOL:path` | mount a host directory as an Amiga volume |
-| `-0` to `-3 <adf>` | insert floppy images |
-| `-r` / `-K` | main and extended Kickstart ROM |
-| `-w 0` / `-w -1` | cycle-exact CPU or maximum speed |
-| `--statefile` | start from a save state |
-| `--dump-paths` | print every resolved path and exit |
-| `--log` | log to the console |
+How to boot a machine from the command line, check the resolved
+configuration, and drive and observe a run through the control socket is in
+the `amiberry` skill (`plugins/amiga-dev/skills/amiberry/SKILL.md`). That is
+the one place for reusable Amiberry knowledge. This note keeps the evidence
+specific to this repository.
 
 ## Booting the baseline A500 (verified 2026-11-07 on macOS)
 
@@ -77,33 +68,24 @@ OCS, 512 KB chip plus 512 KB slow RAM, and cycle-exact emulation. It reached
 the Workbench 1.2 screen showing "890424 free memory". The Amiga Forever ROM
 is encrypted; Amiberry decrypts it with `rom.key` from the same directory.
 
-## Control socket (verified 2026-11-07 on macOS)
+## Booting the A3000 (verified 2026-11-07 on macOS)
 
-A running Amiberry listens on `/tmp/amiberry.sock`. A command is one line of
-tab-separated fields; the reply starts with `OK` or an error.
+`amiga-env a3000` runs Amiberry's A3000 model with the 3.2 A3000 Kickstart,
+`ntsc=true` and `a3000mem_size=8` (the preset has no fast RAM).
+`--dump-config` shows a 68030 and 68882, ECS, 2 MB chip and 8 MB motherboard
+RAM. With `Workbench3.2.adf` in drive 0 it stayed at the 3.2 insert-disk
+screen ("3.2 ROM (Kickstart Version 47.96)") after 45 seconds, so the profile
+boots `Install3.2.adf`, which reached a 3.2 Workbench screen.
 
-- `GET_STATUS` returned `OK  Paused=false  Config=...  Floppy0=...`.
-- `SCREENSHOT<TAB><path>` wrote a PNG of the emulated display to that path.
-  macOS `screencapture` failed in the same session ("could not create image
-  from display"), so this is the route for screenshots.
+## Control socket evidence (2026-11-07 on macOS)
 
-- `QUIT` replied `OK`; the emulator then exited and removed the socket file
-  (verified 2026-11-07 while booting `build/hello.adf`). The log under the
-  private home shows `IPC: Received QUIT`. This is how a scripted run ends,
-  rather than killing the process.
-
-`GET_STATUS` names the disk in `Floppy0`, which is how a script can tell
-which emulator answered when another may be running.
-
-The binary also names `READ`, `AMEM`, `SEND_MOUSE`, `KEYB`, `INSERTFLOPPY`,
-`EJECT_FLOPPY`, `RESET`, `SAVESTATE`, `LOADSTATE`, `QUICKSAVE` and the
-`AKS_QUIT` action. Their arguments are not yet tried.
-
-Amiberry rewrites its own argument strings after parsing: `ps` showed
-`-s ntsc true` and no `-G` for a run started with `-s ntsc=true -G`. Use
-`GET_STATUS`, not `ps`, to see what a running emulator has loaded. The socket path is
-fixed under `/tmp`, outside the project, and one socket per host means one
-emulator at a time unless it can be moved; check both before relying on it.
+- `SCREENSHOT` wrote the screenshots for the A500 hello boot and both A3000
+  boots, where macOS `screencapture` failed in the same session.
+- `QUIT` ended the hello run cleanly; the log shows `IPC: Received QUIT`.
+- `HELP` returned the full command list, now in the skill's
+  `references/ipc-commands.md`. Its "prefer MCP/HTTP" heading refers to an
+  MCP or HTTP surface that is not in the 8.5.0 macOS binary as far as
+  `strings` shows. Not yet investigated.
 
 ## Hypotheses to test
 
