@@ -50,14 +50,15 @@ That sets `HOME` to `runs/home/` so Amiberry's settings, ROM path, save
 states and screenshots stay inside the project. See
 [`research/emulator.md`](research/emulator.md).
 
+## Performance contract
+
+Stacey's Amiga 500 with 1 MB of memory, at its normal clock rate. It is the
+physical machine timing claims are checked on. The emulated baseline matches
+it; its Kickstart version, memory layout, Agnus and video standard are still
+to be read off the machine. See `AGENTS.md`.
+
 ## Open decisions
 
-- **The performance contract machine.** coco-llm wrote "CoCo 1 at its normal
-  clock rate" on day one. This project needs the same sentence. Candidates: a
-  stock A500 (68000 at 7.09 MHz, OCS, 512 KB chip RAM), the most common
-  Amiga and the most constrained; or a stock A3000 (68030 at 25 MHz, ECS),
-  the machine Stacey owns and can measure. The Z3660 accelerator would be the
-  labelled fast mode, like the CoCo 3 was.
 - **Purpose beyond the environment.** Whether the first model experiment
   repeats coco-llm's live-training thesis at Amiga scale or asks a question
   only the larger machine can answer.

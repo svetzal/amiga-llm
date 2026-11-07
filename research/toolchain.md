@@ -29,6 +29,8 @@ reproducibly instead of keeping hand-made hard-drive images.
 
 ## Physical hardware
 
-Stacey's Amiga 3000 (with a Z3660 accelerator, PiStorm and BlueSCSI material
-in the origin collection) is the likely physical authority. Which machine is
-the performance contract is an open decision, recorded in `README.md`.
+Stacey's 1 MB Amiga 500 is the physical authority and the performance
+contract (see `AGENTS.md`). A 68000 build target with no FPU and no
+32-bit-only instructions follows from that. Getting a program onto the real
+machine (floppy written from an ADF, or a serial transfer) is still to be
+worked out.

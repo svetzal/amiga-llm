@@ -13,6 +13,26 @@ The first product is the environment itself: an agent can build a program,
 put it on an emulated Amiga, run it, and read back what happened, without a
 person at the keyboard. Model work starts when that loop is measured.
 
+## Performance contract
+
+**Stacey's Amiga 500 with 1 MB of memory, at its normal clock rate.** That is a
+68000 at 7.16 MHz (NTSC) or 7.09 MHz (PAL), OCS or ECS chips, no accelerator
+and no hard drive. It was her first Amiga and it is the physical machine every
+timing claim is checked on.
+
+A result that needs a faster or larger machine is reported as a labelled
+option, never in place of a miss on the A500. No fast mode is defined yet.
+
+The emulated baseline profile matches that machine. These facts are not yet
+read off it, so the profile uses Amiberry's A500 defaults until they are:
+
+| Fact | Default until read |
+| --- | --- |
+| Kickstart version | 1.3 (`media/rom/forever/amiga-os-130.rom`) |
+| Memory layout | 512 KB chip plus 512 KB "slow" trapdoor RAM |
+| Agnus (OCS or ECS) | OCS |
+| Video standard | NTSC (the machine is in Canada) |
+
 ## Scope boundary
 
 In scope:
