@@ -165,14 +165,15 @@ def read_done(folder: Path) -> int | None:
 class Emulator:
     """Gateway: one Amiberry process this run started, and its control socket."""
 
-    def __init__(self, args: Sequence[str], log_path: Path):
+    def __init__(self, args: Sequence[str], log_path: Path, env: dict[str, str] | None = None):
+        """`env` adds to the environment, for example to choose SDL's drivers."""
         home.prepare()
         log_path.parent.mkdir(parents=True, exist_ok=True)
         self.log_path = log_path
         self._log = log_path.open("w")
         self._process = subprocess.Popen(
             [str(amiberry.installed_binary()), "--log", *args],
-            env=headless(home.environment()),
+            env=headless(home.environment() | (env or {})),
             stdout=self._log,
             stderr=subprocess.STDOUT,
         )

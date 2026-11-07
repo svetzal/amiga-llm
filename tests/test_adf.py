@@ -86,3 +86,9 @@ def test_a_source_builds_an_executable_and_a_disk_named_after_it():
         Path("/b/hello"),
         Path("/b/hello.adf"),
     )
+
+
+def test_include_folders_and_defines_come_before_the_output():
+    args = vasm_args(Path("/t/vasmm68k_mot"), Path("p.s"), Path("b/p"), [Path("data")], {"LOG": 1})
+
+    assert args[-5:] == ["-Idata", "-DLOG=1", "-o", "b/p", "p.s"]

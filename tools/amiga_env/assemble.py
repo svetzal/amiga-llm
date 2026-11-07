@@ -7,6 +7,7 @@ the 2.0 and later loader reads.
 """
 
 import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from . import adf, project, toolchain
@@ -14,7 +15,17 @@ from . import adf, project, toolchain
 VASM = "vasmm68k_mot"
 
 
-def vasm_args(vasm: Path, source: Path, out: Path) -> list[str]:
+def vasm_args(
+    vasm: Path,
+    source: Path,
+    out: Path,
+    include: Sequence[Path] = (),
+    defines: Mapping[str, int] | None = None,
+) -> list[str]:
+    """vasm's arguments; `include` folders are searched for INCLUDE and INCBIN files,
+    and `defines` set symbols as -D does."""
+    extra = [f"-I{folder}" for folder in include]
+    extra += [f"-D{name}={value}" for name, value in (defines or {}).items()]
     return [
         str(vasm),
         "-quiet",
@@ -22,6 +33,7 @@ def vasm_args(vasm: Path, source: Path, out: Path) -> list[str]:
         "-Fhunkexe",
         "-kick1hunks",
         "-nosym",
+        *extra,
         "-o",
         str(out),
         str(source),
@@ -34,9 +46,14 @@ def outputs(source: Path, build_dir: Path | None = None) -> tuple[Path, Path]:
     return build_dir / source.stem, build_dir / f"{source.stem}.adf"
 
 
-def assemble(source: Path, out: Path) -> Path:
+def assemble(
+    source: Path,
+    out: Path,
+    include: Sequence[Path] = (),
+    defines: Mapping[str, int] | None = None,
+) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
-    args = vasm_args(toolchain.binary(VASM), source, out)
+    args = vasm_args(toolchain.binary(VASM), source, out, include, defines)
     if subprocess.run(args, check=False).returncode != 0:
         raise SystemExit(f"vasm failed on {source}")
     print(f"Wrote {out}")
