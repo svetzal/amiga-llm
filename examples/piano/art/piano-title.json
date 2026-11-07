@@ -1,0 +1,70 @@
+{
+  "ImageRole": "cover",
+  "ContentDescription": "A stylised black Yamaha C5 grand piano (a medium-size concert grand, about 2 metres long), lid raised on the long prop, seen from a low three-quarter angle, placed in the LEFT HALF of the frame on a dark, quiet stage. A single warm spotlight falls on the keyboard and the brass of the pedals. Elegant and restrained, like a 1980s record sleeve for a classical album. The RIGHT 40 percent of the frame is a plain, smooth, very dark blue-black wall with no objects, so a list of titles can be written there later. The bottom quarter is an almost empty dark polished floor with no objects, so oscilloscope traces can be drawn there.",
+  "Layout": {
+    "AspectRatio": "16:9",
+    "TextSafeZone": "right 40 percent and bottom quarter must be dark, smooth and empty",
+    "FocalPoint": "left half",
+    "NegativeSpace": "right 40 percent and bottom quarter empty and dark"
+  },
+  "Style": {
+    "Genre": "Classic 16-bit home computer title screen art, Amiga era, refined and stylised",
+    "Rendering": "Flat stylised shapes with bold, clean edges and a few large gradients; simple enough to survive reduction to 320x200 pixels in 16 colours; no fine textures, no noise, no grain, no small details, no lettering",
+    "Lighting": {
+      "Type": "Single dramatic warm spotlight from above",
+      "Sources": [
+        "Warm spotlight on the keys",
+        "Faint cool rim light along the piano's curve"
+      ],
+      "Shadows": "Deep, smooth, near black"
+    },
+    "ColorPalette": {
+      "Primary": [
+        "Near black",
+        "Deep midnight blue",
+        "Charcoal"
+      ],
+      "Accents": [
+        "Ivory key white",
+        "Warm gold",
+        "Soft amber"
+      ],
+      "Treatment": "Very limited palette of about 12 colours, mostly dark blues and blacks, with ivory and gold highlights only where the light falls"
+    },
+    "Atmosphere": {
+      "Effects": [
+        "Soft pool of light on the floor under the keyboard",
+        "Faint reflection of the piano on the dark floor"
+      ],
+      "Mood": "Classy, calm, nocturnal, intimate"
+    }
+  },
+  "Situation": {
+    "Name": "The nocturne",
+    "Setting": "An empty dark stage, no audience visible, no walls in detail",
+    "Camera": "Low three-quarter view from the front left of the keyboard; the whole piano fits inside the left half of the frame",
+    "Props": {
+      "Conceptual": [
+        {
+          "Name": "Grand piano",
+          "Description": "Black lacquer Yamaha C5 grand piano, lid on the long prop, music desk empty, keys visible",
+          "Application": "Left half, not crossing the centre line",
+          "SymbolicMeaning": "The instrument itself, as the subject"
+        }
+      ]
+    }
+  },
+  "PromptKeywords": [
+    "Amiga title screen",
+    "16 colours",
+    "stylised",
+    "dark",
+    "grand piano",
+    "spotlight",
+    "minimal",
+    "bold shapes",
+    "no text",
+    "empty dark lower third"
+  ],
+  "CompositionNotes": "The final image will be cropped to its central 4:3 area and reduced to 320x200 pixels with 16 colours, so keep shapes large and clear and the palette small. Inside that central 4:3 area: the piano in the left half, an empty dark wall in the right 40 percent, an empty dark floor in the bottom quarter. No text, logos or signatures anywhere."
+}
