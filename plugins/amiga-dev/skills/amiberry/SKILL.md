@@ -1,6 +1,6 @@
 ---
 name: amiberry
-description: Install, isolate, launch, drive and observe the Amiberry Amiga emulator from scripts and agents. Use when booting an emulated Amiga (A500, A1200, A3000 and so on) from the command line, choosing Kickstart ROMs and floppies, checking a configuration before boot, taking screenshots, sending keys or mouse input, reading emulator status, quitting a run cleanly, or keeping Amiberry away from a personal setup. Also use when the user mentions Amiberry, WinUAE-style .uae configurations, amiberry.conf, /tmp/amiberry.sock, Amiga Forever ROMs with rom.key, or wants to test an Amiga program without a person at the keyboard.
+description: Install, isolate, launch, drive and observe the Amiberry Amiga emulator from scripts and agents. Use when booting an emulated Amiga (A500, A1200, A3000 and so on) from the command line, choosing Kickstart ROMs and floppies, checking a configuration before boot, taking screenshots, recording video and sound frame by frame, sending keys or mouse input, reading emulator status, quitting a run cleanly, or keeping Amiberry away from a personal setup. Also use when the user mentions Amiberry, WinUAE-style .uae configurations, amiberry.conf, /tmp/amiberry.sock, Amiga Forever ROMs with rom.key, or wants to test an Amiga program without a person at the keyboard.
 ---
 
 # Amiberry for agents
@@ -11,7 +11,8 @@ an agent can boot a machine, run a program, see the screen and stop the
 machine.
 
 Facts here were verified with Amiberry 8.5.0 (2026-10-27) on macOS unless
-marked otherwise (mouse input and the copper state on 2026-11-07). Check `amiberry --help` and the socket's `HELP` reply when
+marked otherwise (mouse input, the copper state and recording on
+2026-11-07). Check `amiberry --help` and the socket's `HELP` reply when
 the version differs.
 
 ## Install a pinned release
@@ -156,7 +157,7 @@ window an NTSC A500's 320x200 lowres screen is at (60, 48) in the 752x486
 PNG, each pixel 2x2 (Amiberry 8.5.0, macOS).
 
 The list also has `WRITE_MEM`, floppy changes (`INSERTFLOPPY`,
-`EJECT_FLOPPY`), save states, `FRAME_ADVANCE` and a debugger
+`EJECT_FLOPPY`), save states and a debugger
 (`DEBUG_STEP`, `DISASSEMBLE`, breakpoints). These are listed
 by Amiberry but not yet verified here. Avoid `CHOOSE_MEDIA`: it opens a
 system file dialog and blocks the socket until a person answers it.
@@ -190,6 +191,16 @@ Amiga is 10, full separation), `sound_filter=emulated`,
 `sound_filter_type=standard` and `sound_interpol=anti`; pass `-s
 sound_stereo_separation=10` for the real machine's stereo.
 
+### Record a video, frame by frame
+
+Amiberry 8.5.0's audio/video recorder is not compiled in, and the socket's
+`FRAME_ADVANCE` replies `OK` but runs no frame. The release's libretro core
+records exactly: each `retro_run()` gives one emulated frame (752x486
+XRGB8888 for an NTSC A500, the screen at (60, 48), 2x2) and the samples
+made in it, at 59.826 frames a second (NTSC). Give it every option
+yourself; its v0 list puts floppy speed 0 (turbo) first. Details, and how
+to check that its machine is the app's, are in `references/recording.md`.
+
 ## Gotchas
 
 - **A second emulator gets another socket.** When `/tmp/amiberry.sock` is
@@ -206,8 +217,9 @@ sound_stereo_separation=10` for the real machine's stereo.
   the socket.
 - **A GDB stub exists.** The binary has a WinUAE GDB server on `127.0.0.1`.
   How to enable it is not yet verified.
-- **The libretro core.** Releases also ship a libretro core, which a small
-  host could step frame by frame. Not yet tried.
+- **`FRAME_ADVANCE` does nothing.** It needs `PAUSE` first and then replies
+  `OK  n frame(s) advanced`, but no frame runs (see
+  `references/recording.md`). Step frames with the libretro core instead.
 
 ## Keep this skill current
 

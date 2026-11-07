@@ -196,3 +196,50 @@ version 47.4" when the RDB carries a filesystem. An image from `amiga-env
 system export` (built with amitools' rdbtool) booted the 3.2 A3000 ROM to
 Workbench on the 68060 machine. A host-folder volume (`filesystem2`) can be
 mounted beside it; do not give it a device or volume name the RDB uses.
+
+## Recording a run (verified 2026-11-07, Amiberry 8.5.0, macOS)
+
+For EXP-004's video of the piano disk. The reusable facts are in the
+`amiberry` skill's `references/recording.md`; this is the evidence.
+
+**The built-in recorder.** Amiberry's input events include
+`SPC_VIDEORECORD` and `SPC_VIDEORECORDFILE` (WinUAE's), but in the v8.5.0
+source `AVIOUTPUT` is commented out in `src/osdep/sysconfig.h` (line 129),
+there is no `avioutput.cpp`, and the record handler in `inputdevice.cpp` is
+under `#ifdef AVIOUTPUT`. The bundled libavcodec serves `VIDEOGRAB` (genlock
+input). On a running A500, the socket's `SETTINGS_INPUT_EVENTS` did not list
+"Audio/Video recording", and binding it replied `ERROR  Unknown input
+event: Audio/Video recording`. `HOST_SETTINGS_GET video_dir` names a
+`Videos/` folder in the private home; nothing writes there.
+
+**`FRAME_ADVANCE`.** After `PAUSE`, 120 rounds of `FRAME_ADVANCE 1` plus
+`SCREENSHOT` took 2.75 s and the player's vertical blank count (its status
+block at `$100`) stayed at 1217 throughout; `FRAME_ADVANCE 600` returned in
+0.01 s and the count was still 1217. The handler (`HandleFrameAdvance` in
+`amiberry_ipc_socket.cpp`) calls `resumepaused(3)` and `setpaused(3)` back
+to back and caps the count at 100. Not usable for a capture.
+
+**The libretro core.** `amiga-env amiberry` now installs the release's core
+beside the app (`amiberry-libretro-macOS-arm64.dylib`, SHA-256 checked:
+`5e8da355...d626c`). `amiga-env piano-video` hosts it with ctypes
+(`tools/amiga_env/libretro.py`). Measured on the piano disk:
+
+| Check | Found |
+| --- | --- |
+| The core's command line, from its debug log | `--model A500 -s sound_frequency=48000 -s sound_filter=emulated -s sound_stereo_separation=10 -s ntsc=true -G -s amiberry.rom_path=... -r <Kickstart 1.2> -s statefile_path=... <disk>` |
+| The app's `--dump-config` for that line against the a500 profile's own arguments plus the three sound settings | identical except `use_gui` (and `amiga-env piano-video` repeats this check on every recording) |
+| With floppy speed left to the core's v0 list (0, turbo) | the player's preload took 199 vertical blanks and its screen opened at 330; the app: 504 and 788 |
+| With floppy speed 100 | screen at 789 (the app: 788) |
+| Frame | 752x486 XRGB8888; the screen at (60, 48), each lowres pixel exactly 2x2 (rows and columns compared); frames 0 to 133 were 752x484 |
+| Samples | 802.325 a frame (fit over frames 1000 to 4487), so 59.8262 frames a second at 48 kHz: the NTSC rate, 3,579,545 / 227.5 / 263 |
+| Frames 0 and 1 | no samples; after that every frame gave some |
+| Text colours on the piano screen | ivory (238, 221, 187), gold (187, 153, 85): `$EDB` and `$B95` |
+| Speed | about 60 frames a second wall clock; the core paces itself |
+| Two boots of the same disk | the screen opened 4 frames apart (frames 2951 and about 2947) |
+
+A/V sync, from the 75 s test (`runs/video/test`): the player stamped piece
+1's first note in frame 3909 (65.340 s from the first frame); the
+recording's sound passed -42 dBFS 8.6 ms after that frame began. A note
+written inside a 16.7 ms frame puts the offset of sound against picture
+between -8.1 ms and +8.6 ms. The MP4's AAC, decoded, gave the same onset
+to 0.1 ms. The ten pieces of the full run narrow this (EXP-004).
