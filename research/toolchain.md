@@ -145,6 +145,43 @@ From EXP-004, the expressive piano (`examples/piano/player.s`), on Amiberry
   use), where the host reads it with Amiberry's `READ_MEM` without knowing
   where LoadSeg put the program.
 
+## Kickstart 1.2 findings from the piano menu (verified 2026-11-07, machine tier)
+
+From EXP-004, the expressive piano, when the player gained a menu and
+loaded its scores from the floppy (`examples/piano/player.s`), on the same
+Amiberry 8.5.0 A500 model:
+
+- **Single key presses without SetMode.** `SetMode` is a 2.0 call. On 1.2
+  the console handler takes the packet `ACTION_SCREEN_MODE` (994) with
+  `dp_Arg1` -1 for raw mode and 0 for cooked mode. The player builds a
+  `StandardPacket` (a `Message` of 20 bytes, its `ln_Name` pointing at the
+  `DosPacket` of 48 bytes after it), sets `dp_Link` to the message, `dp_Port`
+  and `mn_ReplyPort` to its own process's `pr_MsgPort` (`FindTask(0)` plus
+  `$5C`), `PutMsg`s it to the handler's port (`fh_Type`, offset 8 of the
+  `FileHandle` that the file's BPTR shifted left by 2 points at), then
+  `WaitPort` and `GetMsg` on its own port. After that, `Read(fh, buf, 1)`
+  returns each key at once with no echo: space came as `$20`, z as `$7A`,
+  2 as `$32`. The player sends 0 before it exits, or the CLI is left raw.
+- **Read the keyboard from `*`, not `Input()`.** The player opens `*`
+  (`Open("*", MODE_OLDFILE)`), the CLI's own window, and sends the packet to
+  that handle's handler; that worked from the startup-sequence. It does not
+  use `Input()`, because a program that a script runs gets the script as its
+  input (documented AmigaDOS behaviour; not tried here).
+- **Waiting for a key without spinning.** `WaitForChar(fh, 20000)` (dos
+  offset -204) on the raw `*` handle returns nonzero when a key is
+  waiting and 0 after 20 ms. The player's task sleeps in it while its interrupts play,
+  with no `Forbid`; the voice logs match the model as they did with the
+  task in `Forbid` and spinning.
+- **Loading a whole file.** `Open`, `Seek(fh, 0, OFFSET_END)`, then
+  `Seek(fh, 0, OFFSET_BEGINNING)`, which returns the old position, so the
+  file's size; then `AllocMem(size + 1, MEMF_PUBLIC | MEMF_CLEAR)`, one
+  `Read` of the size, `Close`. With slow RAM fitted, `MEMF_PUBLIC` memory
+  came from it (`$C0xxxx`), leaving chip RAM to the samples.
+- **The boot CLI window is 60 columns.** With no `devs/system-configuration`
+  on the floppy, Kickstart 1.2's own preferences apply, and the boot CLI's
+  text wrapped after 61 characters (screenshot). Lines the player prints
+  are kept to 60.
+
 ## Candidates
 
 | Candidate | What it is | Notes |

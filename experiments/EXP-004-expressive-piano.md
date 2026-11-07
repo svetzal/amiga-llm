@@ -565,3 +565,229 @@ The music starts about 37 s after the boot (the floppy loads 355 KB).
 Next: Stacey listens to the host renders before and after the change and
 to the emulator WAVs; then the floppies on her A500, where the CPU figures
 are printed on the screen at the end of each piece.
+
+### 2026-11-07: one floppy, ten pieces and a menu (host and machine tier)
+
+Stacey asked for one floppy with both pieces, more if they fit, and a very
+simple way to choose. Machine-tier runs here are Amiberry 8.5.0 on the Mac,
+the `a500` machine as in steps 4 and 5. Nothing has run on the real A500
+yet.
+
+#### More pieces: the survey (host tier)
+
+`amiga-env piano-survey examples/piano/piano.toml` (`build.survey`,
+`survey.py`) takes every MAESTRO performance of 2 to 6 minutes (501 of
+1,276), measures keys held and strings ringing, and runs the player model
+over it with this piano to count the notes it cuts while their key or the
+pedal still holds them (`clips.report`). Its table is
+`runs/exp004/survey.csv`. The Salamander layer is now fixed at velocity 64
+in the recipe (it was the median of the pieces' velocities, which was 64),
+so a new piece does not change the samples; the two original pieces'
+clipping numbers below are the ones recorded above.
+
+"Ringing" counts the distinct keys held or kept sounding by the pedal; the
+percentiles are weighted by time. The survey reproduces the table at the
+top of this file for keys held, the ringing maximum and the pedal share,
+but gives the nocturne's ringing 95th percentile as 31, not 21. The script
+behind that first table was not kept, so I cannot say which is the
+earlier method's slip; the survey's is in code, with tests.
+
+The ten pieces, in menu order. "Cut" is notes cut while held at Paula
+volume 4 or more, a minute; "melody" is the part of those stolen while
+their key was down.
+
+| Key | Piece (MAESTRO performance) | Length | Held 95% / max | Ringing 95% / max | Pedal | Cut a minute | Melody a minute | Why |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Chopin, Nocturne Op. 9 No. 2 (2011) | 221 s | 4 / 6 | 31 / 43 | 93% | 281.9 | 7.3 | the target, kept |
+| 2 | Bach, Prelude and Fugue in C major, BWV 846 (2014) | 240 s | 5 / 8 | 5 / 11 | 10% | 37.3 | 29.0 | the control, kept |
+| 3 | Bach, Duet in E minor, BWV 802 (2009) | 132 s | 2 / 4 | 2 / 4 | 1% | 0.0 | 0.0 | the lowest of all 501: two voices, nothing cut |
+| 4 | Scarlatti, Sonata in D major, K. 145 (2014) | 206 s | 3 / 5 | 3 / 8 | 18% | 16.3 | 1.5 | Scarlatti's lowest; clear two-part writing |
+| 5 | Haydn, Sonata in F major, Hob. XVI:23, I (2015) | 208 s | 3 / 5 | 3 / 7 | 5% | 11.8 | 2.0 | Haydn's lowest |
+| 6 | Mozart, Sonata in B-flat major, K. 333, I (2017) | 302 s | 3 / 6 | 4 / 8 | 7% | 14.5 | 1.6 | Mozart's lowest; lyrical |
+| 7 | Beethoven, Sonata No. 18, Op. 31 No. 3, I (2008) | 352 s | 5 / 7 | 7 / 11 | 26% | 78.0 | 21.6 | Beethoven's lowest; no Beethoven under 78 |
+| 8 | Schubert, Sonata in B-flat major "D. 962" (2009) | 216 s | 4 / 7 | 4 / 7 | 4% | 31.3 | 24.7 | Schubert's lowest by three times |
+| 9 | Chopin, Nocturne in C-sharp minor, Op. posth. (2014) | 243 s | 4 / 7 | 14 / 23 | 82% | 136.3 | 6.7 | lyrical; half the target's cuts, and the melody is rarely stolen |
+| A | Debussy, Prelude, Book I No. 6, "Des pas sur la neige" (2018) | 251 s | 5 / 8 | 9 / 14 | 80% | 26.3 | 13.9 | Debussy's lowest by 3.6 times; slow and sparse |
+
+Considered and left out: Schumann's lowest, the Romances Op. 28 Nos. 2 and
+3 (2011), cuts 153.5 a minute with 46.8 of them melody; Brahms's Intermezzo
+Op. 118 No. 6 (171.4), Rachmaninoff's Moment Musical Op. 16 No. 3 (180.6),
+Liszt's lowest, "Feux Follets" (189.0), and Mendelssohn's Rondo Capriccioso
+(323.8). Bach had 103 candidates and filled the 27 lowest places; I kept
+to two Bach pieces so the other composers have room. A second Chopin went
+in over Schumann because its melody survives (6.7 against 46.8 a minute).
+
+The menu text is MAESTRO's composer (the surname) and title, in ASCII, as
+the catalogue has them, including three of its slips: BWV 846 is in the
+first book of the Well-Tempered Clavier, not "WTC II"; Haydn's title says
+"Sonata in in F Major"; and D. 962 is not a Schubert sonata number (D. 960
+is his B-flat sonata), so which piece that performance is, I cannot say
+without listening. A title that does not fit 56 characters loses its last
+clauses: Haydn's and Beethoven's lose the movement.
+
+#### The floppy
+
+`make piano-disk` (`disk.py`) writes `build/piano/piano.adf` and the test
+build `build/piano/piano-log.adf`. Both are OFS with the 1.x bootblock,
+labelled `Piano`:
+
+| Path | What | Blocks |
+| --- | --- | --- |
+| `piano` | the program: code, tables, and the samples as a chip hunk (335,328 bytes) | 698 |
+| `scores/index` | one line a piece: the score's path, a space, its title (748 bytes) | 2 |
+| `scores/01-nocturne-op9-2.score` to `scores/10-debussy-neige.score` | the ten scores, 3,031 to 19,058 bytes, 113,609 in all | 248 |
+| `s/startup-sequence` | `piano` | |
+| All, with the root, bitmap and folders | | 955 used, 803 free of 1,758 |
+
+The 803 free blocks hold about 391,000 bytes of scores. These ten average
+2,875 bytes a minute of music, so about 136 minutes more would fit, some
+32 more pieces of this length. The menu has keys for 34 pieces (1 to 9
+and the letters without Q), 24 more than now, so the keys run out before
+the disk does. Only one score is in memory at a time.
+
+Adding a piece is a line in `examples/piano/piano.toml`, `make piano`
+(which converts it and runs the model) and `make piano-disk`. The program
+is reassembled by that command but does not change.
+
+#### The player's menu
+
+The program (`examples/piano/player.s`) now holds only the samples and
+tables. At the start it loads `scores/index` and splits it into titles.
+`piano` with no argument shows the menu in the boot CLI window; `piano 9
+a` plays pieces 9 and A and ends, with no menu.
+
+- **Single keys on 1.2.** `SetMode` is a 2.0 call. The menu opens `*`, the
+  CLI's window, and puts its console handler in raw mode with an
+  `ACTION_SCREEN_MODE` packet (-1 raw, 0 cooked), sent from the process's
+  own message port. `Read` of one byte then returns each key with no echo
+  and no Return. The details are in `research/toolchain.md`.
+- **Choosing.** 1 to 9 and A play pieces 1 to 10 (a or A); Q quits and
+  puts the console back in cooked mode. Other keys are ignored: a space and
+  a z were, in the test below.
+- **Loading.** The chosen score is read with `Open`, `Seek` to the end and
+  back (which gives its size), `AllocMem(size + 1, MEMF_PUBLIC |
+  MEMF_CLEAR)` and one `Read`, played from there, and freed with `FreeMem`
+  when the piece ends or stops. With slow RAM fitted it loads at
+  `$C0xxxx`.
+- **Playing and stopping.** Each piece starts from a cleared state (voices,
+  time, score, log and the status block's measurements). The interrupts
+  are the same code as before. The task no longer `Forbid()`s and spins:
+  it sleeps in `WaitForChar` on the raw window for 20 ms at a time and
+  checks whether the interrupts have finished the piece. Any key stops the
+  piece (CTRL-C too), and the result line says "Stopped after N frames".
+- **What it prints.** Each piece's title, where its score loaded, free
+  memory while it plays, then the frame count and CPU figures as before,
+  then the menu again. The boot CLI window wraps after 61 characters, so
+  every line is at most 60, and the menu and the last piece's figures fit
+  in the window together.
+
+| Screenshot (looked at) | Shows |
+| --- | --- |
+| `runs/exp004/emulator-menu-menu.png` | the Release 1.2 banner, the player's banner, the ten titles, Q Quit and "Press a key:" |
+| `runs/exp004/emulator-menu-log-scarlatti-k145-playing.png` | Scarlatti chosen with 4: title, score at `$C6CEB8`, free memory, "Playing; press any key to stop." |
+| `runs/exp004/emulator-menu-debussy-neige-done.png` | Debussy chosen with A, finished: its figures above the menu, shown again |
+| `runs/exp004/emulator-menu-stop-nocturne-op9-2-done.png` | the nocturne stopped with Return: "Stopped after 873 frames" and the menu |
+
+#### The voice logs through the menu
+
+`amiga-env piano-run examples/piano/piano.toml PIECE... --log` now boots
+the one test floppy, waits for the menu, presses each piece's key with
+Amiberry's `SEND_KEY` (Amiga raw key codes; verified here, see the
+amiberry skill), waits for the piece to end and the menu to return, reads
+the piece's log, and compares it with the model's. At the end it presses
+Q. One boot played all ten in menu order:
+
+| Key | Piece | Model ticks | Emulator ticks | Result | Player share of the 68000 | Free while playing: chip / other |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Nocturne Op. 9 No. 2 | 13,380 | 13,380 | identical, every byte | 18.5% | 119,496 / 63,440 |
+| 2 | BWV 846 | 14,420 | 14,420 | identical, every byte | 18.6% | 119,496 / 61,560 |
+| 3 | BWV 802 | 7,918 | 7,918 | identical | 18.3% | 119,496 / 67,088 |
+| 4 | Scarlatti K. 145 | 12,408 | 12,408 | identical | 18.7% | 119,496 / 61,512 |
+| 5 | Haydn Hob. XVI:23 | 12,517 | 12,517 | identical | 18.8% | 119,496 / 60,800 |
+| 6 | Mozart K. 333 | 18,133 | 16,666 | identical for the 16,666 ticks the log holds | 18.6% | 119,496 / 56,616 |
+| 7 | Beethoven Op. 31 No. 3 | 21,179 | 16,666 | identical for the 16,666 ticks the log holds | 18.6% | 119,496 / 54,072 |
+| 8 | Schubert "D. 962" | 13,073 | 13,073 | identical | 19.3% | 119,496 / 56,040 |
+| 9 | Nocturne in C-sharp minor | 14,558 | 14,558 | identical | 18.0% | 119,496 / 66,480 |
+| A | Debussy, "Des pas sur la neige" | 15,041 | 15,041 | identical | 17.8% | 119,496 / 70,104 |
+
+The test build's log is 400,000 bytes (277 s), so the two pieces longer
+than that were compared over their first 277 s. Making it longer needs
+more than the slow RAM has left: "other" free memory in the test build is
+about 60 KB with the log allocated.
+
+A second boot (`--stop-after-s 10`, name `emulator-menu-stop`) chose
+BWV 802 and then the nocturne and pressed Return about 15 s into each (the
+host polls once a second in warp): both stopped ("stopped by a key" in the
+status), their logs matched the model's for the 906 and 873 ticks they
+played, and the nocturne, started after a stopped piece, began from a
+clean state.
+
+Without the menu: at the CLI after Q, typing `piano a` (with `SEND_KEY`)
+played Debussy and ended. Its log matched the model's except for its first
+6 bytes, because the host read it after the program had ended and freed it:
+the first 8 bytes held exec's free-memory header (next 0, size 473,440).
+An earlier try, `piano 9 a`, played only A: the player read the first
+argument to decide between the menu and the arguments and then lost it.
+Fixed, and the nocturne and BWV 846 were played again through the menu
+with the fixed build (`emulator-menu-final-log`): both identical, every
+byte.
+
+#### Memory at run time
+
+From the status block while a piece plays (`AvailMem` after the score is
+loaded):
+
+| Build | Chip RAM free | Other memory free |
+| --- | --- | --- |
+| Player, Debussy playing (`emulator-menu.json`) | 119,496 bytes | 470,272 bytes |
+| Test build, with its 400,000-byte log | 119,496 bytes | 54,072 to 70,104 bytes, by score |
+
+Chip RAM holds the samples, 328,794 bytes at `$12920`, where LoadSeg put
+the chip hunk; the score, the index and the program's other hunks are in
+slow RAM. The largest score is 19,058 bytes.
+
+#### CPU, with the task asleep
+
+The share of the 68000 used by the player's interrupts rose a little: the
+nocturne's test build was 18.1% in step 4 and is 18.5% now, BWV 846's
+18.2% and 18.6%. The worst frame is about the same (BWV 846: 3,995 and
+3,999 E-clock ticks). The difference is in when the handlers get called,
+not what they do, since the logs are identical: with the task asleep in
+`WaitForChar` instead of spinning in `Forbid`, other tasks and the
+console's timer requests run during the piece, and the dispatch to the
+CIA handler is measured from the timer running out. That is a guess; I
+have not measured it further.
+
+#### Audio through the menu
+
+`amiga-env piano-run examples/piano/piano.toml debussy-neige --audio` boots
+the player floppy in real time, presses A, records the piece, presses Q,
+and writes `runs/exp004/emulator-menu.wav` (262 s; the 39.7 s before the
+music are dropped). Against the host render `runs/exp004/debussy-neige.wav`
+(no filter): RMS -38.7 and -38.3 dBFS, peak -12.6 and -12.3 dBFS, and the
+loudness envelopes in 10 ms frames correlate at 0.996 over the first 30 s
+once aligned and 0.963 over the whole piece. As before, that says the
+notes are at the same times and levels, not that the sound is the same.
+
+#### To play it in a window
+
+From the project folder:
+
+```sh
+uv run amiga-env a500 build/piano/piano.adf
+```
+
+The menu appears about 37 s after the boot. `make piano piano-disk`
+rebuilds the floppy from the media. The two one-piece floppies of step 4
+are gone; this floppy replaces them.
+
+#### Where the hypotheses stand
+
+Unchanged from step 5. Hypothesis 3 holds through the menu path for all
+ten pieces (eight in full, two over their first 277 s): loading a score
+from the floppy at run time, raw console input and a sleeping task changed
+nothing in the register writes.
+
+Next: Stacey chooses pieces from the menu in the emulator, and then boots
+the floppy on her A500, where each piece's CPU figures and free memory are
+printed when it ends.
