@@ -4,7 +4,6 @@ import pytest
 from amiga_env.piano import disk
 from amiga_env.piano.build import Piece, Recipe
 from amiga_env.piano.samples import SampleSpec
-from amiga_env.piano.survey import Entry
 
 PLAYER = Path(__file__).parents[1] / "examples" / "piano" / "player.s"
 
@@ -20,9 +19,6 @@ class TestMenu:
     def test_q_is_left_for_quit(self):
         assert "Q" not in disk.MENU_KEYS
         assert disk.MENU_KEYS[24:26] == "PR"
-
-    def test_the_player_has_the_same_keys(self):
-        assert f'menu_keys:      dc.b "{disk.MENU_KEYS}"' in PLAYER.read_text()
 
     def test_each_score_is_numbered_in_menu_order_in_the_scores_folder(self):
         entries = disk.menu([("nocturne", "Chopin: N"), ("bwv846", "Bach: P")])
@@ -42,16 +38,6 @@ class TestMenu:
         with pytest.raises(SystemExit):
             disk.menu([("x" * 22, "T")])
 
-    def test_the_menu_lists_keys_titles_and_quit(self):
-        entries = disk.menu([("a", "Bach: Duet"), ("b", "Haydn: Sonata")])
-
-        assert disk.menu_lines(entries) == [
-            " 1  Bach: Duet",
-            " 2  Haydn: Sonata",
-            " Q  Quit",
-            "Press a key: ",
-        ]
-
 
 def test_the_index_has_a_line_a_piece_path_space_title():
     entries = disk.menu([("a", "Bach: Duet in E Minor, BWV 802"), ("b", "Haydn: Sonata")])
@@ -61,31 +47,65 @@ def test_the_index_has_a_line_a_piece_path_space_title():
     )
 
 
-def recipe(*midis):
+def recipe(*titles):
     return Recipe(
         sfz="s.sfz",
         out="runs/x",
-        pieces=tuple(Piece(f"p{n}", m) for n, m in enumerate(midis)),
+        pieces=tuple(Piece(f"p{n}", "m.midi", t) for n, t in enumerate(titles)),
         spec=SampleSpec(),
         budget_bytes=1,
         program_bytes=1,
         velocity_exponent=1.5,
         layer_velocity=64,
-        catalogue="maestro/v3/maestro.csv",
     )
 
 
 class TestTitles:
-    def test_titles_come_from_the_catalogue_entry_for_each_midi_file(self):
-        catalogue = [
-            Entry("Frédéric Chopin", "Nocturne Op. 9 No. 2", 2011, "2011/a.midi", 220.0),
-            Entry("Claude Debussy", "Prelude No. 6", 2018, "2018/b.midi", 250.0),
-        ]
+    def test_titles_come_from_the_recipe(self):
+        assert disk.titles(recipe("Bach  Duet", "Haydn  Sonata")) == ["Bach  Duet", "Haydn  Sonata"]
 
-        found = disk.titles(recipe("maestro/v3/2018/b.midi", "maestro/v3/2011/a.midi"), catalogue)
+    def test_a_piece_without_a_title_is_refused(self):
+        with pytest.raises(SystemExit, match="p1: the recipe gives it no title"):
+            disk.titles(recipe("Bach  Duet", ""))
 
-        assert found == ["Debussy: Prelude No. 6", "Chopin: Nocturne Op. 9 No. 2"]
 
-    def test_a_piece_missing_from_the_catalogue_is_refused(self):
-        with pytest.raises(SystemExit, match="not in"):
-            disk.titles(recipe("maestro/v3/2018/c.midi"), [])
+class TestKeys:
+    def test_each_piece_gets_its_keys_raw_code_in_order(self):
+        assert disk.keys_include(11).splitlines()[1] == (
+            "piece_keys: dc.b $01,$02,$03,$04,$05,$06,$07,$08,$09,$20,$35"
+        )
+
+    def test_every_menu_key_has_a_raw_code(self):
+        assert set(disk.MENU_KEYS) <= disk.RAW_KEYS.keys()
+
+    def test_q_is_left_for_quit(self):
+        assert disk.RAW_KEYS["Q"] == 0x10
+        assert "Q" not in disk.MENU_KEYS
+
+
+class TestCredits:
+    def test_the_disks_credits_name_each_source_its_licence_and_the_changes(self):
+        text = (PLAYER.parent / "Credits").read_text(encoding="ascii")
+
+        disk.check_credits(text)
+        for needed in (
+            "Alexander Holm",
+            "https://creativecommons.org/licenses/by/3.0/",
+            "freepats.zenvoid.org",
+            "8 bits",
+            "Google LLC (Magenta)",
+            "International Piano-e-Competition",
+            "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+            "Not for commercial use",
+            "OpenAI",
+            "font",
+        ):
+            assert needed in text
+
+    def test_a_long_line_is_refused(self):
+        with pytest.raises(SystemExit, match="over 60"):
+            disk.check_credits("x" * 61)
+
+    def test_non_ascii_is_refused(self):
+        with pytest.raises(SystemExit, match="ASCII"):
+            disk.check_credits("Frédéric")

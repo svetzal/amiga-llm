@@ -5,7 +5,8 @@
 sfz = "salamander/SalamanderGrandPianoV3_44.1khz16bit/SalamanderGrandPianoV3.sfz"
 out = "runs/exp004"
 player = "examples/piano/player.s"   # the 68000 player (`amiga-env piano-disk`)
-catalogue = "maestro/maestro-v3.0.0/maestro-v3.0.0.csv"  # titles, and `amiga-env piano-survey`
+credits = "examples/piano/Credits"   # the full notices, as `Credits` on the disk
+catalogue = "maestro/maestro-v3.0.0/maestro-v3.0.0.csv"  # for `amiga-env piano-survey`
 
 # Chip RAM for the samples, the larger score, the player's tables and the
 # program, out of the A500's 512 KB; the rest is left to the system.
@@ -30,45 +31,83 @@ attack_treble_s = 0.4
 loop_s = 0.1
 fade_s = 0.01
 
-# The pieces, in menu order (keys 1 to 9, then letters). Their menu titles are
-# MAESTRO's composer and title for the MIDI file. Chosen with
-# `amiga-env piano-survey`; see EXP-004, "More pieces".
+# The player's screen (screen.py): the title picture with the list drawn in.
+# Rows and columns are lowres pixels of the 320x200 NTSC screen.
+[screen]
+master = "examples/piano/art/piano-title-master.png"
+font = "examples/piano/font.txt"
+list_box = [190, 8, 318, 152]     # left, top, right, bottom: the dark wall and floor
+line_pitch = 11
+attribution = ["Piano: A. Holm, CC BY 3.0", "MAESTRO, CC BY-NC-SA 4.0"]
+attribution_gap = 14              # on the floor, below the bright line where floor meets wall
+text = "EDB"                      # register 13: the picture's ivory
+highlight = "B95"                 # register 13 on the playing line: the picture's gold
+voice_trace = "5BC"               # register 14: soft cyan
+mix_trace = "DB8"                 # register 15: pale gold
+scope_band = [0, 152, 320, 197]   # whole rows, restored from a copy each scope frame
+scope_centre = 174
+voice_scopes = [8, 50, 92, 134]
+voice_scope_width = 36
+mix_scope = [180, 132]            # left, width
+
+[screen.picture]
+colours = 13
+gamma = 0.8
+bright_weight = 6.0
+seed = 1
+iterations = 40
+
+# The pieces, in list order (keys 1 to 9, then letters). Chosen with
+# `amiga-env piano-survey`; see EXP-004, "More pieces". The titles are written
+# here, not taken from MAESTRO's catalogue, which has slips: BWV 846 is in the
+# Well-Tempered Clavier Book I (MAESTRO says WTC II), Haydn's says "in in".
+# Schubert's "D. 962" is MAESTRO's and is not verified (see EXP-004).
 [[piece]]
 name = "nocturne-op9-2"
+title = "Chopin  Nocturne Op. 9 No. 2"
 midi = "maestro/maestro-v3.0.0/2011/MIDI-Unprocessed_06_R3_2011_MID--AUDIO_R3-D3_05_Track05_wav.midi"
 
 [[piece]]
 name = "bwv846"
+title = "Bach  Prelude & Fugue in C"
 midi = "maestro/maestro-v3.0.0/2014/MIDI-UNPROCESSED_16-18_R1_2014_MID--AUDIO_16_R1_2014_wav--1.midi"
 
 [[piece]]
 name = "bwv802"
+title = "Bach  Duet in E minor"
 midi = "maestro/maestro-v3.0.0/2009/MIDI-Unprocessed_06_R1_2009_03-07_ORIG_MID--AUDIO_06_R1_2009_06_R1_2009_03_WAV.midi"
 
 [[piece]]
 name = "scarlatti-k145"
+title = "Scarlatti  Sonata K. 145"
 midi = "maestro/maestro-v3.0.0/2014/MIDI-UNPROCESSED_19-21_R3_2014_MID--AUDIO_21_R3_2014_wav--2.midi"
 
 [[piece]]
 name = "haydn-hob16-23"
+title = "Haydn  Sonata Hob. XVI:23, I"
 midi = "maestro/maestro-v3.0.0/2015/MIDI-Unprocessed_R1_D1-1-8_mid--AUDIO-from_mp3_02_R1_2015_wav--2.midi"
 
 [[piece]]
 name = "mozart-k333"
+title = "Mozart  Sonata K. 333, I"
 midi = "maestro/maestro-v3.0.0/2017/MIDI-Unprocessed_052_PIANO052_MID--AUDIO-split_07-06-17_Piano-e_3-03_wav--3.midi"
 
 [[piece]]
 name = "beethoven-op31-3"
+title = "Beethoven  Op. 31 No. 3, I"
 midi = "maestro/maestro-v3.0.0/2008/MIDI-Unprocessed_09_R1_2008_01-05_ORIG_MID--AUDIO_09_R1_2008_wav--2.midi"
 
 [[piece]]
 name = "schubert-d962"
+title = "Schubert  Sonata D. 962"
 midi = "maestro/maestro-v3.0.0/2009/MIDI-Unprocessed_21_R2_2009_01_ORIG_MID--AUDIO_21_R2_2009_21_R2_2009_03_WAV.midi"
 
 [[piece]]
 name = "nocturne-cs-minor"
+title = "Chopin  Nocturne in C# minor"
 midi = "maestro/maestro-v3.0.0/2014/MIDI-UNPROCESSED_04-05_R1_2014_MID--AUDIO_05_R1_2014_wav--6.midi"
 
 [[piece]]
 name = "debussy-neige"
+title = "Debussy  Des pas sur la neige"
 midi = "maestro/maestro-v3.0.0/2018/MIDI-Unprocessed_Recital16_MID--AUDIO_16_R1_2018_wav--3.midi"

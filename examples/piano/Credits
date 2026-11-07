@@ -1,0 +1,44 @@
+Piano: the expressive piano for the Amiga 500.
+From the amiga-llm project, github.com/svetzal/amiga-llm
+(EXP-004, the expressive piano).
+
+This disk and its scores are shared under the Creative
+Commons Attribution-NonCommercial-ShareAlike 4.0 licence
+(CC BY-NC-SA 4.0), because the performances are.
+Not for commercial use.
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+THE PIANO
+Salamander Grand Piano V3 (2016-12-09), a Yamaha C5,
+by Alexander Holm.
+Licence: Creative Commons Attribution 3.0 (CC BY 3.0),
+https://creativecommons.org/licenses/by/3.0/
+Source: https://freepats.zenvoid.org/Piano/
+SalamanderGrandPiano/
+SalamanderGrandPianoV3+20161209_44khz16bit.tar.xz
+Changed for this disk: one velocity layer and one sample
+every three semitones, converted to 8 bits, resampled to
+Paula's rates, cut to a recorded attack plus a short
+crossfaded loop, and set to new levels, with each sample's
+original level kept for the player.
+
+THE PERFORMANCES
+MAESTRO dataset v3.0.0 by Google LLC (Magenta), MIDI
+recorded at the International Piano-e-Competition.
+Licence: Creative Commons Attribution-NonCommercial-
+ShareAlike 4.0 (CC BY-NC-SA 4.0),
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+Source: https://magenta.tensorflow.org/datasets/maestro
+Changed for this disk: each performance's notes, velocities
+and sustain pedal converted to this player's score format.
+The titles on the screen were written for this disk.
+
+THE PICTURE
+Generated with OpenAI's image model from the project's own
+description (piano-title.json), then cropped, reduced to
+13 colours and dithered for this screen.
+
+THE FONT
+The list's pixel font was drawn for this disk by the
+amiga-llm project (font.txt). It is shared on this disk's
+terms.

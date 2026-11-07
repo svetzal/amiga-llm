@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .. import project
 from . import clips, m68k, paula, player, samples, score, sfz
+from . import screen as screen_mod
 from . import survey as survey_mod
 
 # Bytes the player's tables take in chip or fast RAM, per key and per sample.
@@ -27,6 +28,7 @@ VELOCITY_TABLE_BYTES = 128 * 2
 class Piece:
     name: str
     midi: str  # under media/
+    title: str = ""  # its line on the player's screen
 
 
 @dataclass(frozen=True)
@@ -40,7 +42,9 @@ class Recipe:
     velocity_exponent: float
     layer_velocity: int | None  # None: the median velocity of all the pieces
     player: str = ""  # the 68000 player's source, under the project
-    catalogue: str = ""  # MAESTRO's CSV under media/, for titles and surveys
+    catalogue: str = ""  # MAESTRO's CSV under media/, for surveys
+    credits: str = ""  # the disk's full notices, under the project
+    screen: screen_mod.ScreenSpec | None = None  # the player's screen
 
 
 def load_recipe(path: Path) -> Recipe:
@@ -52,7 +56,7 @@ def load_recipe(path: Path) -> Recipe:
     return Recipe(
         sfz=data["sfz"],
         out=data["out"],
-        pieces=tuple(Piece(p["name"], p["midi"]) for p in data["piece"]),
+        pieces=tuple(Piece(p["name"], p["midi"], p.get("title", "")) for p in data["piece"]),
         spec=samples.SampleSpec(**data.get("samples", {})),
         budget_bytes=data["budget_bytes"],
         program_bytes=data["program_bytes"],
@@ -60,6 +64,8 @@ def load_recipe(path: Path) -> Recipe:
         layer_velocity=data.get("layer_velocity"),
         player=data.get("player", ""),
         catalogue=data.get("catalogue", ""),
+        credits=data.get("credits", ""),
+        screen=screen_mod.load_spec(data["screen"]) if "screen" in data else None,
     )
 
 

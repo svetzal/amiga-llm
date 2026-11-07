@@ -27,6 +27,7 @@ import numpy as np
 
 from .. import profile, session
 from . import m68k
+from .disk import RAW_KEYS
 
 STATUS = 0x100
 MAGIC = 0x5049414E  # 'PIAN'
@@ -55,18 +56,6 @@ STATUS_FIELDS = (
     "keys",
 )
 PLAYING, ENDED, MENU, FAILED = 1, 2, 3, 0xFFFFFFFF
-# Amiga raw key codes (the A500 keyboard's matrix), which SEND_KEY takes.
-# Each row of letters and digits runs on from its first code.
-RAW_KEYS = {
-    key: first + offset
-    for row, first in (
-        ("1234567890", 0x01),
-        ("QWERTYUIOP", 0x10),
-        ("ASDFGHJKL", 0x20),
-        ("ZXCVBNM", 0x31),
-    )
-    for offset, key in enumerate(row)
-}
 RETURN_KEY = 0x44
 E_CLOCK_HZ = 715_909  # NTSC
 TIMER_PERIOD = 716  # E-clock ticks between the player's interrupts
