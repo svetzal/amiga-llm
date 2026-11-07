@@ -178,15 +178,19 @@ def include(screen: Screen, spec: ScreenSpec, font: font_mod.Font) -> str:
         f"VOICE_SCOPE_WIDTH equ {spec.voice_scope_width}",
         f"MIX_SCOPE_LEFT  equ {mix_left}",
         f"MIX_SCOPE_WIDTH equ {mix_width}",
+        "; The tables, placed where the player invokes the macro.",
+        "SCREEN_TABLES   macro",
         "line_tops:      dc.w " + ",".join(str(line.top) for line in screen.layout.pieces),
         "voice_scope_left: dc.w " + ",".join(str(x) for x in spec.voice_scopes),
+        "                endm",
         "",
     ]
     return "\n".join(lines)
 
 
 def check_scopes(spec: ScreenSpec) -> None:
-    """The scopes fit the band, the screen and each other; SystemExit otherwise."""
+    """The scopes fit the band and the screen, and no two share a byte of a row
+    (the player takes back and redraws each on its own); SystemExit otherwise."""
     band = spec.scope_band
     spans = [(x, x + spec.voice_scope_width) for x in spec.voice_scopes]
     spans.append((spec.mix_scope[0], spec.mix_scope[0] + spec.mix_scope[1]))
@@ -196,6 +200,8 @@ def check_scopes(spec: ScreenSpec) -> None:
     for (_, right), (left, _) in zip(sorted(spans), sorted(spans)[1:], strict=False):
         if left < right:
             raise SystemExit("two scopes overlap")
+        if left // 8 <= (right - 1) // 8:
+            raise SystemExit("two scopes share a byte of the screen; the player draws each alone")
     if not band.top < spec.scope_centre < band.bottom or band.bottom > picture.HEIGHT:
         raise SystemExit("the scopes' centre row must be inside their band, on the screen")
     if (band.right - band.left) != picture.WIDTH:

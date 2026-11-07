@@ -109,3 +109,23 @@ class TestCredits:
     def test_non_ascii_is_refused(self):
         with pytest.raises(SystemExit, match="ASCII"):
             disk.check_credits("Frédéric")
+
+
+class TestScreen:
+    def test_a_click_point_is_on_each_pieces_line(self):
+        from amiga_env.piano import build
+
+        recipe = build.load_recipe(PLAYER.parent / "piano.toml")
+
+        points = disk.click_points(recipe, PLAYER.parents[2])
+
+        assert points["nocturne-op9-2"] == (202, 12)
+        assert points["bwv846"] == (202, 23)
+        assert len(points) == len(recipe.pieces)
+
+    def test_the_player_takes_its_rows_and_keys_from_the_made_includes(self):
+        source = PLAYER.read_text()
+
+        assert 'include "screen.i"' in source and "SCREEN_TABLES" in source
+        assert 'include "keys.i"' in source
+        assert f'menu_keys:      dc.b "{disk.MENU_KEYS}"' in source

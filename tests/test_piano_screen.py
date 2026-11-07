@@ -99,6 +99,10 @@ class TestScopes:
         with pytest.raises(SystemExit, match="overlap"):
             screen.check_scopes(spec(voice_scopes=(8, 30, 92, 134)))
 
+    def test_scopes_sharing_a_byte_are_refused(self):
+        with pytest.raises(SystemExit, match="share a byte"):
+            screen.check_scopes(spec(voice_scopes=(8, 46, 92, 134)))
+
     def test_a_scope_off_the_screen_is_refused(self):
         with pytest.raises(SystemExit, match="leaves"):
             screen.check_scopes(spec(mix_scope=(200, 132)))

@@ -6,26 +6,32 @@
 ; that the two voice logs can be compared byte for byte.
 ;
 ; Build it with `amiga-env piano-disk examples/piano/piano.toml`, which
-; makes the data in runs/exp004/m68k/ and assembles this file with that
-; folder on the include path. `-DLOG=1` makes the test build, which also
-; writes the voice log (see m68k.py for its layout).
+; makes the data in runs/exp004/m68k/ (the tables, screen.i and keys.i)
+; and assembles this file with that folder on the include path. `-DLOG=1`
+; makes the test build, which also writes the voice log (see m68k.py).
 ;
-; The program holds the samples (in chip RAM) and the tables. The pieces
-; are files on the disk: scores/index has one line a piece, in menu order,
-; the score's file name, a space and the title; each score is loaded with
-; dos.library when it is chosen, played, and freed. Paths are relative to
-; the current directory, which is the disk's root when the disk boots.
+; The program holds the samples (in chip RAM) and the tables. The rest are
+; files on the disk, read with dos.library from the current directory,
+; which is the disk's root when it boots: title.ilbm (the screen),
+; scores/index (one line a piece, in list order: the score's file name, a
+; space and its title) and the scores, each loaded when it is chosen.
 ;
 ; Usage from a CLI or the startup-sequence:
-;   piano            the menu: a numbered list in the CLI window; a key
-;                    chooses a piece (1 to 9, then letters, Q quits), and
-;                    a key during a piece stops it
-;   piano 3 1        plays pieces 3 and 1 (the menu's keys), then ends
+;   piano            the screen: a 320x200 16-colour NTSC screen showing the
+;                    title picture with the song list drawn in (screen.py).
+;                    A click on a piece's line, or its key (1 to 9, then
+;                    A to Z without Q), plays it, or switches to it while
+;                    another plays. Esc or Q quits.
+;   piano 3 1        plays pieces 3 and 1 (their keys), then ends; no screen
 ;
-; The menu reads single key presses: it opens the CLI's window ("*") and
-; puts its console handler in raw mode with an ACTION_SCREEN_MODE packet
-; (Kickstart 1.2 has no SetMode), and back to cooked mode at the end.
-; Input() is not used, because in the startup-sequence it is the script.
+; The screen is an Intuition custom screen with a borderless backdrop
+; window over it for the mouse and the keys (IDCMP MOUSEBUTTONS and
+; RAWKEY). The picture is an uncompressed IFF ILBM, copied into the
+; screen's planes. The playing piece's line turns gold: a user copper list
+; on the screen's viewport changes colour 13 on that line's rows. Five
+; scopes in the floor band show the voices and their mix; the task draws
+; them after each vertical blank from the player's own state, since Paula's
+; registers cannot be read.
 ;
 ; How a piece plays. The program takes CIA-B timer A through ciab.resource
 ; as a 1 kHz interrupt and the four audio interrupt vectors with
@@ -35,9 +41,7 @@
 ; note starts Paula on the whole sample; the channel's audio interrupt,
 ; which Paula raises once it has taken the start and length, writes the
 ; loop's start and length so that Paula goes round the loop when the sample
-; ends. The task itself only waits: for a key (WaitForChar) or for the end.
-; When the piece is over it gives everything back and prints what it
-; measured.
+; ends. Nothing the task does changes what the interrupts write.
 ;
 ; Status for the host, at the unused 68000 vectors from $100 (see STATUS).
 
@@ -46,15 +50,16 @@ LOG     equ     0
         endif
 
 ; exec.library (V33), from the NDK's exec_lib.fd
+_LVOForbid          equ -132
+_LVOPermit          equ -138
 _LVOFreeMem         equ -210
 _LVOAvailMem        equ -216
-_LVOFindTask        equ -294
 _LVOSetSignal       equ -306
 _LVOSetIntVector    equ -162
 _LVOAllocMem        equ -198
-_LVOPutMsg          equ -366
+_LVOWait            equ -318
 _LVOGetMsg          equ -372
-_LVOWaitPort        equ -384
+_LVOReplyMsg        equ -378
 _LVOCloseLibrary    equ -414
 _LVOOpenResource    equ -498
 _LVORawDoFmt        equ -522
@@ -68,7 +73,22 @@ _LVOWrite           equ -48
 _LVOOutput          equ -60
 _LVOSeek            equ -66
 _LVODelay           equ -198
-_LVOWaitForChar     equ -204
+; graphics.library (V33), from graphics_lib.sfd
+_LVOLoadRGB4        equ -192
+_LVOWaitTOF         equ -270
+_LVOCBump           equ -366
+_LVOCMove           equ -372
+_LVOCWait           equ -378
+_LVOFreeCopList     equ -546
+_LVOUCopperListInit equ -594
+; intuition.library (V33), from intuition_lib.sfd
+_LVOCloseScreen     equ -66
+_LVOCloseWindow     equ -72
+_LVOOpenScreen      equ -198
+_LVOOpenWindow      equ -204
+_LVOShowTitle       equ -288
+_LVOMakeScreen      equ -384
+_LVORethinkDisplay  equ -396
 ; ciab.resource (cia_lib.fd)
 _LVOAddICRVector    equ -6
 _LVORemICRVector    equ -12
@@ -77,8 +97,8 @@ _LVOAbleICR         equ -18
 ExecBase        equ 4
 MEMF_PUBLIC     equ 1
 MEMF_CHIP       equ 2
+MEMF_CLEAR      equ $10000
 NT_INTERRUPT    equ 2
-NT_MESSAGE      equ 5
 INTB_AUD0       equ 7
 CIAICRB_TA      equ 0
 SIGBREAKF_CTRL_C equ $1000
@@ -86,44 +106,85 @@ SIGBREAKF_CTRL_C equ $1000
 MODE_OLDFILE    equ 1005
 OFFSET_BEGINNING equ -1
 OFFSET_END      equ 1
-ACTION_SCREEN_MODE equ 994      ; dp_Arg1 -1 raw, 0 cooked
-pr_MsgPort      equ $5c         ; in struct Process
-fh_Type         equ 8           ; in struct FileHandle: the handler's port
-LN_TYPE         equ 8
-LN_NAME         equ 10
-MN_REPLYPORT    equ 14
-MN_LENGTH       equ 18
-MESSAGE_SIZE    equ 20
-dp_Link         equ 0
-dp_Port         equ 4
-dp_Type         equ 8
-dp_Res1         equ 12
-dp_Arg1         equ 20
-DOSPACKET_SIZE  equ 48
+
+; Intuition and graphics structures (offsets checked against the NDK 3.2
+; includes with vasm; they are the same in V33)
+sc_ViewPort     equ 44
+sc_BitMap       equ 184
+bm_BytesPerRow  equ 0
+bm_Planes       equ 8
+vp_UCopIns      equ 20
+vp_DyOffset     equ 30
+gb_ActiView     equ 34
+v_DyOffset      equ 12
+ucl_FirstCopList equ 4
+ucl_SIZEOF      equ 12
+wd_MouseY       equ 12
+wd_MouseX       equ 14
+wd_UserPort     equ 86
+mp_SigBit       equ 15
+im_Class        equ 20
+im_Code         equ 24
+im_MouseX       equ 32
+im_MouseY       equ 34
+CUSTOMSCREEN    equ $000f
+SCREENQUIET     equ $0100
+MOUSEBUTTONS    equ $00000008
+RAWKEY          equ $00000400
+SIMPLE_REFRESH  equ $00000040
+BACKDROP        equ $00000100
+BORDERLESS      equ $00000800
+ACTIVATE        equ $00001000
+RMBTRAP         equ $00010000
+NOCAREREFRESH   equ $00020000
+SELECTDOWN      equ $68
+KEY_UP          equ $80             ; in a RAWKEY code
+KEY_ESC         equ $45
+KEY_Q           equ $10
 
 custom          equ $dff000
 DMACON          equ $096
 INTENA          equ $09a
 INTREQ          equ $09c
 AUD0LC          equ $0a0        ; then LEN +4, PER +6, VOL +8; channels $10 apart
+COLOR13         equ custom+$19a
 
 ciabtalo        equ $bfd400
 ciabtahi        equ $bfd500
 ciabcra         equ $bfde00
 
-; 716 E-clock ticks (715,909 Hz on NTSC) between interrupts: 1.000127 ms.
+; 716 E-clock ticks (715,909 Hz on NTSC) between interrupts: 1.000127 ms,
+; which is exactly 3,580 cycles of Paula's 3,579,545 Hz clock.
 TIMER_LATCH     equ 715
 TIMER_PERIOD    equ TIMER_LATCH+1
+PAULA_PER_MS    equ TIMER_PERIOD*5
 VOICES          equ 4
 FADE_MS         equ 5           ; as player.FADE_MS
 LOG_BYTES       equ 400000      ; 16,666 ticks, 277 s
 MAX_PIECES      equ 34          ; 1-9 and A-Z without Q
-WAIT_US         equ 20000       ; how long one WaitForChar waits for a key
+
+; The screen and the scopes; screen.i (made with the picture) has the rows.
+SCREEN_WIDTH    equ 320
+SCREEN_HEIGHT   equ 200
+DEPTH           equ 4
+ROW_BYTES       equ SCREEN_WIDTH/8
+PICTURE_BYTES   equ ROW_BYTES*SCREEN_HEIGHT*DEPTH
+SCOPE_STEP      equ 960         ; Paula clocks a scope column: 3 samples at period 320
+SCOPE_SHIFT     equ 7           ; a voice's trace: sample * volume >> 7,
+VOICE_HALF      equ 16          ; at most this from the centre
+MIX_HALF        equ 21          ; the mixed trace: half the voices' sum, at most this
+BEAM_GUARD      equ 64          ; lines above the band a unit may not start on
+
+        include "screen.i"      ; LIST_*, LINE_*, colours, SCOPE_*, line_tops
+BAND_BYTES      equ ROW_BYTES*SCOPE_ROWS
+; The mixed scope is drawn in two units split at a byte, so no two units
+; share a byte of the screen (screen.py checks the voice scopes).
+MIX_SPLIT       equ ((((MIX_SCOPE_LEFT+64)/8)*8)-MIX_SCOPE_LEFT)
 
 ; Status block, read by the host through the emulator's memory.
 STATUS          equ $100
 ST_MAGIC        equ 0           ; 'PIAN'
-ST_STATE        equ 4           ; 0 starting, 1 playing, 2 ended, 3 menu, -1 failed
+ST_STATE        equ 4           ; 0 starting, 1 playing, 2 ended, 3 waiting for a choice, -1 failed
 ST_LOGBASE      equ 8
 ST_LOGBYTES     equ 12
 ST_SAMPLES      equ 16          ; where the samples are in chip RAM
@@ -133,18 +194,28 @@ ST_MS           equ 28          ; milliseconds played
 ST_MAX_FRAME_E  equ 32          ; most E-clock ticks in one frame (16 or 17 ms)
 ST_FRAMES       equ 36
 ST_MAX_MS_E     equ 40          ; most in one millisecond's interrupt
-ST_PIECE        equ 44          ; the piece playing or last played, from 0 in menu order
+ST_PIECE        equ 44          ; the piece playing or last played, from 0 in list order
 ST_ENTRY_E      equ 48          ; E-clock ticks from the timer running out to the handler
 ST_PLAYED       equ 52          ; pieces played to their end or stopped
-ST_STOPPED      equ 56          ; 1 when the last piece was stopped by a key
+ST_STOPPED      equ 56          ; 1 when the last piece was stopped (a choice or a quit)
 ST_PIECES       equ 60          ; pieces in the index
 ST_SCORE        equ 64          ; where the score is
 ST_SCORE_BYTES  equ 68
 ST_CHIP_FREE    equ 72          ; AvailMem while the score is loaded: chip RAM
 ST_OTHER_FREE   equ 76          ; and all other memory
-ST_KEY          equ 80          ; the last key read: its character, or what Read returned
-ST_KEYS         equ 84          ; keys read
-ST_END          equ 88
+ST_KEY          equ 80          ; the last RAWKEY code
+ST_KEYS         equ 84          ; RAWKEY messages
+ST_WINDOW       equ 88          ; the backdrop window, 0 without the screen
+ST_CLICKS       equ 92          ; left button presses
+ST_CLICK_XY     equ 96          ; the last one: x in the high word, y in the low
+ST_SCOPE_FRAMES equ 100         ; scope frames drawn in this piece
+ST_SCOPE_E      equ 104         ; E-clock ticks drawing them, less the interrupts' time
+ST_SCOPE_MAX_E  equ 108         ; the most for one scope frame
+ST_HIGHLIGHT    equ 112         ; the line in gold, -1 for none
+ST_SCREEN_CHIP  equ 116         ; chip RAM free with the screen open, before a piece
+ST_DRAW_E       equ 120         ; E-clock ticks taking back and plotting points (after ST_SCOPE_E's)
+ST_DRAW_MAX_E   equ 124         ; the most for one frame
+ST_END          equ 128
 ST_PER_PIECE    equ ST_TOTAL_E  ; cleared before each piece, to ST_PLAYED
 
 ; A voice
@@ -158,7 +229,10 @@ V_TICKS         equ 12          ; ticks since the note started
 V_OUT           equ 14          ; Paula volume register
 V_FADE          equ 16          ; ms until the waiting note starts, 0 when none waits
 V_FROM          equ 18          ; Paula volume when the fade began
-V_SIZE          equ 20
+V_PSAMPLE       equ 20          ; what Paula plays, for the scopes: sample, -1 for none
+V_PPERIOD       equ 22          ; its period
+V_PSTART        equ 24          ; the millisecond it started
+V_SIZE          equ 28
 
 ; Key table (keys.bin), 12 bytes a key
 K_SAMPLE        equ 0
@@ -176,8 +250,27 @@ S_LOOP          equ 6
 S_LOOPWORDS     equ 10
 S_SIZE          equ 12
 
+; A voice as the scopes take it, copied with interrupts off
+C_SAMPLE        equ 0
+C_PERIOD        equ 2
+C_OUT           equ 4
+C_ELAPSED       equ 6           ; ms since it started, at most 65,535
+C_SIZE          equ 8
+
 ; Interrupt structure
 IS_SIZE         equ 22
+
+CALLGFX macro
+        move.l  gfxbase,a6
+        jsr     _LVO\1(a6)
+        move.l  ExecBase.w,a6
+        endm
+
+CALLINT macro
+        move.l  intbase,a6
+        jsr     _LVO\1(a6)
+        move.l  ExecBase.w,a6
+        endm
 
         section code,code
 
@@ -193,6 +286,7 @@ start:
         moveq   #(ST_END-ST_STATE)/4-1,d0
 .clear: clr.l   (a0)+
         dbf     d0,.clear
+        move.l  #-1,STATUS+ST_HIGHLIGHT.w
         move.l  #'PIAN',STATUS+ST_MAGIC.w
 
         lea     dosname(pc),a1
@@ -229,10 +323,15 @@ start:
         bsr     print
 
         bsr     next_argument
-        bmi.s   .menu
+        bmi.s   .screen
         bsr     play_arguments
         bra.s   .ended
-.menu:  bsr     menu
+.screen:
+        bsr     open_display
+        tst.l   d0
+        beq.s   failed
+        bsr     choose
+        bsr     close_display
 .ended: move.l  #2,STATUS+ST_STATE.w
         bra.s   close
 
@@ -240,6 +339,7 @@ no_memory:
         lea     memory_text(pc),a0
         bsr     print
 failed: move.l  #-1,STATUS+ST_STATE.w
+        bsr     close_display
 close:  move.l  index_mem,d0
         beq.s   .log
         move.l  d0,a1
@@ -263,7 +363,7 @@ close:  move.l  index_mem,d0
         rts
 
 ; ---------------------------------------------------------------------------
-; The pieces: the index, the menu, the arguments.
+; The pieces: the index and the arguments.
 ; ---------------------------------------------------------------------------
 
 ; Load scores/index and split it into pieces: d0 is 0 when it cannot.
@@ -320,67 +420,9 @@ read_index:
         moveq   #1,d0
         rts
 
-; The menu: list the pieces, read a key, play the piece, until Q.
-menu:
-        lea     console_name(pc),a0
-        move.l  a0,d1
-        move.l  #MODE_OLDFILE,d2
-        move.l  dosbase,a6
-        jsr     _LVOOpen(a6)
-        move.l  ExecBase.w,a6
-        move.l  d0,console
-        bne.s   .open
-        lea     no_console_text(pc),a0
-        bra     print
-.open:  moveq   #-1,d0
-        bsr     console_mode
-.list:  bsr     print_menu
-        move.l  #3,STATUS+ST_STATE.w
-.key:   bsr     read_key
-        bmi.s   .quit                   ; the window is gone
-        cmp.b   #'Q',d0
-        beq.s   .quit
-        bsr     piece_for_key
-        bmi.s   .key
-        bsr     play_piece
-        bra.s   .list
-.quit:  lea     bye_text(pc),a0
-        bsr     print
-        moveq   #0,d0
-        bsr     console_mode
-        move.l  console,d1
-        move.l  dosbase,a6
-        jsr     _LVOClose(a6)
-        move.l  ExecBase.w,a6
-        rts
-
-print_menu:
-        movem.l d2-d3/a2-a3,-(sp)
-        lea     menu_keys(pc),a2
-        lea     titles,a3
-        move.l  pieces,d2
-        bra.s   .next
-.line:  lea     fmt_args,a1
-        lea     keystr,a0
-        move.b  (a2)+,(a0)
-        move.l  a0,(a1)
-        move.l  (a3)+,4(a1)
-        lea     menu_line(pc),a0
-        bsr     print
-.next:  dbf     d2,.line
-        lea     menu_tail(pc),a0
-        bsr     print
-        movem.l (sp)+,d2-d3/a2-a3
-        rts
-
-; d0: the piece for the key in d0 (from 0), negative when there is none.
+; d0: the piece for the key character in d0 (from 0), negative for none.
 piece_for_key:
-        cmp.b   #'a',d0
-        bcs.s   .upper
-        cmp.b   #'z',d0
-        bhi.s   .upper
-        sub.b   #'a'-'A',d0
-.upper: lea     menu_keys(pc),a0
+        lea     menu_keys(pc),a0
         moveq   #0,d1
 .find:  cmp.l   pieces,d1
         beq.s   .none
@@ -393,74 +435,28 @@ piece_for_key:
 .none:  moveq   #-1,d0
         rts
 
-; d0: the next key from the window, upper case for letters; negative when
-; the window cannot be read.
-read_key:
-        movem.l d2-d3/a6,-(sp)
-        move.l  dosbase,a6
-        move.l  console,d1
-        move.l  #keybuf,d2
-        moveq   #1,d3
-        jsr     _LVORead(a6)
-        movem.l (sp)+,d2-d3/a6
-        addq.l  #1,STATUS+ST_KEYS.w
-        move.l  d0,STATUS+ST_KEY.w
-        cmp.l   #1,d0
-        bne.s   .none
-        moveq   #0,d0
-        move.b  keybuf,d0
-        move.l  d0,STATUS+ST_KEY.w
-        cmp.b   #'a',d0
-        bcs.s   .out
-        cmp.b   #'z',d0
-        bhi.s   .out
-        sub.b   #'a'-'A',d0
-.out:   tst.l   d0                      ; the caller tests the sign
-        rts
-.none:  moveq   #-1,d0
-        rts
-
-; Put the window's console handler in raw mode (d0 = -1) or cooked mode
-; (d0 = 0) with an ACTION_SCREEN_MODE packet, sent from this process's
-; message port and waited for there.
-console_mode:
-        movem.l d2/a2-a3,-(sp)
-        move.l  d0,d2
-        move.l  console,d0
-        lsl.l   #2,d0                   ; a BPTR
-        move.l  d0,a0
-        move.l  fh_Type(a0),d0
-        beq.s   .out                    ; no handler (NIL:)
-        move.l  d0,a3
-        sub.l   a1,a1
-        jsr     _LVOFindTask(a6)
-        move.l  d0,a2
-        lea     pr_MsgPort(a2),a2
-        lea     packet,a1
-        lea     MESSAGE_SIZE(a1),a0
-        move.b  #NT_MESSAGE,LN_TYPE(a1)
-        move.l  a0,LN_NAME(a1)
-        move.l  a2,MN_REPLYPORT(a1)
-        move.w  #DOSPACKET_SIZE,MN_LENGTH(a1)
-        move.l  a1,dp_Link(a0)
-        move.l  a2,dp_Port(a0)
-        move.l  #ACTION_SCREEN_MODE,dp_Type(a0)
-        move.l  d2,dp_Arg1(a0)
-        move.l  a3,a0
-        jsr     _LVOPutMsg(a6)
-        move.l  a2,a0
-        jsr     _LVOWaitPort(a6)
-        move.l  a2,a0
-        jsr     _LVOGetMsg(a6)
-.out:   movem.l (sp)+,d2/a2-a3
-        rts
-
-; The pieces named in the arguments, one menu key each, in order; d0 is
-; the first key.
+; The pieces named in the arguments, one key each, in order; d0 is the
+; first key. No screen: the task waits with Delay.
 play_arguments:
 .piece: bsr     piece_for_key
-        bmi.s   .next                   ; not a key on the menu
-        bsr     play_piece
+        bmi.s   .next                   ; not a piece's key
+        bsr     start_piece
+        tst.l   d0
+        bne.s   .next
+.wait:  tst.w   finished
+        bne.s   .end
+        moveq   #0,d0
+        moveq   #0,d1
+        jsr     _LVOSetSignal(a6)
+        and.l   #SIGBREAKF_CTRL_C,d0
+        bne.s   .stop
+        move.l  dosbase,a6
+        moveq   #1,d1                   ; 1/50 s
+        jsr     _LVODelay(a6)
+        move.l  ExecBase.w,a6
+        bra.s   .wait
+.stop:  move.l  #1,STATUS+ST_STOPPED.w
+.end:   bsr     end_piece
 .next:  bsr     next_argument
         bpl.s   .piece
         rts
@@ -488,11 +484,508 @@ next_argument:
         rts
 
 ; ---------------------------------------------------------------------------
-; One piece: load its score, play it, free it, say what it measured.
+; The screen: open it, show the picture, take choices, close it.
 ; ---------------------------------------------------------------------------
 
-; Play piece d0 (from 0).
-play_piece:
+; Open graphics and Intuition, the screen and its window, and show the
+; picture. d0: 0 when something is missing (and it has said what).
+open_display:
+        movem.l d2-d7/a2-a5,-(sp)
+        lea     gfxname(pc),a1
+        moveq   #0,d0
+        jsr     _LVOOpenLibrary(a6)
+        move.l  d0,gfxbase
+        beq     .fail
+        lea     intname_lib(pc),a1
+        moveq   #0,d0
+        jsr     _LVOOpenLibrary(a6)
+        move.l  d0,intbase
+        beq     .fail
+
+        lea     picture_name(pc),a0     ; the picture, read before the screen opens
+        bsr     load_file
+        move.l  d0,picture_mem
+        move.l  d1,picture_bytes
+        bne.s   .parse
+        lea     no_picture_text(pc),a0
+        bra     .say
+.parse: bsr     parse_ilbm
+        tst.l   d0
+        bne.s   .tables
+        lea     bad_picture_text(pc),a0
+        bra     .say
+
+.tables:
+        move.l  #BAND_BYTES*DEPTH,d0    ; the floor band's copy
+        moveq   #MEMF_PUBLIC,d1
+        jsr     _LVOAllocMem(a6)
+        move.l  d0,band_copy
+        beq     .memory
+        move.l  #65*256,d0              ; a trace's row for each volume and sample
+        moveq   #MEMF_PUBLIC,d1
+        jsr     _LVOAllocMem(a6)
+        move.l  d0,trace_table
+        beq     .memory
+        bsr     make_tables
+        move.l  #trace_sets,front
+        move.l  #trace_sets+MIX_SCOPE_WIDTH*(VOICES+1),back
+
+        lea     newscreen,a0
+        CALLINT OpenScreen
+        move.l  d0,screen
+        beq     .noscreen
+        lea     newwindow,a0
+        move.l  d0,30(a0)               ; nw_Screen
+        CALLINT OpenWindow
+        move.l  d0,window
+        beq     .noscreen
+        move.l  d0,STATUS+ST_WINDOW.w
+        move.l  screen,a0
+        moveq   #0,d0
+        CALLINT ShowTitle               ; the backdrop window covers the title bar
+
+        move.l  screen,a0               ; the planes, the colours
+        lea     sc_BitMap(a0),a0
+        lea     planes,a1
+        moveq   #DEPTH-1,d0
+.planes:
+        move.l  bm_Planes(a0),(a1)+
+        addq.l  #4,a0
+        dbf     d0,.planes
+        bsr     show_picture
+        move.l  gfxbase,a0              ; the band's lines on the display
+        move.l  gb_ActiView(a0),a0
+        move.w  v_DyOffset(a0),d0
+        move.l  screen,a0
+        add.w   sc_ViewPort+vp_DyOffset(a0),d0
+        add.w   #SCOPE_TOP,d0
+        move.w  d0,d1
+        sub.w   #BEAM_GUARD,d0
+        move.w  d0,band_first
+        add.w   #SCOPE_ROWS-1,d1
+        move.w  d1,band_last
+        move.l  screen,a0
+        lea     sc_ViewPort(a0),a0
+        lea     palette,a1
+        moveq   #16,d0
+        CALLGFX LoadRGB4
+        bsr     copy_band
+
+        move.l  picture_mem,a1          ; the file is not needed any more
+        move.l  picture_bytes,d0
+        addq.l  #1,d0
+        jsr     _LVOFreeMem(a6)
+        clr.l   picture_mem
+        moveq   #MEMF_CHIP,d1
+        jsr     _LVOAvailMem(a6)
+        move.l  d0,STATUS+ST_SCREEN_CHIP.w
+        moveq   #1,d0
+        bra.s   .out
+.memory:
+        lea     memory_text(pc),a0
+        bra.s   .say
+.noscreen:
+        lea     no_screen_text(pc),a0
+.say:   bsr     print
+.fail:  moveq   #0,d0
+.out:   movem.l (sp)+,d2-d7/a2-a5
+        rts
+
+; Close whatever open_display opened; safe to call twice.
+close_display:
+        moveq   #-1,d0
+        bsr     highlight               ; no user copper list left on the viewport
+        move.l  window,d0
+        beq.s   .screen
+        move.l  d0,a0
+        bsr     drain_messages
+        move.l  window,a0
+        CALLINT CloseWindow
+        clr.l   window
+        clr.l   STATUS+ST_WINDOW.w
+.screen:
+        move.l  screen,d0
+        beq.s   .mem
+        move.l  d0,a0
+        CALLINT CloseScreen
+        clr.l   screen
+.mem:   move.l  picture_mem,d0
+        beq.s   .copy
+        move.l  d0,a1
+        move.l  picture_bytes,d0
+        addq.l  #1,d0
+        jsr     _LVOFreeMem(a6)
+        clr.l   picture_mem
+.copy:  move.l  band_copy,d0
+        beq.s   .table
+        move.l  d0,a1
+        move.l  #BAND_BYTES*DEPTH,d0
+        jsr     _LVOFreeMem(a6)
+        clr.l   band_copy
+.table: move.l  trace_table,d0
+        beq.s   .libs
+        move.l  d0,a1
+        move.l  #65*256,d0
+        jsr     _LVOFreeMem(a6)
+        clr.l   trace_table
+.libs:  move.l  intbase,d0
+        beq.s   .gfx
+        move.l  d0,a1
+        jsr     _LVOCloseLibrary(a6)
+        clr.l   intbase
+.gfx:   move.l  gfxbase,d0
+        beq.s   .out
+        move.l  d0,a1
+        jsr     _LVOCloseLibrary(a6)
+        clr.l   gfxbase
+.out:   rts
+
+; Reply to every message waiting at window a0's port.
+drain_messages:
+        move.l  a2,-(sp)
+        move.l  wd_UserPort(a0),a2
+.next:  move.l  a2,a0
+        jsr     _LVOGetMsg(a6)
+        tst.l   d0
+        beq.s   .out
+        move.l  d0,a1
+        jsr     _LVOReplyMsg(a6)
+        bra.s   .next
+.out:   move.l  (sp)+,a2
+        rts
+
+; Find the ILBM's header, colours and body in picture_mem. d0: 0 unless it
+; is 320x200, 4 planes and uncompressed. Sets palette and body.
+parse_ilbm:
+        move.l  picture_mem,a0
+        cmp.l   #'FORM',(a0)
+        bne     .bad
+        cmp.l   #'ILBM',8(a0)
+        bne     .bad
+        move.l  a0,a1
+        add.l   picture_bytes,a1        ; the end
+        lea     12(a0),a0
+        clr.l   body
+        moveq   #0,d2                   ; 1 when BMHD was right
+.chunk: lea     8(a0),a2                ; the chunk's data
+        cmp.l   a1,a2
+        bhi     .done
+        move.l  4(a0),d1                ; its size
+        cmp.l   #'BMHD',(a0)
+        bne     .cmap
+        cmp.w   #SCREEN_WIDTH,(a2)
+        bne     .bad
+        cmp.w   #SCREEN_HEIGHT,2(a2)
+        bne     .bad
+        cmp.b   #DEPTH,8(a2)
+        bne     .bad
+        tst.b   10(a2)                  ; compression
+        bne     .bad
+        moveq   #1,d2
+        bra     .skip
+.cmap:  cmp.l   #'CMAP',(a0)
+        bne     .body
+        lea     palette,a3              ; 8-bit RGB to $0RGB
+        move.l  d1,d3
+        divu    #3,d3
+        cmp.w   #16,d3
+        bls     .count
+        moveq   #16,d3
+.count: move.l  a2,a4
+        bra     .cnext
+.colour:
+        moveq   #0,d0
+        move.b  (a4)+,d0
+        lsr.w   #4,d0
+        lsl.w   #4,d0
+        move.b  (a4)+,d4
+        lsr.b   #4,d4
+        or.b    d4,d0
+        lsl.w   #4,d0
+        move.b  (a4)+,d4
+        lsr.b   #4,d4
+        or.b    d4,d0
+        move.w  d0,(a3)+
+.cnext: dbf     d3,.colour
+        bra     .skip
+.body:  cmp.l   #'BODY',(a0)
+        bne     .skip
+        cmp.l   #PICTURE_BYTES,d1
+        bcs     .bad
+        move.l  a2,body
+.skip:  addq.l  #1,d1                   ; chunks are padded to even sizes
+        and.w   #$fffe,d1
+        lea     0(a2,d1.l),a0
+        bra     .chunk
+.done:  tst.l   d2
+        beq     .bad
+        tst.l   body
+        beq     .bad
+        moveq   #1,d0
+        rts
+.bad:   moveq   #0,d0
+        rts
+
+; Copy the ILBM's interleaved rows into the screen's four planes.
+show_picture:
+        movem.l d2-d3/a2-a3,-(sp)
+        move.l  body,a0
+        moveq   #0,d2                   ; the row's offset in a plane
+        move.w  #SCREEN_HEIGHT-1,d3
+.row:   lea     planes,a2
+        moveq   #DEPTH-1,d1
+.plane: move.l  (a2)+,a1
+        add.l   d2,a1
+        moveq   #ROW_BYTES/2-1,d0
+.word:  move.w  (a0)+,(a1)+
+        dbf     d0,.word
+        dbf     d1,.plane
+        add.l   #ROW_BYTES,d2
+        dbf     d3,.row
+        movem.l (sp)+,d2-d3/a2-a3
+        rts
+
+; Keep a copy of the scope band, all four planes, for restoring it.
+copy_band:
+        move.l  band_copy,a1
+        lea     planes,a2
+        moveq   #DEPTH-1,d1
+.plane: move.l  (a2)+,a0
+        add.l   #SCOPE_TOP*ROW_BYTES,a0
+        move.w  #BAND_BYTES/2-1,d0
+.word:  move.w  (a0)+,(a1)+
+        dbf     d0,.word
+        dbf     d1,.plane
+        rts
+
+; Rows' offsets in a plane (row_offsets), and the trace table: for each
+; Paula volume 0 to 64 and each sample byte, the trace's row from the
+; centre, sample * volume >> SCOPE_SHIFT, clamped to VOICE_HALF.
+make_tables:
+        lea     row_offsets,a0
+        moveq   #0,d0
+        move.w  #SCREEN_HEIGHT-1,d1
+.row:   move.w  d0,(a0)+
+        add.w   #ROW_BYTES,d0
+        dbf     d1,.row
+        move.l  trace_table,a0
+        moveq   #0,d2                   ; volume
+.vol:   moveq   #0,d1                   ; sample byte
+.byte:  move.b  d1,d0
+        ext.w   d0
+        muls    d2,d0
+        asr.l   #SCOPE_SHIFT,d0
+        cmp.w   #VOICE_HALF,d0
+        ble.s   .low
+        moveq   #VOICE_HALF,d0
+.low:   cmp.w   #-VOICE_HALF,d0
+        bge.s   .high
+        moveq   #-VOICE_HALF,d0
+.high:  move.b  d0,(a0)+
+        addq.w  #1,d1
+        cmp.w   #256,d1
+        bne.s   .byte
+        addq.w  #1,d2
+        cmp.w   #65,d2
+        bne.s   .vol
+        rts
+
+; Take choices until Esc or Q: a click on a piece's line or its key plays
+; it, switching from the piece playing. While a piece plays, the scopes
+; are drawn after every vertical blank.
+choose:
+        move.l  #3,STATUS+ST_STATE.w
+.loop:  tst.w   playing
+        beq.s   .idle
+        tst.w   finished
+        beq.s   .draw
+        bsr     end_piece               ; it played to its end
+        bra.s   .loop
+.draw:  bsr     scope_frame
+        bra.s   .messages
+.idle:  move.l  window,a0
+        move.l  wd_UserPort(a0),a0
+        moveq   #0,d1
+        move.b  mp_SigBit(a0),d1
+        moveq   #0,d0
+        bset    d1,d0
+        jsr     _LVOWait(a6)
+.messages:
+        bsr     next_choice
+        tst.l   d0
+        beq.s   .loop                   ; nothing to do
+        bmi.s   .quit
+        subq.l  #1,d0                   ; the piece, from 0
+        move.l  d0,-(sp)
+        tst.w   playing
+        beq.s   .start
+        move.l  #1,STATUS+ST_STOPPED.w
+        bsr     end_piece
+.start: move.l  (sp)+,d0
+        bsr     start_piece
+        bra.s   .loop
+.quit:  tst.w   playing
+        beq.s   .out
+        move.l  #1,STATUS+ST_STOPPED.w
+        bsr     end_piece
+.out:   rts
+
+; Read the window's messages. d0: -1 to quit, n + 1 for piece n, 0 for
+; nothing. The last choice among the waiting messages wins, but a quit
+; always does.
+next_choice:
+        movem.l d2-d4/a2,-(sp)
+        moveq   #0,d4                   ; the choice
+.next:  move.l  window,a0
+        move.l  wd_UserPort(a0),a0
+        jsr     _LVOGetMsg(a6)
+        tst.l   d0
+        beq     .out
+        move.l  d0,a1
+        move.l  im_Class(a1),d2
+        move.w  im_Code(a1),d3
+        move.w  im_MouseX(a1),d0
+        swap    d0
+        move.w  im_MouseY(a1),d0
+        move.l  d0,a2                   ; x and y
+        jsr     _LVOReplyMsg(a6)
+        cmp.l   #RAWKEY,d2
+        bne.s   .mouse
+        addq.l  #1,STATUS+ST_KEYS.w
+        and.l   #$ffff,d3
+        move.l  d3,STATUS+ST_KEY.w
+        btst    #7,d3                   ; a key going up
+        bne.s   .next
+        cmp.b   #KEY_ESC,d3
+        beq.s   .quit
+        cmp.b   #KEY_Q,d3
+        beq.s   .quit
+        lea     piece_keys,a0
+        moveq   #0,d0
+.key:   cmp.l   pieces,d0
+        beq.s   .next
+        cmp.b   (a0)+,d3
+        beq.s   .chosen
+        addq.l  #1,d0
+        bra.s   .key
+.mouse: cmp.l   #MOUSEBUTTONS,d2
+        bne.s   .next
+        cmp.w   #SELECTDOWN,d3
+        bne.s   .next
+        addq.l  #1,STATUS+ST_CLICKS.w
+        move.l  a2,STATUS+ST_CLICK_XY.w
+        move.l  a2,d1
+        swap    d1
+        cmp.w   #LIST_LEFT-4,d1         ; left of the list: not a choice
+        blt     .next
+        swap    d1                      ; y
+        lea     line_tops(pc),a0
+        moveq   #0,d0
+.line:  cmp.l   pieces,d0
+        beq     .next
+        cmp.w   #LIST_LINES,d0
+        beq     .next
+        move.w  (a0)+,d2
+        cmp.w   d2,d1
+        blt.s   .below
+        add.w   #LINE_PITCH,d2
+        cmp.w   d2,d1
+        blt.s   .chosen
+.below: addq.l  #1,d0
+        bra.s   .line
+.chosen:
+        addq.l  #1,d0
+        move.l  d0,d4
+        bra     .next
+.quit:  moveq   #-1,d4
+        bra     .next
+.out:   move.l  d4,d0
+        movem.l (sp)+,d2-d4/a2
+        rts
+
+; Put line d0 in gold with a user copper list on the screen's viewport:
+; colour 13 is HIGHLIGHT_COLOUR on its rows and TEXT_COLOUR again after
+; them. d0 = -1 takes the highlight away. The old list is freed once the
+; display has been remade without it.
+highlight:
+        movem.l d2-d3/a2-a3,-(sp)
+        move.l  screen,d1
+        beq     .out
+        move.l  d0,d2
+        sub.l   a2,a2                   ; the new list, none for -1
+        tst.l   d2
+        bmi     .set
+        moveq   #ucl_SIZEOF,d0
+        move.l  #MEMF_PUBLIC|MEMF_CLEAR,d1
+        jsr     _LVOAllocMem(a6)
+        tst.l   d0
+        beq     .out                    ; no memory: no highlight
+        move.l  d0,a2
+        move.l  a2,a0
+        moveq   #5,d0
+        CALLGFX UCopperListInit
+        lea     line_tops(pc),a0
+        add.w   d2,d2
+        move.w  0(a0,d2.w),d3           ; the line's first row
+        move.l  a2,a1
+        move.w  d3,d0
+        moveq   #0,d1
+        CALLGFX CWait
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1
+        move.l  #COLOR13,d0
+        move.w  #HIGHLIGHT_COLOUR,d1
+        CALLGFX CMove
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1
+        move.w  d3,d0
+        add.w   #LINE_ROWS,d0
+        moveq   #0,d1
+        CALLGFX CWait
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1
+        move.l  #COLOR13,d0
+        move.w  #TEXT_COLOUR,d1
+        CALLGFX CMove
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1                   ; CEND
+        move.w  #10000,d0
+        move.w  #255,d1
+        CALLGFX CWait
+        move.l  a2,a1
+        CALLGFX CBump
+        lsr.w   #1,d2
+.set:   jsr     _LVOForbid(a6)
+        move.l  screen,a0
+        move.l  sc_ViewPort+vp_UCopIns(a0),a3   ; the old list
+        move.l  a2,sc_ViewPort+vp_UCopIns(a0)
+        jsr     _LVOPermit(a6)
+        move.l  screen,a0
+        CALLINT MakeScreen
+        CALLINT RethinkDisplay
+        move.l  d2,STATUS+ST_HIGHLIGHT.w
+        move.l  a3,d0
+        beq.s   .out
+        CALLGFX WaitTOF                 ; the copper has the new list now
+        move.l  ucl_FirstCopList(a3),a0
+        CALLGFX FreeCopList
+        move.l  a3,a1
+        moveq   #ucl_SIZEOF,d0
+        jsr     _LVOFreeMem(a6)
+.out:   movem.l (sp)+,d2-d3/a2-a3
+        rts
+
+; ---------------------------------------------------------------------------
+; One piece: load its score, start it, end it.
+; ---------------------------------------------------------------------------
+
+; Load piece d0 (from 0), start it playing and put its line in gold.
+; d0: 0 when it plays.
+start_piece:
         movem.l d2-d7/a2-a5,-(sp)
         move.l  d0,d6
         move.l  d0,d7
@@ -509,6 +1002,7 @@ play_piece:
         bne.s   .loaded
         lea     no_score_text(pc),a0
         bsr     print
+        moveq   #1,d0
         bra     .out
 .loaded:
         move.l  d0,score_mem
@@ -532,55 +1026,430 @@ play_piece:
         move.l  STATUS+ST_OTHER_FREE.w,12(a1)
         lea     playing_text(pc),a0
         bsr     print
-        lea     stop_hint(pc),a0
-        tst.l   console
-        bne.s   .hint
-        lea     play_hint(pc),a0
-.hint:  bsr     print
+        move.l  d6,d0
+        bsr     highlight
         bsr     take_audio
         bsr     take_timer
         tst.l   d0
-        bne.s   .busy
+        beq.s   .play
+        bsr     give_audio              ; the timer is someone else's
+        bsr     free_score
+        lea     busy_text(pc),a0
+        bsr     print
+        moveq   #-1,d0
+        bsr     highlight
+        moveq   #1,d0
+        bra.s   .out
+.play:  move.w  #1,playing
         move.l  #1,STATUS+ST_STATE.w
-        bsr     wait_for_end
-        bsr     give_timer
-.busy:  bsr     give_audio
-
-        move.l  score_mem,a1
-        move.l  score_bytes,d0
-        addq.l  #1,d0
-        jsr     _LVOFreeMem(a6)
-        addq.l  #1,STATUS+ST_PLAYED.w
-        bsr     print_results
+        moveq   #0,d0
 .out:   movem.l (sp)+,d2-d7/a2-a5
         rts
 
-; Wait for the interrupts to finish the piece, or for a key in the window,
-; or for CTRL-C. The task sleeps in WaitForChar or Delay meanwhile.
-wait_for_end:
-.wait:  tst.w   finished
-        bne.s   .out
-        moveq   #0,d0
-        moveq   #0,d1
-        jsr     _LVOSetSignal(a6)
-        and.l   #SIGBREAKF_CTRL_C,d0
-        bne.s   .stop
-        move.l  dosbase,a6
-        move.l  console,d1
-        beq.s   .delay
-        move.l  #WAIT_US,d2
-        jsr     _LVOWaitForChar(a6)
-        move.l  ExecBase.w,a6
-        tst.l   d0
-        beq.s   .wait
-        bsr     read_key                ; take the key that stopped it
-.stop:  move.l  #1,STATUS+ST_STOPPED.w
+; Stop the piece playing (or finished), give everything back, and say what
+; it measured.
+end_piece:
+        movem.l d2-d7/a2-a5,-(sp)
+        bsr     give_timer
+        bsr     give_audio
+        clr.w   playing
+        bsr     free_score
+        addq.l  #1,STATUS+ST_PLAYED.w
+        moveq   #-1,d0
+        bsr     highlight
+        tst.l   screen
+        beq.s   .print
+        bsr     restore_band            ; the traces go
+.print: bsr     print_results
+        move.l  #3,STATUS+ST_STATE.w
+        movem.l (sp)+,d2-d7/a2-a5
         rts
-.delay: moveq   #1,d1                   ; 1/50 s
-        jsr     _LVODelay(a6)
-        move.l  ExecBase.w,a6
-        bra.s   .wait
+
+free_score:
+        move.l  score_mem,d0
+        beq.s   .out
+        move.l  d0,a1
+        move.l  score_bytes,d0
+        addq.l  #1,d0
+        jsr     _LVOFreeMem(a6)
+        clr.l   score_mem
 .out:   rts
+
+; ---------------------------------------------------------------------------
+; The scopes: four voices and their mix, in the floor band.
+; ---------------------------------------------------------------------------
+
+; One scope frame. After the vertical blank, draw the traces made last
+; time, scope by scope: each scope's old points are copied back from
+; band_copy and its new ones plotted, and no scope is started while the
+; beam is on the band or about to reach it (beam_clear), so the beam
+; always shows a scope whole, old or new. The next traces are made into
+; the other buffer while the beam holds the drawing up, or after it. The
+; traces are a frame late. Counts the E-clock ticks of both kinds of work,
+; less the player's interrupts' share; waiting for the beam is not counted.
+scope_frame:
+        movem.l d2-d7/a2-a5,-(sp)
+        CALLGFX WaitTOF
+        clr.w   made
+        clr.l   draw_sum
+        clr.l   make_sum
+        bsr     draw_units
+        bsr     make_traces             ; if the beam did not leave time for it
+        move.l  front,d0                ; show what was just made, next time
+        move.l  back,front
+        move.l  d0,back
+        move.l  draw_sum,d0
+        add.l   d0,STATUS+ST_DRAW_E.w
+        cmp.l   STATUS+ST_DRAW_MAX_E.w,d0
+        bls.s   .most
+        move.l  d0,STATUS+ST_DRAW_MAX_E.w
+.most:  move.l  make_sum,d0
+        add.l   d0,STATUS+ST_SCOPE_E.w
+        addq.l  #1,STATUS+ST_SCOPE_FRAMES.w
+        cmp.l   STATUS+ST_SCOPE_MAX_E.w,d0
+        bls.s   .out
+        move.l  d0,STATUS+ST_SCOPE_MAX_E.w
+.out:   movem.l (sp)+,d2-d7/a2-a5
+        rts
+
+; Make the next traces into the back buffer, once a frame.
+make_traces:
+        tst.w   made
+        bne.s   .out
+        movem.l d2-d7/a2-a5,-(sp)
+        bsr     stopwatch_start
+        bsr     take_voices
+        bsr     trace_voices
+        bsr     stopwatch_stop
+        add.l   d0,make_sum
+        move.w  #1,made
+        movem.l (sp)+,d2-d7/a2-a5
+.out:   rts
+
+stopwatch_start:
+        bsr     clock
+        move.l  d0,watch_ms
+        move.w  d1,watch_count
+        move.l  isr_e,watch_isr
+        rts
+
+; d0: the E-clock ticks since stopwatch_start, less the interrupts'.
+stopwatch_stop:
+        bsr     clock
+        sub.l   watch_ms,d0             ; ms between
+        mulu    #TIMER_PERIOD,d0
+        move.w  watch_count,d2
+        sub.w   d1,d2                   ; the timer counts down
+        ext.l   d2
+        add.l   d2,d0                   ; E-clock ticks between
+        move.l  isr_e,d1
+        sub.l   watch_isr,d1
+        sub.l   d1,d0                   ; less the interrupts' own
+        bpl.s   .pos
+        moveq   #0,d0
+.pos:   rts
+
+; d0: the player's millisecond, d1: CIA-B timer A's count within it.
+clock:
+.again: move.l  now,d2
+        bsr     read_timer
+        move.l  d0,d1
+        move.l  d2,d0
+        cmp.l   now,d2
+        bne.s   .again
+        rts
+
+; Copy what Paula plays on each voice into taken. Interrupts stay on, so
+; that the player's are never late for the scopes: a note that starts
+; while this copies shows wrongly for one scope frame at most.
+take_voices:
+        move.l  now,d2
+        lea     voices,a0
+        lea     taken,a1
+        moveq   #VOICES-1,d1
+.voice: move.w  V_PSAMPLE(a0),C_SAMPLE(a1)
+        move.w  V_PPERIOD(a0),C_PERIOD(a1)
+        move.w  V_OUT(a0),C_OUT(a1)
+        move.l  d2,d0
+        sub.l   V_PSTART(a0),d0
+        cmp.l   #$ffff,d0
+        bls.s   .short
+        move.l  #$ffff,d0
+.short: move.w  d0,C_ELAPSED(a1)
+        lea     V_SIZE(a0),a0
+        lea     C_SIZE(a1),a1
+        dbf     d1,.voice
+        rts
+
+; Each voice's trace for MIX_SCOPE_WIDTH columns into the back buffer, and
+; the mix after them: where Paula
+; is in the sample now, the classic tracker way (the samples played since
+; the start, through the loop), then a column every SCOPE_STEP clocks.
+trace_voices:
+        lea     taken,a3
+        move.l  back,a2
+        moveq   #VOICES-1,d7
+.voice: move.w  d7,-(sp)
+        move.w  C_SAMPLE(a3),d0
+        bmi.s   .flat
+        tst.w   C_OUT(a3)
+        bne.s   .sound
+.flat:  move.w  #MIX_SCOPE_WIDTH-1,d0   ; silent: the centre line
+.zero:  clr.b   (a2)+
+        dbf     d0,.zero
+        bra     .next
+.sound: mulu    #S_SIZE,d0
+        lea     sampletab,a4
+        add.l   d0,a4
+        move.l  samples_base,a0
+        add.l   S_OFFSET(a4),a0         ; the sample
+        move.w  S_WORDS(a4),d4
+        add.w   d4,d4                   ; its length in bytes
+        move.w  S_LOOPWORDS(a4),d5
+        add.w   d5,d5                   ; the loop's
+        move.w  C_ELAPSED(a3),d0
+        mulu    #PAULA_PER_MS,d0        ; Paula clocks since it started
+        move.w  C_PERIOD(a3),d1
+        bsr     divide_long             ; samples since it started
+        moveq   #0,d3
+        move.w  d4,d3
+        cmp.l   d3,d0
+        bcs.s   .first                  ; still in the first pass
+        sub.l   d3,d0                   ; then round the loop
+        divu    d5,d0
+        swap    d0
+        add.w   d4,d0
+        sub.w   d5,d0                   ; the loop ends where the sample does
+.first: move.w  d0,d3                   ; the byte now
+        move.l  #SCOPE_STEP*256,d0      ; bytes a column, 8.8
+        divu    C_PERIOD(a3),d0
+        moveq   #0,d6
+        move.b  d0,d6                   ; fraction
+        lsr.w   #8,d0                   ; whole bytes
+        move.l  trace_table,a1
+        move.w  C_OUT(a3),d1
+        lsl.w   #8,d1
+        add.w   d1,a1                   ; the row for its volume
+        moveq   #0,d2                   ; the fraction so far
+        move.w  #MIX_SCOPE_WIDTH-1,d7
+        moveq   #0,d1
+.col:   move.b  0(a0,d3.w),d1
+        move.b  0(a1,d1.w),(a2)+
+        add.b   d6,d2
+        addx.w  d0,d3
+        cmp.w   d4,d3
+        bcs.s   .in
+        sub.w   d5,d3
+.in:    dbf     d7,.col
+.next:  lea     C_SIZE(a3),a3
+        move.w  (sp)+,d7
+        dbf     d7,.voice
+        move.l  back,a0                 ; the mix: half the voices' sum, clamped
+        lea     MIX_SCOPE_WIDTH*VOICES(a0),a1
+        move.w  #MIX_SCOPE_WIDTH-1,d7
+.mix:   move.b  (a0),d0
+        ext.w   d0
+        move.b  MIX_SCOPE_WIDTH(a0),d1
+        ext.w   d1
+        add.w   d1,d0
+        move.b  MIX_SCOPE_WIDTH*2(a0),d1
+        ext.w   d1
+        add.w   d1,d0
+        move.b  MIX_SCOPE_WIDTH*3(a0),d1
+        ext.w   d1
+        add.w   d1,d0
+        addq.l  #1,a0
+        asr.w   #1,d0
+        cmp.w   #MIX_HALF,d0
+        ble.s   .low
+        moveq   #MIX_HALF,d0
+.low:   cmp.w   #-MIX_HALF,d0
+        bge.s   .high
+        moveq   #-MIX_HALF,d0
+.high:  move.b  d0,(a1)+
+        dbf     d7,.mix
+        rts
+
+; d0.l / d1.w: d0.l the quotient. Uses d2.
+divide_long:
+        move.l  d0,d2
+        clr.w   d2
+        swap    d2
+        divu    d1,d2                   ; the high word: remainder and quotient
+        move.l  d2,-(sp)
+        move.w  d0,d2
+        divu    d1,d2                   ; the low word, after that remainder
+        move.l  (sp)+,d0
+        swap    d0
+        move.w  d2,d0
+        rts
+
+; Copy the whole band back from band_copy with the CPU, a row at a time
+; (40 bytes in two MOVEMs), when a piece ends. While a piece plays, each
+; scope takes back only its own points (draw_unit).
+restore_band:
+        movem.l d2-d7/a2-a4,-(sp)
+        move.l  band_copy,a0
+        lea     planes,a4
+        moveq   #DEPTH-1,d0
+.plane: move.l  (a4)+,a3
+        add.l   #SCOPE_TOP*ROW_BYTES,a3
+        move.w  #SCOPE_ROWS-1,d1
+.row:   movem.l (a0)+,d2-d7/a1-a2
+        movem.l d2-d7/a1-a2,(a3)
+        movem.l (a0)+,d2-d3
+        movem.l d2-d3,32(a3)
+        lea     ROW_BYTES(a3),a3
+        dbf     d1,.row
+        dbf     d0,.plane
+        clr.w   drawn                   ; no points to take back
+        movem.l (sp)+,d2-d7/a2-a4
+        rts
+
+; Draw the six units: the four voice scopes (colour 14) and the mixed
+; scope in two halves (colour 15), each when the beam allows.
+draw_units:
+        move.l  front,a0
+        lea     voice_scope_left(pc),a1
+        lea     old_points,a2
+        moveq   #VOICES-1,d7
+.voice: movem.l a0-a2,-(sp)
+        bsr     make_if_held
+        move.w  (a1),d4                 ; the left column
+        moveq   #VOICE_SCOPE_WIDTH,d6
+        moveq   #0,d3                   ; colour 14
+        bsr     draw_unit
+        movem.l (sp)+,a0-a2
+        lea     MIX_SCOPE_WIDTH(a0),a0
+        addq.l  #2,a1
+        lea     VOICE_SCOPE_WIDTH*2(a2),a2
+        dbf     d7,.voice
+        move.l  a2,-(sp)
+        bsr     make_if_held
+        move.l  front,a0
+        lea     MIX_SCOPE_WIDTH*VOICES(a0),a0
+        move.w  #MIX_SCOPE_LEFT,d4
+        moveq   #MIX_SPLIT,d6
+        moveq   #1,d3                   ; colour 15
+        bsr     draw_unit
+        move.l  (sp),a2
+        bsr     make_if_held
+        move.l  (sp)+,a2
+        move.l  front,a0
+        lea     MIX_SCOPE_WIDTH*VOICES+MIX_SPLIT(a0),a0
+        lea     MIX_SPLIT*2(a2),a2
+        move.w  #MIX_SCOPE_LEFT+MIX_SPLIT,d4
+        moveq   #MIX_SCOPE_WIDTH-MIX_SPLIT,d6
+        moveq   #1,d3
+        bsr     draw_unit
+        move.w  #1,drawn
+        rts
+
+; Make the next traces now if the beam holds the drawing up. Keeps a0-a2.
+make_if_held:
+        tst.w   made
+        bne.s   .out
+        bsr     beam_held
+        beq.s   .out
+        movem.l a0-a2,-(sp)
+        bsr     make_traces
+        movem.l (sp)+,a0-a2
+.out:   rts
+
+; One unit: d6 points from the trace a0, from column d4; d3 0 for colour
+; 14, 1 for colour 15; a2 holds the unit's points from last time (their
+; offsets in a plane), which are taken back first and then replaced.
+draw_unit:
+        movem.l d7/a6,-(sp)
+        move.l  a0,unit_trace
+        bsr     beam_clear
+        bsr     stopwatch_start
+        movem.l planes,a3-a6            ; planes 0 to 3, a3 is plane 0
+        tst.w   drawn
+        beq.s   .plot
+        move.l  a2,a1                   ; take back last time's points
+        move.l  band_copy,a0
+        sub.l   #SCOPE_TOP*ROW_BYTES,a0 ; so a plane offset indexes the copy
+        move.w  d6,d7
+        subq.w  #1,d7
+.back:  move.w  (a1)+,d0
+        move.b  0(a0,d0.w),0(a3,d0.w)
+        dbf     d7,.back
+        lea     BAND_BYTES(a0),a0
+        move.l  a2,a1
+        move.w  d6,d7
+        subq.w  #1,d7
+.back1: move.w  (a1)+,d0
+        move.b  0(a0,d0.w),0(a4,d0.w)
+        dbf     d7,.back1
+        lea     BAND_BYTES(a0),a0
+        move.l  a2,a1
+        move.w  d6,d7
+        subq.w  #1,d7
+.back2: move.w  (a1)+,d0
+        move.b  0(a0,d0.w),0(a5,d0.w)
+        dbf     d7,.back2
+        lea     BAND_BYTES(a0),a0
+        move.l  a2,a1
+        move.w  d6,d7
+        subq.w  #1,d7
+.back3: move.w  (a1)+,d0
+        move.b  0(a0,d0.w),0(a6,d0.w)
+        dbf     d7,.back3
+.plot:  move.l  unit_trace,a0
+        lea     row_offsets+SCOPE_CENTRE*2,a1
+        move.w  d4,d5
+        lsr.w   #3,d4                   ; the column's byte
+        not.w   d5
+        and.w   #7,d5                   ; and bit
+        move.w  d6,d7
+        subq.w  #1,d7
+.point: move.b  (a0)+,d0
+        ext.w   d0
+        add.w   d0,d0
+        move.w  0(a1,d0.w),d2
+        add.w   d4,d2
+        move.w  d2,(a2)+                ; for next time
+        tst.w   d3
+        bne.s   .fifteen
+        bclr    d5,0(a3,d2.w)
+        bra.s   .upper
+.fifteen:
+        bset    d5,0(a3,d2.w)
+.upper: bset    d5,0(a4,d2.w)
+        bset    d5,0(a5,d2.w)
+        bset    d5,0(a6,d2.w)
+        subq.w  #1,d5
+        bpl.s   .same
+        moveq   #7,d5
+        addq.w  #1,d4
+.same:  dbf     d7,.point
+        bsr     stopwatch_stop
+        add.l   d0,draw_sum
+        movem.l (sp)+,d7/a6
+        rts
+
+; Wait until the beam is clear of the band: not on it, and not within
+; BEAM_GUARD lines above it, which is longer than a unit takes.
+beam_clear:
+.wait:  bsr.s   beam_held
+        bne.s   .wait
+        rts
+
+; Z clear when the beam is in the guard lines or on the band. Uses d0.
+beam_held:
+        move.l  custom+4,d0             ; VPOSR and VHPOSR
+        lsr.l   #8,d0
+        and.w   #$1ff,d0                ; the beam's line
+        cmp.w   band_first,d0
+        bcs.s   .clear                  ; above the guard
+        cmp.w   band_last,d0
+        bhi.s   .clear                  ; below the band
+        moveq   #1,d0
+        rts
+.clear: moveq   #0,d0
+        rts
+
 
 ; Everything a piece starts from: silent voices, time 0, the score's start,
 ; the log's start, and the status's measurements cleared.
@@ -595,6 +1464,11 @@ reset_piece:
         dbf     d0,.stat
         clr.l   STATUS+ST_STOPPED.w
         clr.l   STATUS+ST_LOGBYTES.w
+        clr.l   STATUS+ST_SCOPE_FRAMES.w
+        clr.l   STATUS+ST_SCOPE_E.w
+        clr.l   STATUS+ST_SCOPE_MAX_E.w
+        clr.l   STATUS+ST_DRAW_E.w
+        clr.l   STATUS+ST_DRAW_MAX_E.w
         if      LOG
         move.l  STATUS+ST_LOGBASE.w,d0
         move.l  d0,log_ptr
@@ -617,11 +1491,7 @@ print_results:
         move.l  ST_MAX_FRAME_E(a0),8(a1)
         move.l  ST_MAX_MS_E(a0),12(a1)
         lea     results(pc),a0
-        tst.w   timer_busy
-        beq.s   .say
-        lea     busy_text(pc),a0
-        bra.s   .print
-.say:   tst.l   STATUS+ST_STOPPED.w
+        tst.l   STATUS+ST_STOPPED.w
         beq.s   .print
         lea     stopped(pc),a0
 .print: bsr     print
@@ -726,6 +1596,7 @@ voices_silent:
         moveq   #VOICES-1,d0
 .loop:  move.w  #-1,V_KEY(a0)
         move.w  #-1,V_SAMPLE(a0)
+        move.w  #-1,V_PSAMPLE(a0)
         lea     V_SIZE(a0),a0
         dbf     d0,.loop
         rts
@@ -870,6 +1741,7 @@ cia_handler:
         bpl.s   .pos
         moveq   #0,d1
 .pos:   add.l   d1,frame_e
+        add.l   d1,isr_e
         cmp.l   STATUS+ST_MAX_MS_E.w,d1
         bls.s   .done
         move.l  d1,STATUS+ST_MAX_MS_E.w
@@ -990,6 +1862,9 @@ start_voice:
         add.l   S_LOOP(a0),d1
         move.l  d1,(a1)+
         move.w  S_LOOPWORDS(a0),(a1)
+        move.w  V_SAMPLE(a3),V_PSAMPLE(a3)  ; for the scopes
+        move.w  V_PERIOD(a3),V_PPERIOD(a3)
+        move.l  now,V_PSTART(a3)
         move.w  #$0080,d0
         lsl.w   d7,d0
         move.w  d0,INTREQ(a5)           ; nothing stale
@@ -1001,8 +1876,9 @@ start_voice:
         move.w  d0,DMACON(a5)
         rts
 
-; Stop voice d7's channel. Uses d0, a0.
+; Stop voice a3 (number d7) on Paula. Uses d0, a0.
 stop_voice:
+        move.w  #-1,V_PSAMPLE(a3)
         moveq   #1,d0
         lsl.w   d7,d0
         move.w  d0,DMACON(a5)
@@ -1265,27 +2141,28 @@ aud_handler:
         add.w   #TIMER_PERIOD,d1
 .pos:   ext.l   d1
         add.l   d1,frame_e
+        add.l   d1,isr_e
         rts
 
 
+
+        SCREEN_TABLES                   ; line_tops, voice_scope_left (screen.i)
+
 dosname:        dc.b "dos.library",0
+gfxname:        dc.b "graphics.library",0
+intname_lib:    dc.b "intuition.library",0
 ciabname:       dc.b "ciab.resource",0
-console_name:   dc.b "*",0
 index_name:     dc.b "scores/index",0
+picture_name:   dc.b "title.ilbm",0
 menu_keys:      dc.b "123456789ABCDEFGHIJKLMNOPRSTUVWXYZ"
 banner:         dc.b "EXP-004, the expressive piano: %ld pieces.",10
                 dc.b "Samples: %ld bytes at $%lx in chip RAM,",10
                 dc.b "%s.",10,0
 loaded:         dc.b "where LoadSeg put them",0
 copied:         dc.b "copied there from elsewhere",0
-menu_line:      dc.b " %s  %s",10,0
-menu_tail:      dc.b " Q  Quit",10
-                dc.b "Press a key: ",0
 loading_text:   dc.b 10,"%s",10,0
 playing_text:   dc.b "Score: %ld bytes at $%lx.",10
                 dc.b "Free memory: %ld bytes chip, %ld other.",10,0
-stop_hint:      dc.b "Playing; press any key to stop.",10,0
-play_hint:      dc.b "Playing.",10,0
 results:        dc.b "Done: %ld frames (1/60 s). Player time a frame",10
                 dc.b "in E-clock ticks (11932 a frame): average %ld,",10
                 dc.b "worst %ld. Worst millisecond: %ld ticks of 716.",10,0
@@ -1296,8 +2173,9 @@ busy_text:      dc.b "CIA-B timer A is in use; nothing played.",10,0
 memory_text:    dc.b "Not enough memory.",10,0
 no_index_text:  dc.b "Cannot read scores/index: run piano from the disk's root.",10,0
 no_score_text:  dc.b "Cannot load that score.",10,0
-no_console_text: dc.b "Cannot open the CLI window (*) for the menu.",10,0
-bye_text:       dc.b 10,"Bye.",10,0
+no_picture_text: dc.b "Cannot read title.ilbm: run piano from the disk's root.",10,0
+bad_picture_text: dc.b "title.ilbm is not a 320x200 4-plane uncompressed ILBM.",10,0
+no_screen_text: dc.b "Cannot open the screen.",10,0
         if      LOG
 log_text:       dc.b "Voice log: %ld bytes at $%lx.",10,0
         endif
@@ -1306,6 +2184,20 @@ intname:        dc.b "EXP-004 piano",0
 
         section tables,data
 
+newscreen:      dc.w 0,0,SCREEN_WIDTH,SCREEN_HEIGHT,DEPTH     ; left, top, size, depth
+                dc.b 0,1                                      ; detail and block pens
+                dc.w 0                                        ; lowres
+                dc.w CUSTOMSCREEN|SCREENQUIET                 ; no title bar drawn
+                dc.l 0,0,0,0                                  ; font, title, gadgets, bitmap
+newwindow:      dc.w 0,0,SCREEN_WIDTH,SCREEN_HEIGHT
+                dc.b 0,1
+                dc.l MOUSEBUTTONS|RAWKEY
+                dc.l BACKDROP|BORDERLESS|ACTIVATE|RMBTRAP|SIMPLE_REFRESH|NOCAREREFRESH
+                dc.l 0,0,0                                    ; gadgets, checkmark, title
+                dc.l 0                                        ; the screen (nw_Screen, 30)
+                dc.l 0                                        ; bitmap
+                dc.w 0,0,0,0                                  ; size limits
+                dc.w CUSTOMSCREEN
 ciaint:         dc.l 0,0
                 dc.b NT_INTERRUPT,0
                 dc.l intname,0,cia_handler
@@ -1315,6 +2207,8 @@ audints:
                 dc.b NT_INTERRUPT,0
                 dc.l intname,REPTN,aud_handler
         endr
+        include "keys.i"                ; piece_keys: each piece's raw key code
+        even
 keys:           incbin "keys.bin"
 sampletab:      incbin "samples.tab"
 velocity:       incbin "velocity.bin"
@@ -1328,7 +2222,6 @@ samples_end:
         section state,bss
 
 bss_start:
-packet:         ds.b MESSAGE_SIZE+DOSPACKET_SIZE    ; first: longword aligned
 piece_state:                            ; cleared before each piece
 voices:         ds.b V_SIZE*VOICES
 loops:          ds.b 8*VOICES           ; loop start (long) and length (word) per channel
@@ -1343,12 +2236,14 @@ score_done:     ds.w 1
 finished:       ds.w 1
 fading:         ds.w 1                  ; voices waiting for a fade
 piece_state_end:
+isr_e:          ds.l 1                  ; E-clock ticks in the interrupts, never cleared
 score_ptr:      ds.l 1
 old_audio:      ds.l VOICES
 samples_base:   ds.l 1
 dosbase:        ds.l 1
+gfxbase:        ds.l 1
+intbase:        ds.l 1
 ciabbase:       ds.l 1
-console:        ds.l 1                  ; the CLI window, for the menu; 0 without it
 args:           ds.l 1
 args_len:       ds.l 1
 pieces:         ds.l 1
@@ -1361,8 +2256,33 @@ score_bytes:    ds.l 1
 log_ptr:        ds.l 1
 log_end:        ds.l 1
 fmt_args:       ds.l 4
+screen:         ds.l 1
+window:         ds.l 1
+planes:         ds.l DEPTH
+picture_mem:    ds.l 1                  ; title.ilbm while it is read
+picture_bytes:  ds.l 1
+body:           ds.l 1                  ; its BODY
+band_copy:      ds.l 1                  ; the scope band's four planes
+trace_table:    ds.l 1                  ; 65 volumes x 256 sample bytes
+taken:          ds.b C_SIZE*VOICES
+palette:        ds.w 16
+row_offsets:    ds.w SCREEN_HEIGHT
 timer_busy:     ds.w 1
-keybuf:         ds.b 2
-keystr:         ds.b 2
+playing:        ds.w 1
+drawn:          ds.w 1                  ; 1 when old_points are on the screen
+band_first:     ds.w 1                  ; the first beam line no unit may start on
+band_last:      ds.w 1                  ; the band's last line on the display
+unit_trace:     ds.l 1
+old_points:     ds.w VOICES*VOICE_SCOPE_WIDTH+MIX_SCOPE_WIDTH
+front:          ds.l 1                  ; the traces being drawn: voices, then the mix
+back:           ds.l 1                  ; the traces being made
+draw_sum:       ds.l 1
+make_sum:       ds.l 1
+made:           ds.w 1
+trace_sets:     ds.b 2*MIX_SCOPE_WIDTH*(VOICES+1)
+watch_count:    ds.w 1
+watch_ms:       ds.l 1
+watch_isr:      ds.l 1
 textbuf:        ds.b 512
+                ds.w 1
 bss_end:

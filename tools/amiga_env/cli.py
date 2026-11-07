@@ -155,7 +155,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     survey.add_argument("--max-s", type=float, default=360, help="longest, seconds; 360")
     check = sub.add_parser(
         "piano-run",
-        help="boot the piano floppy headless and play pieces from its menu; "
+        help="boot the piano floppy headless and choose pieces on its screen; "
         "compare their logs, record audio",
     )
     check.add_argument("recipe", type=Path, metavar="RECIPE.toml")
@@ -164,12 +164,22 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     )
     check.add_argument("--machine", default="a500", help="a machine from amiga.toml; a500")
     check.add_argument(
-        "--stop-after-s",
+        "--switch-after-s",
         type=float,
         metavar="S",
-        help="press Return S seconds into each piece, as a listener stopping it would",
+        help="choose the next piece S seconds into each piece but the last, while it plays",
     )
-    check.add_argument("--name", help="what the run's files are called; emulator-menu[-log]")
+    check.add_argument(
+        "--click", action="store_true", help="choose by clicking each piece's line, not its key"
+    )
+    check.add_argument(
+        "--scope-shots",
+        type=int,
+        default=0,
+        metavar="N",
+        help="take N more screenshots while each piece plays and count scopes caught half drawn",
+    )
+    check.add_argument("--name", help="what the run's files are called; emulator-screen[-log]")
     mode = check.add_mutually_exclusive_group(required=True)
     mode.add_argument("--log", action="store_true", help="the test build: compare the voice log")
     mode.add_argument("--audio", action="store_true", help="the player, in real time, to a WAV")
@@ -291,27 +301,41 @@ def _piano_run(args: argparse.Namespace) -> int:
     machines = profile.load_machines(reserved=command_names())
     out = project.root() / recipe.out
     player, test = disk.DISK_NAMES
-    name = args.name or ("emulator-menu-log" if args.log else "emulator-menu")
-    stop_ms = round(args.stop_after_s * 1000) if args.stop_after_s is not None else None
+    name = args.name or ("emulator-screen-log" if args.log else "emulator-screen")
+    switch_ms = round(args.switch_after_s * 1000) if args.switch_after_s is not None else None
+    lines = disk.click_points(recipe)
+    scopes = machine.ScopeCheck(*disk.scope_regions(recipe), args.scope_shots)
     found = machine.run_menu(
         machines[args.machine],
         project.build_dir() / "piano" / (test if args.log else player),
-        [machine.Choice(n, keys[n], out / "m68k" / f"{n}.log") for n in args.pieces],
+        [machine.Choice(n, keys[n], out / "m68k" / f"{n}.log", lines[n]) for n in args.pieces],
         out,
         name,
         log=args.log,
         audio=args.audio,
-        stop_after_ms=stop_ms,
+        switch_after_ms=switch_ms,
+        click=args.click,
+        scopes=scopes,
     )
     print(f"samples in chip RAM at {found['samples_in_chip']['address']}")
+    print(f"chip RAM free with the screen open: {found['chip_free_with_the_screen_open']}")
     matched = True
     for piece, result in found["pieces"].items():
-        cpu, free = result["cpu"], result["memory_free_while_playing"]
-        stopped = ", stopped by a key" if result["stopped_by_key"] else ""
-        print(
-            f"{piece} (key {result['key']}): {cpu['frames']} frames{stopped}, player "
-            f"{cpu['percent_of_cpu']}% of the CPU; free {free['chip']} chip, {free['other']} other"
+        cpu, free, scopes = result["cpu"], result["memory_free_while_playing"], result["scopes"]
+        left = (
+            ", left playing for the next choice"
+            if result["left_playing_for_the_next_choice"]
+            else ""
         )
+        print(
+            f"{piece} (key {result['key']}): {cpu['frames']} frames{left}, player "
+            f"{cpu['percent_of_cpu']}%, with scopes {scopes['player_and_scopes_percent_of_cpu']}% "
+            f"of the CPU, scopes {scopes['scope_frames_per_second']}/s; "
+            f"free {free['chip']} chip, {free['other']} other"
+        )
+        if result.get("scope_shots", {}).get("shots"):
+            shots = result["scope_shots"]
+            print(f"  scopes whole in {shots['every_scope_whole']} of {shots['shots']} screenshots")
         if args.log:
             print(f"  voice log: {json.dumps(result['log'])}")
             matched &= result["log"]["same_ticks"]

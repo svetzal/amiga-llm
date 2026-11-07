@@ -27,6 +27,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 from .. import adf, assemble, project
+from . import font as font_mod
+from . import picture
 from . import screen as screen_mod
 from .build import Recipe
 
@@ -106,6 +108,35 @@ def titles(recipe: Recipe) -> list[str]:
     if missing:
         raise SystemExit(f"{missing[0]}: the recipe gives it no title")
     return [p.title for p in recipe.pieces]
+
+
+def click_points(recipe: Recipe, root: Path | None = None) -> dict[str, tuple[int, int]]:
+    """A point on each piece's line of the screen, by piece name: its middle row,
+    a little in from the line's left."""
+    root = root or project.root()
+    if recipe.screen is None:
+        raise SystemExit("the recipe has no [screen] table")
+    font = font_mod.load(root / recipe.screen.font)
+    lines = screen_mod.layout(titles(recipe), recipe.screen, font).pieces
+    return {
+        p.name: (line.left + 12, line.top + font.height // 2)
+        for p, line in zip(recipe.pieces, lines, strict=True)
+    }
+
+
+def scope_regions(recipe: Recipe) -> tuple[tuple, tuple[int, int]]:
+    """The scopes (as machine.Scope fields: left, width, trace colour) and the band's
+    rows, from the recipe's screen, for checking screenshots."""
+    spec = recipe.screen
+    if spec is None:
+        raise SystemExit("the recipe has no [screen] table")
+    from .machine import Scope
+
+    voice = picture.rgb_of(picture.parse_ocs(spec.voice_trace))
+    mix = picture.rgb_of(picture.parse_ocs(spec.mix_trace))
+    scopes = tuple(Scope(x, spec.voice_scope_width, voice) for x in spec.voice_scopes)
+    scopes += (Scope(spec.mix_scope[0], spec.mix_scope[1], mix),)
+    return scopes, (spec.scope_band.top, spec.scope_band.bottom)
 
 
 def build_disks(recipe: Recipe, root: Path | None = None) -> list[Path]:

@@ -1,6 +1,8 @@
 import struct
 import wave
+from pathlib import Path
 
+import numpy as np
 from amiga_env.piano import disk, m68k, machine
 from amiga_env.piano.player import LogRow
 
@@ -103,3 +105,84 @@ def test_the_boot_silence_is_dropped_up_to_a_lead():
 
     assert dropped == 2.0
     assert trimmed == silence[: 4 * 44100] + music
+
+
+class TestScopes:
+    def test_scope_shares_are_of_the_e_clock_ticks_played(self):
+        # 1000 ms of 716 ticks: scopes 358,000 ticks is 50%, player 71,600 is 10%.
+        found = machine.scope_report(
+            status(ms=1000, scope_frames=30, scope_e=158_000, draw_e=200_000, total_e=71_600)
+        )
+
+        assert found["scope_frames_per_second"] == 30.0
+        assert found["average_e_per_scope_frame"] == 11_933
+        assert found["average_e_drawing"] == 6667
+        assert found["scope_percent_of_cpu"] == 50.0
+        assert found["player_and_scopes_percent_of_cpu"] == 60.0
+        assert found["player_e_per_frame"] == 1193
+
+    def test_no_scope_frames_is_not_a_division_by_zero(self):
+        assert machine.scope_report(status())["average_e_per_scope_frame"] == 0
+
+
+class TestPointer:
+    def test_a_move_is_the_distance_times_the_gain(self):
+        assert machine.pointer_move((10, 10), (20, 5)) == (40, -20)
+
+    def test_a_long_move_is_sent_in_steps(self):
+        assert machine.pointer_move((0, 0), (300, -300)) == (120, -120)
+
+    def test_within_a_pixel_is_there(self):
+        assert machine.pointer_move((201, 12), (202, 13)) is None
+
+
+def test_the_status_block_has_the_screens_fields_after_the_menus():
+    found = machine.parse_status(list(range(len(machine.STATUS_FIELDS))))
+
+    assert (found.window, found.scope_frames, found.highlight, found.screen_chip) == (
+        22,
+        25,
+        28,
+        29,
+    )
+
+
+class TestScopeCoverage:
+    def shot(self):
+        return np.zeros((486, 752, 3), dtype=np.uint8)
+
+    def test_a_trace_in_every_column_is_whole(self):
+        shot = self.shot()
+        scope = machine.Scope(10, 4, (85, 187, 204))
+        for x in range(10, 14):
+            shot[48 + 2 * 170, 60 + 2 * x] = (85, 187, 204)
+
+        assert machine.scope_coverage(shot, [scope], (152, 197)) == [1.0]
+
+    def test_a_half_drawn_trace_is_seen(self):
+        shot = self.shot()
+        scope = machine.Scope(10, 4, (85, 187, 204))
+        for x in range(10, 12):
+            shot[48 + 2 * 170, 60 + 2 * x] = (85, 187, 204)
+
+        assert machine.scope_coverage(shot, [scope], (152, 197)) == [0.5]
+
+    def test_pixels_outside_the_band_do_not_count(self):
+        shot = self.shot()
+        shot[48 + 2 * 100, 60 + 2 * 10] = (85, 187, 204)
+
+        found = machine.scope_coverage(shot, [machine.Scope(10, 1, (85, 187, 204))], (152, 197))
+
+        assert found == [0.0]
+
+
+def test_the_recipes_scopes_are_checked_with_their_trace_colours():
+    from amiga_env.piano import build
+
+    recipe = build.load_recipe(Path(__file__).parents[1] / "examples" / "piano" / "piano.toml")
+
+    scopes, rows = disk.scope_regions(recipe)
+
+    assert rows == (152, 197)
+    assert [s.left for s in scopes] == [8, 50, 92, 134, 180]
+    assert scopes[0].colour == (85, 187, 204) and scopes[4].colour == (221, 187, 136)
