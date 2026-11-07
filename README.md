@@ -36,7 +36,10 @@ EXP-001, the headless boot, is still to be run as an experiment.
 - `tools/amiga_env/`: the host tooling, one Python package with the
   `amiga-env` command. Installable on its own for other projects.
 - `tests/`: tests for the host tooling. No licensed media needed.
-- `amiga.toml`: this project's machine profiles, the A500 and the A3000.
+- `amiga.toml`: this project's machine profiles: the A500, the A3000 and
+  the A3000 development machine.
+- `systems/`: recipes for systems a machine boots from a host folder.
+- `work/`: the development machine's `Work:` volume.
 - `media/`: licensed ROMs, OS floppies, the NDK and reference manuals.
   Only `manifest.toml` and `manifest.lock.json` are tracked.
 - `.env.example`: the variables that say where each media source is. Your
@@ -88,6 +91,26 @@ make a3000    # Kickstart 3.2, the 3.2 Install floppy, 8 MB fast RAM
 
 The machines are defined in `amiga.toml`; `uv run amiga-env <machine>
 [DISK.adf] [amiberry options]` boots any of them.
+
+The A3000 also has a development machine: AmigaOS 3.2 with SAS/C 6.50,
+Commodore's 3.1 Developer Update and MUI 3.8, built into a host folder that
+boots as `DH0:`, with `work/` as `Work:`. A system is a recipe in
+`systems/NAME.toml`: ordered layers that unpack or copy from disks and
+archives in `media/`, write files, or run an AmigaDOS script once on the
+emulated machine (SAS/C installs that way). A rebuild applies only what
+changed.
+
+```sh
+make system                    # = amiga-env system build a3000-dev, about a minute the first time
+make a3000-dev                 # boot it in a window
+uv run amiga-env exec a3000-dev work/hello/test.amigados   # build and run a C program, no window
+```
+
+`amiga-env exec MACHINE SCRIPT` boots a machine with no window, runs the
+AmigaDOS script once, prints its output, takes a screenshot if asked
+(`--screenshot PNG`) and quits. See `work/README.md` and
+[`experiments/EXP-003-a3000-dev-machine.md`](experiments/EXP-003-a3000-dev-machine.md),
+the A3000 dev machine.
 
 To write a program in 68000 assembly and boot it:
 

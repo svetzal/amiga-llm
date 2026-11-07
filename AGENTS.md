@@ -69,10 +69,28 @@ applications target this machine, not the A500.
 | Kickstart (profile) | 3.2 (`media/rom/3.2/kick-a3000.rom`) | chosen 2026-11-07 |
 | Boot floppy (profile) | `media/adf/3.2/Install3.2.adf` | `Workbench3.2.adf` does not boot alone |
 
-Not yet known: the Kickstart actually in the machine, whether the Z3660
-accelerator is fitted and how a fitted one is labelled, and the MUI version
-of Stacey's licence. A proper desktop setup needs 3.2 installed on a
-hard-drive image built reproducibly; that is not built yet.
+Not yet known: the Kickstart actually in the machine, and whether the Z3660
+accelerator is fitted and how a fitted one is labelled. Stacey's MUI
+licence is a 3.8 registration (`media/mui/README.txt`).
+
+### a3000-dev: the A3000 as a development machine
+
+The same A3000 profile, booting a system built from
+`systems/a3000-dev.toml` (`make system`) as `DH0:` instead of a floppy,
+with the project's `work/` folder as `Work:`. Boot it with `make a3000-dev`;
+run a script on it with no person present with `amiga-env exec a3000-dev
+SCRIPT`. The tools are Stacey's choice (2026-11-07):
+
+| Part | Version | From |
+| --- | --- | --- |
+| OS | AmigaOS 3.2 | the 3.2 floppies |
+| C compiler | SAS/C 6.50 (`SYS:SC`, `SC:`) | `media/dev/sasc-6.50/`, installed on the emulated machine |
+| Includes, FD, linker libraries, autodocs | Amiga Developer Update 3.1 (`Developer:NDU3.1`) | `media/dev/ndu-3.1/` |
+| GUI | MUI 3.8 (`SYS:MUI`, `S:mui.key`, `Developer:MUI`) | `media/mui/` |
+
+`INCLUDE:` and `LIB:` search NDU 3.1 first, then MUI, then SAS/C's own.
+The built tree holds `S:mui.key`, which must not leave Stacey's machines.
+See EXP-003, the A3000 dev machine.
 
 ## Scope boundary
 

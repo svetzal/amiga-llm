@@ -106,3 +106,39 @@ These are the questions the first experiments answer. None is established.
   simpler routes above are measured.
 - Amiberry runs headless on mojility-ops-01 from the AppImage, so long runs
   can move off the Mac.
+
+## Host folders as volumes, and headless script runs (verified 2026-11-07, Amiberry 8.5.0, macOS)
+
+From EXP-003, the A3000 dev machine:
+
+- **A bootable host folder.** `-s filesystem2=rw,DH0:System:<dir>,0` boots
+  Kickstart 3.2 from a host directory holding an unpacked Workbench 3.2
+  floppy. The last field is the boot priority; `-128` mounts a folder that
+  is not bootable.
+- **Many folders at once.** Repeating `-s filesystem2=...` mounts each one.
+  Eight at once worked: System, AmigaEnv, and the six SAS/C disks as
+  `SASC_6.50_Disk_1:` to `_6:` (a volume name with `.` in it works).
+  `Info` lists each with its device name (`DH0`, `DH1`, `AENV`).
+- **Attributes.** Files in a host folder show `----rwed` on the Amiga. The
+  `p` and `s` bits of the original disk are not kept, and Amiberry wrote no
+  `_UAEFSDB.___` files during these runs. Commands without `p` still run,
+  and `Resident ... PURE` still works.
+- **No window.** With `SDL_VIDEODRIVER=dummy` and `SDL_AUDIODRIVER=dummy`
+  Amiberry runs with no window and no sound, and the socket's `SCREENSHOT`
+  still writes the emulated display. `amiga-env exec` sets both unless the
+  caller's environment chooses drivers.
+- **A second emulator gets its own socket.** When `/tmp/amiberry.sock` is
+  taken, Amiberry logs "Default socket in use, using instance N" and uses
+  another path. With `--log` it prints "IPC: Listening on PATH", so a
+  script can find the socket of the emulator it started and leave a
+  person's emulator alone. `amiga-env exec` does this, then checks that
+  `LIST_HARDDRIVES` reports its own exchange folder before sending
+  anything else.
+- **`Assign NAME: EXISTS`** returns 5 (WARN) for a name that is not
+  mounted, with no requester. The amiga-env hook in `S:User-Startup` uses
+  it to do nothing unless the AmigaEnv volume is mounted.
+- **A missing assign target asks a person.** `assign add LOCALE: MUI:Locale`
+  in MUI's `User-Startup` block opened "Please insert volume LOCALE" when
+  `SYS:Locale` did not exist (the 3.2 startup-sequence assigns `LOCALE:` to
+  it only then). A headless run then waits until its timeout; take a
+  screenshot at the timeout to see why.
