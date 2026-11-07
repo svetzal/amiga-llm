@@ -59,3 +59,8 @@ def runs_dir() -> Path:
 
 def build_dir() -> Path:
     return root() / "build"
+
+
+def system_tree(name: str, root_dir: Path | None = None) -> Path:
+    """Where `amiga-env system build NAME` builds the tree that boots as DH0:."""
+    return (root_dir or root()) / "runs" / "systems" / name

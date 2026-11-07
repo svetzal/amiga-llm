@@ -6,7 +6,20 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import adf, amiberry, assemble, guard, home, init, media, profile, project, toolchain
+from . import (
+    adf,
+    amiberry,
+    assemble,
+    guard,
+    home,
+    init,
+    media,
+    profile,
+    project,
+    session,
+    system,
+    toolchain,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -17,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     parser, sub = build_parser()
     machines = _machines(set(sub.choices))
     if argv[:1] and argv[0] in machines:
+        _ready(machines[argv[0]])
         return home.run(boot_command(machines[argv[0]], argv[1:]))
     for name, machine in machines.items():
         # Listed for --help only; machines are dispatched above, like `run`.
@@ -89,6 +103,21 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     )
     boot.add_argument("source", type=Path, metavar="SOURCE.s")
 
+    systems = sub.add_parser("system", help="build and list systems from systems/NAME.toml")
+    act = systems.add_subparsers(dest="system_command", required=True)
+    make = act.add_parser("build", help="build runs/systems/NAME, applying only what changed")
+    make.add_argument("name", metavar="NAME")
+    make.add_argument("--force", action="store_true", help="rebuild every layer from nothing")
+    act.add_parser("list", help="list the recipes and whether each is built")
+
+    once = sub.add_parser(
+        "exec", help="boot MACHINE with no window, run an AmigaDOS SCRIPT once, then quit"
+    )
+    once.add_argument("machine", metavar="MACHINE", help="a machine with a built system")
+    once.add_argument("script", type=Path, metavar="SCRIPT", help="AmigaDOS script on the host")
+    once.add_argument("--timeout", type=float, default=300, help="seconds to wait; default 300")
+    once.add_argument("--screenshot", type=Path, metavar="PNG", help="screenshot when it ends")
+
     # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
     return parser, sub
@@ -119,7 +148,45 @@ COMMANDS = {
     ),
     "adf": lambda args: adf.make_adf(args.image, args.files, args.startup, args.label),
     "bootdisk": lambda args: assemble.bootdisk(args.source),
+    "system": lambda args: _system(args),
+    "exec": lambda args: _exec(args),
 }
+
+
+def _system(args: argparse.Namespace) -> None:
+    if args.system_command == "list":
+        system.list_systems()
+    else:
+        system.build(args.name, args.force)
+
+
+def _exec(args: argparse.Namespace) -> int:
+    machines = profile.load_machines(reserved=command_names())
+    if args.machine not in machines:
+        raise SystemExit(f"no machine {args.machine} in {project.CONFIG}")
+    machine = machines[args.machine]
+    if machine.system is None:
+        raise SystemExit(f"{args.machine} boots no system, so it has no amiga-env startup hook")
+    _ready(machine)
+    exchange = project.runs_dir() / "exec" / args.machine
+    outcome = session.run_script(
+        profile.machine_args(machine),
+        exchange,
+        args.script.read_text(),
+        args.timeout,
+        args.screenshot,
+    )
+    sys.stdout.write(outcome.log)
+    print(f"exec      return code {outcome.return_code} after {outcome.seconds:.1f} s")
+    return 0 if outcome.return_code == 0 else 1
+
+
+def _ready(machine: profile.Machine) -> None:
+    """A machine's system must be built and its volume folders must exist."""
+    if machine.system is not None and not system.built_layers(machine.system):
+        raise SystemExit(f"run `amiga-env system build {machine.system}` first")
+    for volume in profile.volumes(machine)[1 if machine.system else 0 :]:
+        volume.path.mkdir(parents=True, exist_ok=True)
 
 
 def parse_overrides(pairs: list[str]) -> dict[str, Path]:
@@ -230,6 +297,15 @@ def _machines_report() -> bool:
     lines, ok = machine_media_lines(machines, project.media_dir())
     for line in lines:
         print(line)
+    for name, machine in machines.items():
+        if machine.system is not None:
+            built = system.built_layers(machine.system) == system.fingerprints(
+                system.load(machine.system)
+            )
+            state = (
+                "built" if built else f"NOT BUILT; run `amiga-env system build {machine.system}`"
+            )
+            print(f"{name:<9} {'system':<9} {machine.system} {state}")
     return ok
 
 
