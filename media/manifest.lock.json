@@ -143,6 +143,105 @@
     "origin": "ADF/Workbench3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
+  "dev/ndu-3.1/disk1-autodocs.7z": {
+    "kind": "file",
+    "sha256": "f128bcf4148fa7861d696b3a6b1eeaf1e426f8032cf8f92f6b8f7d0b7761c486",
+    "size": 803780,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 1 of 5)(Autodocs)[WB].7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/ndu-3.1/disk2-sw-toolkit.7z": {
+    "kind": "file",
+    "sha256": "df7b38e83656f9522895d7d65beb2ff7c43852f08934c0a83c2039f5bfff68e5",
+    "size": 337086,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 2 of 5)(SW Toolkit).7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/ndu-3.1/disk3-includes-libs.7z": {
+    "kind": "file",
+    "sha256": "34f55c50653295d9cd8bb74b48bdca942cbc36d14e6227bfbf1070f997369252",
+    "size": 819437,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 3 of 5)(Includes & Libs).7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/ndu-3.1/disk4-examples-1.7z": {
+    "kind": "file",
+    "sha256": "1111264bdd2395621da950318574dcf4fa41abf6a5513dedad77705e7963d3e7",
+    "size": 219413,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 4 of 5)(Examples 1).7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/ndu-3.1/disk5-examples-2.7z": {
+    "kind": "file",
+    "sha256": "a901aabdd3c86ac81436f9d11bfef7f312414658964be504701affdcc1fbc431",
+    "size": 744913,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 5 of 5)(Examples 2).7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/sasc-6.50/disk1.7z": {
+    "kind": "file",
+    "sha256": "44028f5bac42da743548426b840134355e58d54a39a92725e4fd63f28573c8ab",
+    "size": 548136,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 1 of 6)[HD].7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/sasc-6.50/disk2.7z": {
+    "kind": "file",
+    "sha256": "21e06c191b605e07ea9696ac37e551b85215958ce553929d02deaedab557859d",
+    "size": 671788,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 2 of 6)[HD].7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/sasc-6.50/disk3.7z": {
+    "kind": "file",
+    "sha256": "c5a9f28c9a660b6e00ed37f976ca3ec6789f325d2162cf1c26eefd37b96593ab",
+    "size": 679253,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 3 of 6)[HD].7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/sasc-6.50/disk4.7z": {
+    "kind": "file",
+    "sha256": "841e923d45c26d666a5b944593937d12e2076155f456f83413038b54ff37371a",
+    "size": 621749,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 4 of 6)[HD].7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/sasc-6.50/disk5.7z": {
+    "kind": "file",
+    "sha256": "0d9871e8f99b38c26c9d7dc3dbdb809cb4e5e4947e81870d5d71d246cda97267",
+    "size": 732660,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 5 of 6)[HD].7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
+  "dev/sasc-6.50/disk6.7z": {
+    "kind": "file",
+    "sha256": "5187a51a9fccc9e60c9088a57ac1ad2f3b5a722ff5efeb1af6ccb5b238b077df",
+    "size": 128385,
+    "source": "collection",
+    "origin": "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 6 of 6)[HD].7z",
+    "licence": "Personal collection (TOSEC dump)",
+    "optional": true
+  },
   "docs/68000UM.pdf": {
     "kind": "file",
     "sha256": "f1f154e2070318e09b103f0f6641d3d1f3c644953c702666b43ba9435be8f387",

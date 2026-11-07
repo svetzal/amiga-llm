@@ -406,3 +406,80 @@ source = "collection"
 origin = "MUI/README.txt"
 licence = "Provenance note"
 optional = true
+
+[[item]]
+dest = "dev/sasc-6.50/disk1.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 1 of 6)[HD].7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/sasc-6.50/disk2.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 2 of 6)[HD].7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/sasc-6.50/disk3.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 3 of 6)[HD].7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/sasc-6.50/disk4.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 4 of 6)[HD].7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/sasc-6.50/disk5.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 5 of 6)[HD].7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/sasc-6.50/disk6.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/SAS C Compiler v6.50 (1992)(SAS Institute)(Disk 6 of 6)[HD].7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/ndu-3.1/disk1-autodocs.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 1 of 5)(Autodocs)[WB].7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/ndu-3.1/disk2-sw-toolkit.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 2 of 5)(SW Toolkit).7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/ndu-3.1/disk3-includes-libs.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 3 of 5)(Includes & Libs).7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/ndu-3.1/disk4-examples-1.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 4 of 5)(Examples 1).7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
+
+[[item]]
+dest = "dev/ndu-3.1/disk5-examples-2.7z"
+source = "collection"
+origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 5 of 5)(Examples 2).7z"
+licence = "Personal collection (TOSEC dump)"
+optional = true
