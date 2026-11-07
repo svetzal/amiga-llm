@@ -2,6 +2,7 @@ from itertools import pairwise
 
 import pytest
 from amiga_env.piano.player import (
+    FADE_MS,
     FULL_VOLUME,
     KeySound,
     LogRow,
@@ -61,7 +62,7 @@ class TestChoosingAVoice:
     def test_striking_a_sounding_key_again_reuses_its_voice(self):
         result = play([on(0, 5), on(0, 6), on(10, 5)], keys(), table(40))
 
-        assert starts(result) == [(0, 0), (0, 1), (10, 0)]
+        assert starts(result) == [(0, 0), (0, 1), (10 + FADE_MS, 0)]
         assert result.restrikes == 1
         assert result.steals == []
 
@@ -71,7 +72,7 @@ class TestChoosingAVoice:
 
         result = play(events, keys(), quiet)
 
-        assert starts(result)[-1] == (0, 1)
+        assert starts(result)[-1] == (FADE_MS, 1)
         steal = result.steals[0]
         assert (steal.voice, steal.volume, steal.old_key, steal.new_key) == (1, 9, 2, 9)
         assert steal.held
@@ -81,7 +82,62 @@ class TestChoosingAVoice:
 
         result = play(events, keys(), table(30))
 
-        assert starts(result)[-1] == (4, 0)
+        assert starts(result)[-1] == (4 + FADE_MS, 0)
+
+    def test_a_note_whose_key_is_up_is_stolen_before_a_louder_held_key(self):
+        quiet = (0,) + tuple((v << 8) for v in range(1, 128))
+        events = [on(0, 1, 9), on(0, 2, 50), on(0, 3, 60), on(0, 4, 70), Event(1, "off", 4)]
+
+        result = play([*events, on(2, 9, 100)], keys(), quiet)
+
+        assert starts(result)[-1] == (2 + FADE_MS, 3)
+        assert result.steals[0].old_key == 4
+
+    def test_with_every_key_down_the_quietest_is_stolen(self):
+        quiet = (0,) + tuple((v << 8) for v in range(1, 128))
+        events = [on(0, 1, 50), on(0, 2, 9), on(0, 3, 70), on(0, 4, 60), on(0, 9, 100)]
+
+        result = play(events, keys(), quiet)
+
+        assert result.steals[0].old_key == 2
+
+
+class TestCuttingANote:
+    def test_the_old_note_fades_out_and_the_channel_stops_before_the_new_one_starts(self):
+        result = play([on(0, 1), on(10, 1, 50)], keys(attack_ticks=100), table(40))
+
+        cut = [(w.ms, w.kind, w.volume) for w in result.writes if 10 <= w.ms < 100]
+        assert cut == [
+            (11, "volume", 30),
+            (12, "volume", 20),
+            (13, "volume", 10),
+            (14, "stop", 0),
+            (15, "start", 40),
+        ]
+
+    def test_a_note_for_a_waiting_voice_replaces_the_waiting_note(self):
+        result = play([on(0, 1), on(10, 1), on(12, 1, 20)], keys(), table(40))
+
+        assert starts(result) == [(0, 0), (15, 0)]
+        assert result.superseded == 1
+        assert [e.note for e in result.endings] == [0, 2]
+
+    def test_a_waiting_voice_is_not_decayed(self):
+        result = play([on(0, 1), on(15, 1)], keys(held=HALF), table(64))
+
+        assert [w.ms for w in result.writes if w.kind == "start"] == [0, 20]
+        log = [(row.ms, row.volume, row.out) for row in result.log if row.voice == 0]
+        assert log[1] == (16, 64, 24)  # the new note, not yet decayed; Paula fading 32 out
+
+    def test_every_note_ending_is_recorded_with_its_cause(self):
+        events = [on(0, 1), on(5, 1), Event(6, "off", 1)]
+
+        result = play(events, keys(release=HALF), table(64))
+
+        assert [(e.note, e.cause, e.ms, e.key_down) for e in result.endings] == [
+            (0, "restrike", 5, True),
+            (1, "faded", tick_ms(7), False),
+        ]
 
     def test_a_key_with_no_sound_is_dropped(self):
         sounds = keys()
@@ -145,5 +201,5 @@ def test_the_log_has_every_voice_on_every_tick():
 
     ticks = {row.tick for row in result.log}
     assert len(result.log) == 4 * len(ticks)
-    assert result.log[0] == LogRow(0, 0, 0, 1, 1, 201, 32)
-    assert result.log[1] == LogRow(0, 0, 1, -1, -1, 0, 0)
+    assert result.log[0] == LogRow(0, 0, 0, 1, 1, 201, 32, 32)
+    assert result.log[1] == LogRow(0, 0, 1, -1, -1, 0, 0, 0)

@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 from .. import project
-from . import paula, player, samples, score, sfz
+from . import clips, paula, player, samples, score, sfz
 
 # Bytes the player's tables take in chip or fast RAM, per key and per sample.
 KEY_TABLE_BYTES = 8  # sample index, level, period, held and release factors
@@ -96,7 +96,11 @@ def build(recipe_path: Path) -> dict:
         frames = paula.render(result.writes, made, result.end_ms)
         paula.write_wav(out / f"{piece.name}.wav", frames)
         paula.write_wav(out / f"{piece.name}-a500-filter.wav", paula.a500_filter(frames))
-        pieces[piece.name] = score.report(perf, stream) | play_report(result, perf.length_ms)
+        pieces[piece.name] = (
+            score.report(perf, stream)
+            | play_report(result, perf.length_ms)
+            | {"clips": clips.report(perf.events, result.endings, perf.length_ms)}
+        )
 
     report = {
         "sfz": recipe.sfz,
@@ -190,6 +194,7 @@ def play_report(result: player.Result, length_ms: int) -> dict:
         "notes_played": result.notes,
         "restrikes": result.restrikes,
         "notes_dropped_by_player": result.dropped,
+        "notes_superseded_while_waiting": result.superseded,
         "steals": len(result.steals),
         "steals_per_minute": round(len(result.steals) / minutes, 1),
         "steals_of_held_notes": sum(s.held for s in result.steals),
@@ -222,7 +227,9 @@ def _write_samples(out: Path, made: list[samples.PaulaSample]) -> None:
 def _write_log(path: Path, log: list[player.LogRow]) -> None:
     with path.open("w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["tick", "ms", "voice", "key", "sample", "period", "volume"])
+        writer.writerow(["tick", "ms", "voice", "key", "sample", "period", "volume", "out"])
         for row in log:
             key = row.key + score.LOWEST_NOTE if row.key >= 0 else -1
-            writer.writerow([row.tick, row.ms, row.voice, key, row.sample, row.period, row.volume])
+            writer.writerow(
+                [row.tick, row.ms, row.voice, key, row.sample, row.period, row.volume, row.out]
+            )
