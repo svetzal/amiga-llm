@@ -416,6 +416,13 @@ class Amiga:
         self._emulator.stop()
 
 
+def require_floppy(floppy: Path) -> None:
+    """SystemExit unless the disk exists: Amiberry starts without a missing floppy, and
+    the run then fails late, at the socket's floppy check."""
+    if not floppy.is_file():
+        raise SystemExit(f"no floppy at {floppy}; run `amiga-env piano-disk` first")
+
+
 class Choice(NamedTuple):
     """A piece to choose on the player's screen."""
 
@@ -423,6 +430,7 @@ class Choice(NamedTuple):
     key: str  # its key
     model_log: Path  # the model's voice log in the player's layout
     line: tuple[int, int]  # a point on its line, to click
+    index: int = 0  # its place in the list, from 0
 
 
 def run_menu(
@@ -447,6 +455,7 @@ def run_menu(
     and the next is chosen while it plays. With `scopes`, screenshots taken
     while a piece plays are checked for scopes caught half drawn.
     """
+    require_floppy(floppy)
     out.mkdir(parents=True, exist_ok=True)
     raw = out / f"{name}.raw"
     env = {"SDL_AUDIODRIVER": "dummy"}
@@ -472,8 +481,8 @@ def run_menu(
         found["floppy_speed"] = " ".join(amiga.send("GET_FLOPPY_SPEED")[1:])
         if found["warp"]:
             amiga.send("SET_WARP", "1")
-        status = _wait_for(amiga, lambda s: s.state in (MENU, ENDED, FAILED), timeout)
-        if status.state != MENU:
+        status = _wait_for(amiga, lambda s: s.state in (MENU, PLAYING, ENDED, FAILED), timeout)
+        if status.state not in (MENU, PLAYING):  # the rotation may have started piece 1
             raise SystemExit(f"the player did not reach its menu: {status}")
         amiga.screenshot(out / f"{name}-idle.png")
         found["menu_pieces"] = status.pieces
@@ -487,9 +496,8 @@ def run_menu(
             found["pieces"][choice.name] = _play(
                 amiga,
                 choice,
-                number,
                 out / f"{name}-{choice.name}",
-                _Options(log, switch, click, scopes, timeout),
+                _Options(log, switch, click, scopes, timeout, found["warp"]),
             )
         amiga.press(raw_key("Q"))
         status = _wait_for(amiga, lambda s: s.state in (ENDED, FAILED), 60)
@@ -523,16 +531,32 @@ class _Options(NamedTuple):
     click: bool
     scopes: ScopeCheck | None
     timeout: float
+    warp: bool = False
 
 
-def _play(amiga: Amiga, choice: Choice, number: int, stem: Path, options: _Options) -> dict:
+def started(status: Status, starts_before: int, index: int) -> bool:
+    """Whether piece `index` has started since `starts_before` pieces had."""
+    return status.starts > starts_before and status.piece == index
+
+
+def has_ended(status: Status, serial: int) -> bool:
+    """Whether the piece that was the `serial`th to start (from 1) has ended."""
+    return status.played >= serial
+
+
+def _play(amiga: Amiga, choice: Choice, stem: Path, options: _Options) -> dict:
     """Choose a piece, watch it play, and record it when it ends.
 
+    The piece is followed by its place among the pieces started, so a piece
+    the rotation starts by itself before or after it is not taken for it.
     With `switch_after_ms` it is left playing after that long: the next
-    choice stops it. Its log is then read as far as it has got.
+    choice stops it. Its log is then read as far as it has got. In warp, a
+    piece that ends is read with warp off, so the rotation's next piece
+    cannot overwrite its log first.
     """
-    log, switch_after_ms, click, scopes, timeout = options
+    log, switch_after_ms, click, scopes, timeout, _ = options
     found: dict = {"key": choice.key}
+    before = read_status(amiga).starts
     if click:
         window = read_status(amiga).window
         found["clicked_at"] = amiga.click(window, choice.line)
@@ -540,19 +564,12 @@ def _play(amiga: Amiga, choice: Choice, number: int, stem: Path, options: _Optio
         amiga.screenshot(Path(f"{stem}-clicked.png"))
     else:
         amiga.press(raw_key(choice.key))
-    status = _wait_for(
-        amiga,
-        lambda s: (
-            s.state == FAILED
-            or s.played >= number
-            or (s.state == PLAYING and s.played == number - 1)
-        ),
-        120,
-    )
+    status = _wait_for(amiga, lambda s: s.state == FAILED or started(s, before, choice.index), 120)
+    serial = status.starts
     first = Path(f"{stem}-playing.png")
     second = Path(f"{stem}-playing-2.png")
     first_ms = None
-    while status.played < number:
+    while not has_ended(status, serial):
         if status.state == FAILED:
             raise SystemExit(f"the player failed during {choice.name}")
         if status.ms > 5000 and first_ms is None:
@@ -568,9 +585,14 @@ def _play(amiga: Amiga, choice: Choice, number: int, stem: Path, options: _Optio
         if switch_after_ms is not None and status.ms >= switch_after_ms:
             break
         status = _wait_for(amiga, lambda s: True, timeout)
-    switched = status.played < number
+    switched = not has_ended(status, serial)
+    warp = options.warp and not switched
+    if warp:
+        amiga.send("SET_WARP", "0")
     if not switched:
-        status = _wait_for(amiga, lambda s: s.state in (MENU, ENDED, FAILED), 60)
+        status = read_status(amiga)
+        if status.starts != serial:
+            raise SystemExit(f"the next piece started before {choice.name}'s log was read")
         amiga.screenshot(Path(f"{stem}-done.png"))
     found |= {
         "status": status._asdict(),
@@ -586,6 +608,8 @@ def _play(amiga: Amiga, choice: Choice, number: int, stem: Path, options: _Optio
         machine_log = read_block(amiga.read_long, status.log_base, status.log_bytes)
         Path(f"{stem}.log").write_bytes(machine_log)
         found["log"] = compare_logs(choice.model_log.read_bytes(), machine_log)
+    if warp:
+        amiga.send("SET_WARP", "1")
     return found
 
 
@@ -619,3 +643,198 @@ def _wait_for(amiga: Amiga, ready: Callable[[Status], bool], timeout: float) -> 
 
 def read_status(amiga: Amiga) -> Status:
     return parse_status([amiga.read_long(STATUS + 4 * i) for i in range(len(STATUS_FIELDS))])
+
+
+def seconds(frames: int, hz: int) -> float:
+    """Vertical blanks as seconds, to the hundredth."""
+    return round(frames / (hz or 60), 2)
+
+
+SPACE_KEY = 0x40  # Amiga raw key code: stops the piece and holds the rotation
+HELD = 0xFFFFFFFF  # rotate_at while the rotation waits for a choice; highlight with no line
+
+
+class _Rotation:
+    """One run of the unattended screen: the emulator, what it found, its screenshots."""
+
+    def __init__(self, amiga: Amiga, choices: Sequence[Choice], out: Path, name: str):
+        self.amiga, self.choices, self.out, self.name = amiga, choices, out, name
+        self.screen_wall = 0.0
+        self.found: dict = {"steps": {}, "screenshots": []}
+
+    def status(self) -> Status:
+        return read_status(self.amiga)
+
+    def wait(self, ready: Callable[[Status], bool], timeout: float) -> Status:
+        """Poll four times a second until `ready`."""
+        deadline = time.monotonic() + timeout
+        while True:
+            status = self.status()
+            if status.magic == MAGIC and ready(status):
+                return status
+            if status.state == FAILED:
+                raise SystemExit(f"the player failed: {status}")
+            if time.monotonic() > deadline:
+                raise SystemExit(f"not there within {timeout:g} s: {status}")
+            time.sleep(0.25)
+
+    def warp(self, on: bool) -> None:
+        self.amiga.send("SET_WARP", "1" if on else "0")
+
+    def shot(self, label: str) -> None:
+        status = self.status()
+        path = self.out / f"{self.name}-{label}.png"
+        self.amiga.screenshot(path)
+        self.found["screenshots"].append(
+            {
+                "file": path.name,
+                "wall_s_after_screen": round(time.monotonic() - self.screen_wall, 1),
+                "emulated_s_after_screen": seconds(
+                    status.vblanks - status.screen_at, status.vblank_hz
+                ),
+                "piece": status.piece if status.state == PLAYING else None,
+                "highlight": None if status.highlight == HELD else status.highlight,
+            }
+        )
+
+    def read_log(self, label: str) -> dict:
+        """The playing (or just ended) piece's voice log against the model's."""
+        status = self.status()
+        choice = self.choices[status.piece]
+        machine_log = read_block(self.amiga.read_long, status.log_base, status.log_bytes)
+        (self.out / f"{self.name}-{label}.log").write_bytes(machine_log)
+        return {"piece": choice.name, **compare_logs(choice.model_log.read_bytes(), machine_log)}
+
+    def after_end(self, serial: int, label: str) -> tuple[Status, dict]:
+        """Warp until the `serial`th piece ends, then read its log with warp off."""
+        self.warp(True)
+        # The player counts the end first and stamps it last, then waits (MENU).
+        self.wait(lambda s: has_ended(s, serial) and (s.state == MENU or s.starts > serial), 900)
+        self.warp(False)
+        ended = self.status()
+        if ended.starts != serial:
+            raise SystemExit("the rotation started the next piece before the log was read")
+        return ended, self.read_log(label)
+
+    def next_by_rotation(self, ended: Status) -> dict:
+        """Warp through the gap until the rotation starts the next piece; what it did."""
+        self.warp(True)
+        status = self.wait(lambda s: s.starts > ended.starts, 120)
+        self.warp(False)
+        hz = status.vblank_hz
+        return {
+            "piece": self.choices[status.piece].name,
+            "started_by_rotation": status.rotated > ended.rotated,
+            "gap_s": seconds(status.chosen_at - ended.ended_at, hz),
+            "line_gold": status.highlight == status.piece,
+            "latency": latency_report(status),
+        }
+
+
+def run_rotation(
+    machine: profile.Machine, floppy: Path, choices: Sequence[Choice], out: Path, name: str
+) -> dict:
+    """Boot the test build and check the rotation as someone who walks away would see it.
+
+    Real time until piece 1 starts by itself; warp after that, off whenever a
+    log is read or a key or click is sent. The steps: piece 1 after the quiet
+    start; piece 2 after the gap; a click on the last piece mid-piece; the
+    wrap to piece 1 after the last; Space; quiet held; a key; the next by
+    rotation from that key's piece; Q.
+    """
+    require_floppy(floppy)
+    out.mkdir(parents=True, exist_ok=True)
+    amiga = Amiga(
+        profile.machine_args(machine, floppy.resolve()),
+        out / f"{name}.amiberry.log",
+        {"SDL_AUDIODRIVER": "dummy"},
+    )
+    run = _Rotation(amiga, choices, out, name)
+    steps = run.found["steps"]
+    try:
+        amiga.connect(floppy.resolve())
+        _rotation_steps(run, steps)
+    finally:
+        amiga.stop()
+    run.found["floppy"] = str(floppy)
+    (out / f"{name}.json").write_text(json.dumps(run.found, indent=2) + "\n")
+    return run.found
+
+
+def _rotation_steps(run: _Rotation, steps: dict) -> None:
+    last = len(run.choices) - 1
+    menu = run.wait(lambda s: s.state in (MENU, PLAYING), 300)
+    run.screen_wall = time.monotonic()
+    hz = menu.vblank_hz
+    for at in (1, 8, 14):
+        time.sleep(max(0.0, run.screen_wall + at - time.monotonic()))
+        run.shot(f"quiet-{at:02d}s")
+    first = run.wait(lambda s: s.starts >= 1, 60)
+    wall = round(time.monotonic() - run.screen_wall, 1)
+    time.sleep(2)
+    run.shot("piece-1-by-itself")
+    steps["first_by_itself"] = {
+        "piece": run.choices[first.piece].name,
+        "started_by_rotation": first.rotated == 1,
+        "emulated_s_from_screen_to_choice": seconds(first.chosen_at - first.screen_at, hz),
+        "emulated_s_from_screen_to_timer": seconds(first.playing_at - first.screen_at, hz),
+        "wall_s_seen_by_the_host": wall,
+        "warp": False,
+    }
+    ended, steps["first_log"] = run.after_end(1, "1-rotation")
+    steps["second_by_rotation"] = run.next_by_rotation(ended)
+    run.shot("piece-2-by-rotation")
+
+    run.warp(True)
+    run.wait(lambda s: s.ms >= 20_000, 300)
+    run.warp(False)
+    steps["second_log_before_the_click"] = run.read_log("2-rotation")
+    before = run.status()
+    run.amiga.click(before.window, run.choices[last].line)
+    clicked = run.wait(lambda s: started(s, before.starts, last), 30)
+    run.shot("clicked-last")
+    steps["click_mid_piece"] = {
+        "piece": run.choices[clicked.piece].name,
+        "previous_stopped": clicked.played == before.starts,
+        "line_gold": clicked.highlight == last,
+        "rotation_next": run.choices[clicked.next].name,
+        "latency": latency_report(clicked),
+    }
+    ended, steps["last_log"] = run.after_end(clicked.starts, "last-chosen")
+    steps["wrap_to_first"] = run.next_by_rotation(ended)
+    run.shot("wrap-to-1")
+
+    run.warp(True)
+    run.wait(lambda s: s.ms >= 10_000, 300)
+    run.warp(False)
+    steps["wrap_log_before_space"] = run.read_log("1-wrapped")
+    before = run.status()
+    run.amiga.press(SPACE_KEY)
+    held = run.wait(lambda s: s.state == MENU and s.played == before.starts, 30)
+    run.shot("space")
+    run.warp(True)
+    quiet = run.wait(lambda s: s.vblanks >= held.vblanks + 60 * hz, 120)
+    run.warp(False)
+    run.shot("held-60s")
+    steps["space"] = {
+        "piece_stopped": held.stopped == 1,
+        "rotation_held": held.rotate_at == HELD,
+        "no_line_gold": held.highlight == HELD,
+        "starts_after_60_quiet_s": quiet.starts - held.starts,
+    }
+
+    choice = run.choices[2]
+    run.amiga.press(raw_key(choice.key))
+    chosen = run.wait(lambda s: started(s, held.starts, choice.index), 30)
+    steps["key_after_space"] = {
+        "piece": choice.name,
+        "rotation_next": run.choices[chosen.next].name,
+        "latency": latency_report(chosen),
+    }
+    ended, steps["key_log"] = run.after_end(chosen.starts, "3-chosen")
+    steps["next_after_the_key"] = run.next_by_rotation(ended)
+    run.shot("after-key")
+    run.amiga.press(raw_key("Q"))
+    end = run.wait(lambda s: s.state in (ENDED, FAILED), 60)
+    run.shot("end")
+    steps["quit"] = {"ended": end.state == ENDED}

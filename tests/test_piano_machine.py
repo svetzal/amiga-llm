@@ -3,6 +3,7 @@ import wave
 from pathlib import Path
 
 import numpy as np
+import pytest
 from amiga_env.piano import disk, m68k, machine
 from amiga_env.piano.player import LogRow
 
@@ -217,3 +218,23 @@ class TestLatency:
 
         assert machine.latency_report(switched)["previous_piece_ended_ms"] == 100
         assert "previous_piece_ended_ms" not in machine.latency_report(own_end)
+
+
+class TestFollowingAPiece:
+    def test_it_has_started_when_a_new_start_is_its_own(self):
+        assert machine.started(status(starts=3, piece=4), 2, 4)
+
+    def test_a_piece_the_rotation_started_is_not_it(self):
+        assert not machine.started(status(starts=3, piece=1), 2, 4)
+
+    def test_nothing_new_has_not_started(self):
+        assert not machine.started(status(starts=2, piece=4), 2, 4)
+
+    def test_it_has_ended_once_as_many_pieces_have_ended_as_had_started_with_it(self):
+        assert not machine.has_ended(status(played=2, starts=3), 3)
+        assert machine.has_ended(status(played=3, starts=4), 3)
+
+
+def test_a_missing_floppy_is_refused_before_any_emulator_starts(tmp_path):
+    with pytest.raises(SystemExit, match="no floppy"):
+        machine.run_rotation(None, tmp_path / "missing.adf", [], tmp_path, "x")

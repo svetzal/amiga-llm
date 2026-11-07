@@ -18,8 +18,9 @@ by rebuilding the disk:
     build/piano/piano-log.adf      the test build
 
 Pieces take keys 1 to 9, then the letters without Q (MENU_KEYS); Q and Esc
-quit. The player gets Amiga raw key codes, so `keys.i` gives it each
-piece's code (RAW_KEYS).
+quit. The player gets Amiga raw key codes, so `menu.i` gives it each
+piece's code (RAW_KEYS), and the recipe's `rotate_s`: the seconds of quiet
+after which the player plays the next piece by itself.
 """
 
 from collections.abc import Sequence
@@ -80,10 +81,21 @@ def index_text(entries: Sequence[MenuPiece]) -> str:
     return "".join(f"{e.path} {e.title}\n" for e in entries)
 
 
-def keys_include(count: int) -> str:
-    """`keys.i`: the raw key code of each piece's key, in list order."""
+ROTATE_RANGE_S = (1, 600)
+
+
+def menu_include(count: int, rotate_s: int) -> str:
+    """`menu.i`: the raw key code of each piece's key, in list order, and the
+    rotation's gap in seconds; SystemExit for a gap that is not 1 to 600 whole seconds."""
+    low, high = ROTATE_RANGE_S
+    if type(rotate_s) is not int or not low <= rotate_s <= high:
+        raise SystemExit(f"rotate_s is whole seconds from {low} to {high}, not {rotate_s!r}")
     codes = ",".join(f"${RAW_KEYS[k]:02x}" for k in MENU_KEYS[:count])
-    return f"; keys.i: made by `amiga-env piano-disk` (disk.py); do not edit.\npiece_keys: dc.b {codes}\n"
+    return (
+        "; menu.i: made by `amiga-env piano-disk` (disk.py); do not edit.\n"
+        f"ROTATE_S        equ {rotate_s}\n"
+        f"piece_keys: dc.b {codes}\n"
+    )
 
 
 def check_credits(text: str) -> None:
@@ -153,7 +165,7 @@ def build_disks(recipe: Recipe, root: Path | None = None, out: Path | None = Non
     out.mkdir(parents=True, exist_ok=True)
     made = screen_mod.make(names, recipe.screen, root)
     picture = screen_mod.write(made, recipe.screen, root, data, root / recipe.out)
-    (data / "keys.i").write_text(keys_include(len(entries)), encoding="ascii")
+    (data / "menu.i").write_text(menu_include(len(entries), recipe.rotate_s), encoding="ascii")
     credits = root / recipe.credits
     check_credits(credits.read_text(encoding="ascii"))
     index = out / "index"

@@ -45,6 +45,7 @@ class Recipe:
     catalogue: str = ""  # MAESTRO's CSV under media/, for surveys
     credits: str = ""  # the disk's full notices, under the project
     screen: screen_mod.ScreenSpec | None = None  # the player's screen
+    rotate_s: int = 15  # seconds of quiet before the player plays the next piece by itself
 
 
 def load_recipe(path: Path) -> Recipe:
@@ -66,6 +67,7 @@ def load_recipe(path: Path) -> Recipe:
         catalogue=data.get("catalogue", ""),
         credits=data.get("credits", ""),
         screen=screen_mod.load_spec(data["screen"]) if "screen" in data else None,
+        rotate_s=data.get("rotate_s", 15),
     )
 
 

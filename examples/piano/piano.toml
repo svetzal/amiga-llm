@@ -16,6 +16,12 @@ program_bytes = 8192    # an estimate until the 68000 player exists
 # Paula volume = 64 * (velocity / 127) ** velocity_exponent, at least 1.
 velocity_exponent = 1.5
 
+# The player's screen plays by itself: after this many seconds with no input
+# it plays piece 1, and this long after each piece ends, the next (after the
+# last, the first). A choice plays that piece now and the rotation goes on
+# from it; Space stops and holds the rotation until the next choice.
+rotate_s = 15
+
 # The Salamander velocity layer every key plays. 64 is the median velocity of
 # the first two pieces; it is fixed so that adding a piece does not change the
 # samples.

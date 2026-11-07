@@ -154,6 +154,7 @@ SELECTDOWN      equ $68
 KEY_UP          equ $80             ; in a RAWKEY code
 KEY_ESC         equ $45
 KEY_Q           equ $10
+KEY_SPACE       equ $40
 
 custom          equ $dff000
 DMACON          equ $096
@@ -600,6 +601,7 @@ play_arguments:
 .stop:  move.l  #1,STATUS+ST_STOPPED.w
 .end:   moveq   #-1,d0
         bsr     end_piece
+        bsr     flush_results
 .next:  bsr     next_argument
         bpl.s   .piece
         rts
@@ -936,52 +938,133 @@ make_tables:
 ; Take choices until Esc or Q: a click on a piece's line or its key plays
 ; it, switching from the piece playing. While a piece plays, the scopes
 ; are drawn after every vertical blank.
+;
+; The rotation: ROTATE_S seconds after the screen appears with no input,
+; and that long after each piece ends, the next piece plays by itself (the
+; first after the last). A choice plays that piece now and the rotation goes
+; on from it. Space stops the piece playing and holds the rotation until the
+; next choice. Waiting is Wait on the window's port and the alarm, which the
+; vertical blank server signals.
 choose:
         move.l  #3,STATUS+ST_STATE.w
         move.l  STATUS+ST_VBLANKS.w,STATUS+ST_SCREEN_AT.w
-.loop:  tst.w   playing
+        move.l  #ROTATE_S,d0
+        mulu    STATUS+ST_VBLANK_HZ+2.w,d0
+        move.l  d0,rotate_frames
+        clr.l   STATUS+ST_NEXT.w
+        bsr     arm_rotation
+.loop:  bsr     flush_results
+        tst.w   playing
         beq.s   .idle
         tst.w   finished
         beq.s   .draw
         moveq   #-1,d0
         bsr     end_piece               ; it played to its end
+        bsr     arm_rotation            ; the next, after the gap
         bra.s   .loop
 .draw:  bsr     scope_frame
         bra.s   .messages
-.idle:  move.l  window,a0
+.idle:  bsr     rotation_due
+        bne     .rotate
+        move.l  window,a0
         move.l  wd_UserPort(a0),a0
         moveq   #0,d1
         move.b  mp_SigBit(a0),d1
         moveq   #0,d0
         bset    d1,d0
+        or.l    alarm_mask,d0
         jsr     _LVOWait(a6)
 .messages:
         bsr     next_choice
         tst.l   d0
-        beq.s   .loop                   ; nothing to do
-        bmi.s   .quit
+        bne.s   .act
+        tst.l   d1                      ; input that chose nothing: while the
+        beq.s   .loop                   ; rotation counts, the quiet starts again
+        cmp.l   #-1,STATUS+ST_ROTATE_AT.w
+        beq.s   .loop
+        bsr     arm_rotation
+        bra.s   .loop
+.act:   cmp.l   #-1,d0
+        beq.s   .quit
+        cmp.l   #-2,d0
+        beq.s   .hold
         subq.l  #1,d0                   ; the piece, from 0
-        move.l  d0,-(sp)
+.play:  move.l  d0,-(sp)
+        addq.l  #1,d0                   ; the rotation goes on from it
+        cmp.l   pieces,d0
+        bcs.s   .next
+        moveq   #0,d0
+.next:  move.l  d0,STATUS+ST_NEXT.w
+        bsr     hold_rotation           ; until it ends
         tst.w   playing
         beq.s   .start
         move.l  #1,STATUS+ST_STOPPED.w
+        move.l  (sp),d0
         bsr     end_piece               ; and its line gold at once
 .start: move.l  (sp)+,d0
         bsr     start_piece
-        bra.s   .loop
-.quit:  tst.w   playing
+        tst.l   d0
+        beq     .loop
+        bsr     arm_rotation            ; it could not play: on to the next
+        bra     .loop
+.rotate:
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_CHOSEN_AT.w
+        addq.l  #1,STATUS+ST_ROTATED.w
+        move.l  STATUS+ST_NEXT.w,d0
+        bra.s   .play
+.hold:  bsr     hold_rotation
+        tst.w   playing
+        beq     .loop
+        move.l  #1,STATUS+ST_STOPPED.w
+        moveq   #-1,d0
+        bsr     end_piece
+        bra     .loop
+.quit:  bsr     hold_rotation
+        tst.w   playing
         beq.s   .out
         move.l  #1,STATUS+ST_STOPPED.w
         moveq   #-1,d0
         bsr     end_piece
-.out:   rts
+.out:   bra     flush_results
 
-; Read the window's messages. d0: -1 to quit, n + 1 for piece n, 0 for
-; nothing. The last choice among the waiting messages wins, but a quit
-; always does.
+; Play the next piece rotate_frames from now: the alarm wakes the task then.
+arm_rotation:
+        tst.l   pieces
+        beq.s   hold_rotation
+        move.l  STATUS+ST_VBLANKS.w,d0
+        add.l   rotate_frames,d0
+        clr.w   alarm_on                ; the server must not see half of it
+        move.l  d0,alarm_at
+        move.l  d0,STATUS+ST_ROTATE_AT.w
+        move.w  #1,alarm_on
+        rts
+
+; No rotation until the next choice.
+hold_rotation:
+        clr.w   alarm_on
+        move.l  #-1,STATUS+ST_ROTATE_AT.w
+        rts
+
+; Z clear when the rotation's time has come.
+rotation_due:
+        move.l  STATUS+ST_ROTATE_AT.w,d0
+        cmp.l   #-1,d0
+        beq.s   .no
+        sub.l   STATUS+ST_VBLANKS.w,d0
+        bgt.s   .no
+        moveq   #1,d0
+        rts
+.no:    moveq   #0,d0
+        rts
+
+; Read the window's messages. d0: -1 to quit, -2 to stop and hold the
+; rotation (Space), n + 1 for piece n, 0 for nothing; d1: how many key
+; presses and clicks there were. The last choice among the waiting messages
+; wins, but a quit always does.
 next_choice:
-        movem.l d2-d4/a2,-(sp)
+        movem.l d2-d5/a2,-(sp)
         moveq   #0,d4                   ; the choice
+        moveq   #0,d5                   ; the input
 .next:  move.l  window,a0
         move.l  wd_UserPort(a0),a0
         jsr     _LVOGetMsg(a6)
@@ -1001,23 +1084,27 @@ next_choice:
         and.l   #$ffff,d3
         move.l  d3,STATUS+ST_KEY.w
         btst    #7,d3                   ; a key going up
-        bne.s   .next
+        bne     .next
+        addq.l  #1,d5
         cmp.b   #KEY_ESC,d3
-        beq.s   .quit
+        beq     .quit
         cmp.b   #KEY_Q,d3
-        beq.s   .quit
+        beq     .quit
+        cmp.b   #KEY_SPACE,d3
+        beq     .hold
         lea     piece_keys,a0
         moveq   #0,d0
 .key:   cmp.l   pieces,d0
-        beq.s   .next
+        beq     .next
         cmp.b   (a0)+,d3
         beq.s   .chosen
         addq.l  #1,d0
         bra.s   .key
 .mouse: cmp.l   #MOUSEBUTTONS,d2
-        bne.s   .next
+        bne     .next
         cmp.w   #SELECTDOWN,d3
-        bne.s   .next
+        bne     .next
+        addq.l  #1,d5
         addq.l  #1,STATUS+ST_CLICKS.w
         move.l  a2,STATUS+ST_CLICK_XY.w
         move.l  a2,d1
@@ -1041,13 +1128,20 @@ next_choice:
         bra.s   .line
 .chosen:
         addq.l  #1,d0
+        cmp.l   #-1,d4
+        beq     .next                   ; a quit stands
         move.l  d0,d4
         move.l  STATUS+ST_VBLANKS.w,STATUS+ST_CHOSEN_AT.w
+        bra     .next
+.hold:  cmp.l   #-1,d4
+        beq     .next
+        moveq   #-2,d4
         bra     .next
 .quit:  moveq   #-1,d4
         bra     .next
 .out:   move.l  d4,d0
-        movem.l (sp)+,d2-d4/a2
+        move.l  d5,d1
+        movem.l (sp)+,d2-d5/a2
         rts
 
 ; Put line d0 in gold with a user copper list on the screen's viewport:
@@ -1188,6 +1282,7 @@ start_piece:
         move.l  STATUS+ST_VBLANKS.w,STATUS+ST_PLAYING_AT.w
         addq.l  #1,STATUS+ST_STARTS.w
         move.l  #1,STATUS+ST_STATE.w
+        bsr     flush_results           ; the piece before's, now this one plays
         moveq   #MEMF_CHIP,d1           ; then what it found, while it plays
         jsr     _LVOAvailMem(a6)
         move.l  d0,STATUS+ST_CHIP_FREE.w
@@ -1654,14 +1749,21 @@ print_results:
         tst.l   STATUS+ST_STOPPED.w
         beq.s   .print
         lea     stopped(pc),a0
-.print: bsr     print
+.print: move.l  a3,-(sp)                ; formatted now, written by flush_results
+        lea     results_buf,a3
+        bsr     format
         if      LOG
+.end:   tst.b   (a3)+
+        bne.s   .end
+        subq.l  #1,a3
         lea     log_text(pc),a0
         lea     fmt_args,a1
         move.l  STATUS+ST_LOGBYTES.w,(a1)
         move.l  STATUS+ST_LOGBASE.w,4(a1)
-        bsr     print
+        bsr     format
         endif
+        move.l  (sp)+,a3
+        move.w  #1,results_pending
         rts
 
 ; Load the file named a0 (a C string) into new public memory, with a 0
@@ -1860,23 +1962,50 @@ give_timer:
 
 ; Print the RawDoFmt format a0 with the arguments a1 to the CLI.
 print:
-        movem.l d2-d3/a2-a3/a6,-(sp)
-        lea     putchar(pc),a2
+        move.l  a3,-(sp)
         lea     textbuf,a3
-        jsr     _LVORawDoFmt(a6)
+        bsr     format
         lea     textbuf,a0
+        bsr     write_text
+        move.l  (sp)+,a3
+        rts
+
+; Format a0 with the arguments a1 into the buffer at a3 (RawDoFmt).
+format:
+        movem.l a2-a3/a6,-(sp)
+        move.l  ExecBase.w,a6
+        lea     putchar(pc),a2
+        jsr     _LVORawDoFmt(a6)
+        movem.l (sp)+,a2-a3/a6
+        rts
+
+; Write the C string a0 to the CLI.
+write_text:
+        movem.l d2-d3/a6,-(sp)
+        move.l  a0,d2
         moveq   #-1,d3
 .len:   addq.l  #1,d3
         tst.b   (a0)+
         bne.s   .len
+        tst.l   d3
+        beq.s   .out
         move.l  dosbase,a6
         jsr     _LVOOutput(a6)
         move.l  d0,d1
         beq.s   .out
-        move.l  #textbuf,d2
         jsr     _LVOWrite(a6)
-.out:   movem.l (sp)+,d2-d3/a2-a3/a6
+.out:   movem.l (sp)+,d2-d3/a6
         rts
+
+; Write the last piece's results, if they wait. Writing to the CLI takes
+; several frames, so a switch starts the next piece first.
+flush_results:
+        tst.w   results_pending
+        beq.s   .out
+        clr.w   results_pending
+        lea     results_buf,a0
+        bsr     write_text
+.out:   rts
 
 putchar:
         move.b  d0,(a3)+
@@ -2387,7 +2516,7 @@ audints:
                 dc.b NT_INTERRUPT,0
                 dc.l intname,REPTN,aud_handler
         endr
-        include "keys.i"                ; piece_keys: each piece's raw key code
+        include "menu.i"                ; ROTATE_S, and piece_keys: each piece's raw key code
         even
 keys:           incbin "keys.bin"
 sampletab:      incbin "samples.tab"
@@ -2468,11 +2597,14 @@ task:           ds.l 1                  ; this program's task, for the alarm
 alarm_mask:     ds.l 1
 alarm_at:       ds.l 1                  ; the vertical blank count it goes off at
 alarm_on:       ds.w 1
+rotate_frames:  ds.l 1                  ; ROTATE_S in vertical blanks
 clock_on:       ds.w 1                  ; 1 while the vertical blank server is in
 alarm_bit:      ds.b 1
                 ds.b 1
                 cnop 0,4
 fib:            ds.b 260                ; a FileInfoBlock, longword aligned
 textbuf:        ds.b 512
+results_buf:    ds.b 512                ; a piece's results, until flush_results
+results_pending: ds.w 1
                 ds.w 1
 bss_end:

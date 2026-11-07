@@ -1,11 +1,12 @@
 from pathlib import Path
 
 import pytest
-from amiga_env.piano import disk
+from amiga_env.piano import build, disk
 from amiga_env.piano.build import Piece, Recipe
 from amiga_env.piano.samples import SampleSpec
 
 PLAYER = Path(__file__).parents[1] / "examples" / "piano" / "player.s"
+RECIPE = PLAYER.parent / "piano.toml"
 
 
 class TestMenu:
@@ -69,11 +70,22 @@ class TestTitles:
             disk.titles(recipe("Bach  Duet", ""))
 
 
-class TestKeys:
+class TestMenuInclude:
     def test_each_piece_gets_its_keys_raw_code_in_order(self):
-        assert disk.keys_include(11).splitlines()[1] == (
-            "piece_keys: dc.b $01,$02,$03,$04,$05,$06,$07,$08,$09,$20,$35"
+        assert "piece_keys: dc.b $01,$02,$03,$04,$05,$06,$07,$08,$09,$20,$35" in (
+            disk.menu_include(11, 15).splitlines()
         )
+
+    def test_the_rotation_gap_is_given_in_seconds(self):
+        assert "ROTATE_S        equ 5" in disk.menu_include(3, 5).splitlines()
+
+    @pytest.mark.parametrize("seconds", [0, -1, 601, 1.5])
+    def test_a_gap_outside_1_to_600_whole_seconds_is_refused(self, seconds):
+        with pytest.raises(SystemExit, match="rotate_s"):
+            disk.menu_include(3, seconds)
+
+    def test_the_recipe_rotates_after_15_seconds(self):
+        assert build.load_recipe(RECIPE).rotate_s == 15
 
     def test_every_menu_key_has_a_raw_code(self):
         assert set(disk.MENU_KEYS) <= disk.RAW_KEYS.keys()
@@ -127,5 +139,5 @@ class TestScreen:
         source = PLAYER.read_text()
 
         assert 'include "screen.i"' in source and "SCREEN_TABLES" in source
-        assert 'include "keys.i"' in source
+        assert 'include "menu.i"' in source
         assert f'menu_keys:      dc.b "{disk.MENU_KEYS}"' in source

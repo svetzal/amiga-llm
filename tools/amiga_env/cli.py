@@ -194,6 +194,18 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         "--realtime", action="store_true", help="the player, in real time, with no recording"
     )
 
+    rotation = sub.add_parser(
+        "piano-rotation",
+        help="boot the piano test floppy and check that it plays by itself: "
+        "the quiet start, the gaps, a click, the wrap, Space, a key",
+    )
+    rotation.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    rotation.add_argument("--machine", default="a500", help="a machine from amiga.toml; a500")
+    rotation.add_argument(
+        "--floppy", type=Path, metavar="ADF", help="the test build; build/piano/piano-log.adf"
+    )
+    rotation.add_argument("--name", default="emulator-rotation", help="the run's files' name")
+
     # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
     return parser, sub
@@ -230,6 +242,7 @@ COMMANDS = {
     "piano-disk": lambda args: _piano_disk(args.recipe, args.out),
     "piano-survey": lambda args: _piano_survey(args),
     "piano-run": lambda args: _piano_run(args),
+    "piano-rotation": lambda args: _piano_rotation(args),
 }
 
 
@@ -305,6 +318,7 @@ def _piano_run(args: argparse.Namespace) -> int:
 
     recipe = build.load_recipe(args.recipe)
     keys = {p.name: key for p, key in zip(recipe.pieces, disk.MENU_KEYS)}
+    order = {p.name: i for i, p in enumerate(recipe.pieces)}
     unknown = [name for name in args.pieces if name not in keys]
     if unknown:
         raise SystemExit(f"no piece {unknown[0]} in {args.recipe}")
@@ -318,7 +332,10 @@ def _piano_run(args: argparse.Namespace) -> int:
     found = machine.run_menu(
         machines[args.machine],
         args.floppy or project.build_dir() / "piano" / (test if args.log else player),
-        [machine.Choice(n, keys[n], out / "m68k" / f"{n}.log", lines[n]) for n in args.pieces],
+        [
+            machine.Choice(n, keys[n], out / "m68k" / f"{n}.log", lines[n], order[n])
+            for n in args.pieces
+        ],
         out,
         name,
         log=args.log,
@@ -353,6 +370,30 @@ def _piano_run(args: argparse.Namespace) -> int:
     if args.audio:
         print(f"audio: {found.get('wav')}")
     return 0 if matched and found["ended"] else 1
+
+
+def _piano_rotation(args: argparse.Namespace) -> int:
+    from .piano import build, disk, machine
+
+    recipe = build.load_recipe(args.recipe)
+    out = project.root() / recipe.out
+    lines = disk.click_points(recipe)
+    choices = [
+        machine.Choice(p.name, key, out / "m68k" / f"{p.name}.log", lines[p.name], i)
+        for i, (p, key) in enumerate(zip(recipe.pieces, disk.MENU_KEYS))
+    ]
+    floppy = args.floppy or project.build_dir() / "piano" / disk.DISK_NAMES[1]
+    found = machine.run_rotation(
+        profile.load_machines(reserved=command_names())[args.machine],
+        floppy,
+        choices,
+        out,
+        args.name,
+    )
+    for step, result in found["steps"].items():
+        print(f"{step}: {json.dumps(result)}")
+    logs = [r for step, r in found["steps"].items() if step.endswith("_log") or "_log_" in step]
+    return 0 if all(r["same_ticks"] for r in logs) and found["steps"]["quit"]["ended"] else 1
 
 
 def _ready(machine: profile.Machine) -> None:
