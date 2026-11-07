@@ -59,7 +59,7 @@ NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 TOP_KEYS = {"description", "machine", "layer"}
 DEFAULT_TIMEOUT = 600
 # Bump when the meaning of a layer changes, so every system is rebuilt.
-FORMAT = 2
+FORMAT = 3
 ARCHIVE_SUFFIXES = (".lha", ".lzh", ".7z", ".zip")
 CONTAINER_SUFFIXES = (".adf", *ARCHIVE_SUFFIXES)
 

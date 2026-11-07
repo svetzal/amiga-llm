@@ -7,6 +7,10 @@ import zipfile
 import pytest
 from amiga_env import adf, compress, session, system
 from amiga_env.recipe import parse, personal_paths
+from amitools.fs.ADFSVolume import ADFSVolume
+from amitools.fs.blkdev.BlkDevFactory import BlkDevFactory
+from amitools.fs.FSString import FSString
+from amitools.fs.TimeStamp import TimeStamp
 from amitools.tools import xdftool
 
 
@@ -140,17 +144,26 @@ def _sidecar(path):
     return (path.parent / (path.name + system.SIDECAR)).read_text()
 
 
+def _stamp(adf, path, days, minutes, ticks):
+    """Set a file's raw Amiga datestamp, which has no time zone."""
+    blkdev = BlkDevFactory().open(str(adf))
+    volume = ADFSVolume(blkdev)
+    volume.open()
+    volume.get_path_name(FSString(path)).change_mod_ts(TimeStamp(days, minutes, ticks))
+    volume.close()
+    blkdev.close()
+
+
 class TestAttributes:
     def test_a_file_keeps_the_protection_bits_and_date_of_its_disk(self, project):
-        image = str(project / "media" / "adf" / "wb.adf")
-        xdftool.main(
-            [image, "protect", "hello", "srwd", "+", "time", "hello", "13.04.2021 03:43:13"]
-        )
+        image = project / "media" / "adf" / "wb.adf"
+        xdftool.main([str(image), "protect", "hello", "srwd"])
+        _stamp(image, "hello", days=15808, minutes=163, ticks=684)
         _recipe(project, BASE)
 
         tree = system.build("t")
 
-        assert _sidecar(tree / "hello").startswith("-s--rw-d 2021-04-13 03:43:13.00")
+        assert _sidecar(tree / "hello") == "-s--rw-d 2021-04-13 02:43:13.68\n"
 
     def test_a_copied_file_takes_its_attributes_under_its_new_name(self, project):
         xdftool.main([str(project / "media" / "adf" / "wb.adf"), "protect", "hello", "prwed"])

@@ -16,10 +16,10 @@ and archives are opened once into runs/systems/.cache/, keyed by checksum.
 Amiga attributes (protection bits, date, comment) live in FS-UAE `.uaem`
 sidecar files beside each host file: `NAME.uaem` holds one line,
 `hsparwed YYYY-MM-DD HH:MM:SS.TT comment`, in the Amiga's local time.
-Amiberry reads and writes them, and amitools' xdftool unpacks a disk to them
-and packs an image from them, so a file keeps its disk's attributes from
-the floppy to the emulator and on to an exported image. Every copy here
-takes a file's sidecar with it, under the file's new name.
+Amiberry reads and writes them; amigafs.py unpacks a disk to them and
+packs an image from them, so a file keeps its disk's attributes from the
+floppy to the emulator and on to an exported image. Every copy here takes
+a file's sidecar with it, under the file's new name.
 """
 
 import json
@@ -29,17 +29,15 @@ import tempfile
 import time
 from pathlib import Path
 
-from amitools.tools import xdftool
-
-from . import compress, media, profile, project, recipe, session
+from . import amigafs, compress, media, profile, project, recipe, session
 from .recipe import Amiga, Copy, Dirs, File, Layer, MediaRef, Recipe, Unpack
 
 SYSTEMS = "systems"
-SIDECAR = ".uaem"  # FS-UAE's attribute file, which Amiberry and amitools share
+SIDECAR = amigafs.SIDECAR  # FS-UAE's attribute file, which Amiberry reads
 FSDB = "_UAEFSDB.___"  # WinUAE's per-folder attribute record
 IGNORED = {FSDB, ".DS_Store"}
 # Bump when what the cache holds for a disk or archive changes.
-CACHE_FORMAT = 2
+CACHE_FORMAT = 3
 
 
 def recipes_dir() -> Path:
@@ -152,7 +150,7 @@ def _apply(layer: Layer, rec: Recipe, tree: Path, state: Path) -> None:
     match layer:
         case Unpack(source=source, into=into, exclude=exclude, decompress=unz):
             opened, _ = open_ref(source)
-            dest = _resolve(tree, into, create=True)
+            dest = resolve(tree, into, create=True)
             dest.mkdir(parents=True, exist_ok=True)
             merge(opened, dest, _lower(exclude), decompress=unz)
         case Copy(source=source, files=files, exclude=exclude, decompress=unz):
@@ -162,9 +160,9 @@ def _apply(layer: Layer, rec: Recipe, tree: Path, state: Path) -> None:
                 _copy_path(found, src, tree, dst, _lower(exclude), unz)
         case Dirs(paths=paths):
             for path in paths:
-                _resolve(tree, path, create=True).mkdir(exist_ok=True)
+                resolve(tree, path, create=True).mkdir(exist_ok=True)
         case File(path=path, text=text, append=append):
-            target = _resolve(tree, path, create=True)
+            target = resolve(tree, path, create=True)
             before = target.read_text() if append and target.exists() else ""
             if before and not before.endswith("\n"):
                 before += "\n"
@@ -194,7 +192,7 @@ def _run_amiga(layer: Amiga, rec: Recipe, tree: Path, state: Path) -> None:
 
 
 def _ensure_hook(tree: Path) -> None:
-    startup = _resolve(tree, session.USER_STARTUP, create=True)
+    startup = resolve(tree, session.USER_STARTUP, create=True)
     existing = startup.read_text() if startup.exists() else ""
     wanted = session.with_hook(existing)
     if wanted != existing:
@@ -253,16 +251,10 @@ def _is_adf(path: Path) -> bool:
 
 def _unpack_adf(adf: Path, slot: Path) -> str:
     """Unpack with a `.uaem` sidecar for every file and drawer."""
-    out = slot / "unpacked"
-    out.mkdir()
-    if xdftool.main([str(adf), "unpack", str(out), "fsuae"]) != 0:
-        raise SystemExit(f"xdftool could not unpack {adf}")
-    disks = [p for p in out.iterdir() if p.is_dir()]
-    if len(disks) != 1:
-        raise SystemExit(f"xdftool unpacked {len(disks)} volumes from {adf}")
-    disks[0].rename(slot / "tree")
-    shutil.rmtree(out)
-    return disks[0].name
+    try:
+        return amigafs.unpack_adf(adf, slot / "tree")
+    except Exception as error:  # amitools raises its own error types
+        raise SystemExit(f"could not unpack {adf}: {error}") from error
 
 
 def _extract(archive: Path, slot: Path) -> None:
@@ -339,8 +331,7 @@ def is_sidecar(name: str) -> bool:
     return name.lower().endswith(SIDECAR)
 
 
-def sidecar(path: Path) -> Path:
-    return path.with_name(path.name + SIDECAR)
+sidecar = amigafs.sidecar
 
 
 def copy_sidecar(source: Path, target: Path) -> None:
@@ -355,7 +346,7 @@ def copy_sidecar(source: Path, target: Path) -> None:
 def _copy_path(
     source: Path, src: str, tree: Path, dst: str, exclude: set[str], decompress: bool
 ) -> None:
-    target = _resolve(tree, dst, create=True)
+    target = resolve(tree, dst, create=True)
     if source.is_dir():
         target.mkdir(exist_ok=True)
         copy_sidecar(source, target)
@@ -368,7 +359,7 @@ def _lower(paths: tuple[str, ...]) -> set[str]:
     return {p.lower() for p in paths}
 
 
-def _resolve(tree: Path, rel: str, create: bool = False) -> Path:
+def resolve(tree: Path, rel: str, create: bool = False) -> Path:
     """tree/rel, using existing folders whose names differ only in case."""
     path = tree
     parts = [p for p in rel.split("/") if p]
@@ -388,7 +379,7 @@ def _child(folder: Path, name: str) -> Path:
 
 
 def _existing(tree: Path, rel: str, what: str) -> Path:
-    path = _resolve(tree, rel)
+    path = resolve(tree, rel)
     if not path.exists():
         raise SystemExit(f"{what} has no {rel}")
     return path
