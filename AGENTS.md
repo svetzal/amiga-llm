@@ -121,7 +121,11 @@ path outside the repository at run time.
   `media/manifest.lock.json`. To add media, add a manifest entry and rerun
   `make media`. Never copy files into `media/` by hand.
 - Media is copyrighted and never committed. Only the manifest and its lock are
-  tracked.
+  tracked. The repository is public (`github.com/svetzal/amiga-llm`), so
+  `tests/test_public_repo.py` fails if git tracks anything else under
+  `media/`, a file with a media suffix (`.rom`, `.adf`, `.key` and so on), or
+  a file whose checksum matches locked media. Never weaken those tests to
+  make a commit pass.
 - Amiberry comes from `make tools` and runs through `amiga-env run`, which
   gives it a private HOME under `runs/home/`. Never launch
   `/Applications/Amiberry.app` or the bundled binary directly for project
