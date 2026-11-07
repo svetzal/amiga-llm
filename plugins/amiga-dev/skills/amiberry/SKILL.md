@@ -81,10 +81,30 @@ Verified recipes:
 | --- | --- | --- |
 | A500, 1 MB, Kickstart 1.2 | `--model A500 -r amiga-os-120.rom -0 <WB 1.2 adf> -s ntsc=true` | 68000, OCS, 512 KB chip plus 512 KB slow, cycle-exact; Workbench 1.2 with "890424 free memory" |
 | A3000, Kickstart 3.2 | `--model A3000 -r <3.2 A3000 ROM> -0 Install3.2.adf -s ntsc=true -s a3000mem_size=8` | 68030 and 68882, ECS, 2 MB chip, 8 MB fast; 3.2 Workbench from the Install floppy |
+| A3000 with a 68060 | as above plus `cpu_model=68060 fpu_model=68060 mmu_model=68060 cpu_24bit_addressing=false cycle_exact=false cpu_cycle_exact=false cpu_memory_cycle_exact=false cpu_compatible=false z3mem_size=256` (each with `-s`) | 68060 with FPU and MMU, 256 MB Zorro III RAM; `cpu_compatible=false` holds only with cycle-exact off |
 
 The A3000 preset has no fast RAM; add `a3000mem_size` for the motherboard
 RAM. The AmigaOS 3.2 `Workbench3.2.adf` does not boot on its own (the machine
 stops at the insert-disk screen); `Install3.2.adf` does.
+
+### Hard disks: host folders and RDB images
+
+- `-s filesystem2=rw,DH0:Label:/abs/dir,0` mounts a host folder as a
+  volume; the last field is the boot priority (`-128` for not bootable).
+- `-s hardfile2=rw,DH0:/abs/disk.hdf,0,0,0,512,0,,uaehf0` attaches an RDB
+  image. Zeros for sectors, surfaces and reserved blocks make Amiberry read
+  the geometry, partitions and any filesystem from the RDB; the partitions
+  keep their RDB names. Kickstart 3.2 booted one to Workbench.
+- **Amiga attributes in a host folder** live in FS-UAE sidecars,
+  `NAME.uaem` beside `NAME`: one line, `-s--rw-d 2021-04-13 02:42:22.10
+  comment`, flags in `hsparwed` order (`-` when clear), the date as the
+  Amiga shows it, with no time zone. Write sidecars on the host before boot
+  to give files their protection bits, dates and comments. Amiberry writes
+  one when the Amiga sets `s`, `h`, `a` or a comment, but not for
+  `Protect +p`, which is lost at the next boot.
+- amitools (`xdftool unpack DIR fsuae`, `pack`) uses the same sidecars but,
+  in 0.9.0, converts dates through the host's time zone (an hour off in
+  summer) and drops sub-second ticks when packing.
 
 ### ROMs
 
@@ -133,9 +153,12 @@ process unless `QUIT` fails.
 
 ## Gotchas
 
-- **One socket per host.** The path is fixed, so a second emulator collides
-  with the first. Before acting, check that `GET_STATUS` names the disk you
-  booted. Do not quit an emulator you did not start.
+- **A second emulator gets another socket.** When `/tmp/amiberry.sock` is
+  taken, Amiberry logs "Default socket in use, using instance N" and
+  listens elsewhere; with `--log` it prints "IPC: Listening on PATH". Read
+  that line to find your emulator's socket, check that `GET_STATUS` or
+  `LIST_HARDDRIVES` names the disk you booted, and never quit an emulator
+  you did not start.
 - **`ps` is misleading.** Amiberry rewrites its argument strings after
   parsing: a run started with `-s ntsc=true -G` shows `-s ntsc true` and no
   `-G`. Use `GET_STATUS` or `--dump-config` instead.
