@@ -15,6 +15,11 @@ migration leaves no half-copied media and keeps what it finished. An item
 already present and matching its lock is not copied again, so its source need
 not be set. A copy that does not match its locked checksum is refused, so a
 different origin cannot silently replace the media the lock describes.
+
+Freely licensed material from the internet is a [[download]]: a pinned URL,
+its size and SHA-256, and its licence. `migrate` fetches it into a fresh
+directory, checks it, unpacks it when it is an archive (see fetch.py), and
+locks what landed in media/ beside the URL and the download's checksum.
 """
 
 import hashlib
@@ -22,12 +27,13 @@ import json
 import os
 import re
 import shutil
+import tempfile
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import dotenv, project
+from . import dotenv, fetch, project
 
 MANIFEST_NAME = "manifest.toml"
 LOCK_NAME = "manifest.lock.json"
@@ -36,6 +42,9 @@ ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 SOURCE_KEYS = {"env", "description"}
 ITEM_REQUIRED = {"dest", "source", "origin", "licence"}
 ITEM_KEYS = ITEM_REQUIRED | {"optional"}
+DOWNLOAD_REQUIRED = {"dest", "url", "sha256", "size", "licence"}
+DOWNLOAD_KEYS = DOWNLOAD_REQUIRED | {"unpack", "optional"}
+SHA256 = re.compile(r"[0-9a-f]{64}")
 DIGEST_KEYS = ("kind", "sha256", "size", "files")
 
 
@@ -56,9 +65,26 @@ class Item:
 
 
 @dataclass(frozen=True)
+class Download:
+    dest: str
+    url: str
+    sha256: str
+    size: int
+    licence: str
+    unpack: str | None = None
+    optional: bool = False
+
+
+@dataclass(frozen=True)
 class Manifest:
     sources: dict[str, Source]
     items: list[Item]
+    downloads: tuple[Download, ...] = ()
+
+    @property
+    def entries(self) -> list[Item | Download]:
+        """Everything with a dest in media/: copied items, then downloads."""
+        return [*self.items, *self.downloads]
 
 
 def manifest_path() -> Path:
@@ -73,16 +99,17 @@ def parse_manifest(text: str) -> Manifest:
             "manifest.toml: origin_root is no longer used; name [sources] and give each "
             "[[item]] a source (see the comment at the top of a fresh `amiga-env init` manifest)"
         )
-    _no_unknown_keys(data, {"sources", "item"}, "manifest.toml")
+    _no_unknown_keys(data, {"sources", "item", "download"}, "manifest.toml")
     sources = {name: _source(name, table) for name, table in data.get("sources", {}).items()}
     envs = [s.env for s in sources.values()]
     if len(set(envs)) != len(envs):
         raise SystemExit("manifest.toml: two sources use the same environment variable")
     items = [_item(table, sources) for table in data.get("item", [])]
-    dests = [i.dest for i in items]
+    downloads = [_download(table) for table in data.get("download", [])]
+    dests = [e.dest for e in [*items, *downloads]]
     if len(set(dests)) != len(dests):
         raise SystemExit("manifest.toml lists the same dest twice")
-    return Manifest(sources, items)
+    return Manifest(sources, items, tuple(downloads))
 
 
 def load_manifest(path: Path | None = None) -> Manifest:
@@ -139,10 +166,13 @@ def describe(path: Path) -> dict:
     return {"kind": "file", "sha256": file_digest(path), "size": path.stat().st_size}
 
 
-def lock_entry(digest: dict, item: Item) -> dict:
-    """What the lock records for an item: its checksum, and where it came from."""
+def lock_entry(digest: dict, item: Item | Download) -> dict:
+    """What the lock records for an entry: its checksum, and where it came from."""
     entry = {k: digest[k] for k in DIGEST_KEYS if k in digest}
-    entry |= {"source": item.source, "origin": item.origin, "licence": item.licence}
+    if isinstance(item, Download):
+        entry |= {"url": item.url, "download_sha256": item.sha256, "licence": item.licence}
+    else:
+        entry |= {"source": item.source, "origin": item.origin, "licence": item.licence}
     return entry | ({"optional": True} if item.optional else {})
 
 
@@ -150,8 +180,12 @@ def migrate(
     overrides: Mapping[str, Path] | None = None,
     manifest: Path | None = None,
     environ: Mapping[str, str] | None = None,
+    get: fetch.Getter = fetch.http_get,
 ) -> None:
-    """Copy every item not already present. `overrides` maps source names to folders."""
+    """Copy every item and fetch every download not already present.
+
+    `overrides` maps source names to folders; `get` fetches a URL into a file.
+    """
     manifest = manifest or manifest_path()
     loaded = load_manifest(manifest)
     media_dir = manifest.parent
@@ -159,8 +193,10 @@ def migrate(
     folders |= dict(overrides or {})
     lock_path = media_dir / LOCK_NAME
     previous = _read_lock(lock_path)
-    lock = {i.dest: previous[i.dest] for i in loaded.items if i.dest in previous}
-    present = {i.dest for i in loaded.items if _matches_lock(media_dir / i.dest, lock.get(i.dest))}
+    lock = {e.dest: previous[e.dest] for e in loaded.entries if e.dest in previous}
+    present = {
+        e.dest for e in loaded.entries if _matches_lock(media_dir / e.dest, lock.get(e.dest))
+    }
     pending = [i for i in loaded.items if i.dest not in present]
     _require_sources(loaded, pending, folders)
     for item in loaded.items:
@@ -173,6 +209,16 @@ def migrate(
             lock[item.dest] = lock_entry(found, item)
             _write_lock(lock_path, lock)
             print(f"copied  {item.dest}")
+    for download in loaded.downloads:
+        if download.dest in present:
+            lock[download.dest] = lock_entry(lock[download.dest], download)
+            print(f"present {download.dest}")
+            continue
+        found = _fetch_download(download, media_dir, lock, get)
+        if found is not None:
+            lock[download.dest] = lock_entry(found, download)
+            _write_lock(lock_path, lock)
+            print(f"fetched {download.dest}")
     _write_lock(lock_path, lock)
     print(f"Recorded {len(lock)} items in {lock_path.relative_to(media_dir.parent)}")
 
@@ -183,7 +229,7 @@ def verify(manifest: Path | None = None) -> bool:
     media_dir = manifest.parent
     lock = _read_lock(media_dir / LOCK_NAME)
     ok = True
-    for item in loaded.items:
+    for item in loaded.entries:
         dest = media_dir / item.dest
         expected = lock.get(item.dest)
         if not dest.exists() and item.optional:
@@ -225,7 +271,7 @@ def add(
         raise SystemExit(f"Not found in {source} ({env}): {relative}")
     if not licence.strip():
         raise SystemExit("--licence must say what entitles this copy")
-    dest = check_new_dest(dest, [i.dest for i in loaded.items])
+    dest = check_new_dest(dest, [e.dest for e in loaded.entries])
     item = Item(dest, source, relative, licence, optional)
     _write_text(manifest, with_item(manifest.read_text(), item))
     print(f"added   {item.dest} <- {source}:{relative}; run `amiga-env media` to copy it in")
@@ -353,6 +399,71 @@ def _item(table: object, sources: dict[str, Source]) -> Item:
         licence=table["licence"],
         optional=table.get("optional", False),
     )
+
+
+def _download(table: object) -> Download:
+    if not isinstance(table, dict):
+        raise SystemExit("manifest.toml: each [[download]] must be a table")
+    where = f"manifest.toml [[download]] {table.get('dest', '(no dest)')}"
+    _no_unknown_keys(table, DOWNLOAD_KEYS, where)
+    missing = sorted(DOWNLOAD_REQUIRED - table.keys())
+    if missing:
+        raise SystemExit(f"{where} has no {', '.join(missing)}")
+    url, sha256, size = table["url"], table["sha256"], table["size"]
+    if not isinstance(url, str) or not url.startswith("https://"):
+        raise SystemExit(f"{where}: url must be an https:// address")
+    if not isinstance(sha256, str) or not SHA256.fullmatch(sha256):
+        raise SystemExit(f"{where}: sha256 must be 64 lower-case hex digits")
+    if type(size) is not int or size <= 0:
+        raise SystemExit(f"{where}: size is the download's length in bytes")
+    unpack = table.get("unpack")
+    if unpack is not None and unpack not in fetch.UNPACK_FORMATS:
+        raise SystemExit(f"{where}: unpack is one of {', '.join(fetch.UNPACK_FORMATS)}")
+    if not isinstance(table.get("optional", False), bool):
+        raise SystemExit(f"{where}: optional is true or false")
+    if not isinstance(table["licence"], str) or not table["licence"].strip():
+        raise SystemExit(f"{where}: licence must name the licence the material is under")
+    return Download(
+        dest=check_dest(table["dest"]),
+        url=url,
+        sha256=sha256,
+        size=size,
+        licence=table["licence"],
+        unpack=unpack,
+        optional=table.get("optional", False),
+    )
+
+
+def _fetch_download(
+    download: Download, media_dir: Path, lock: dict, get: fetch.Getter
+) -> dict | None:
+    """Fetch one download into media/ and return its description; None when an optional
+    download could not be fetched."""
+    dest = media_dir / download.dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix=f".{dest.name}.download-", dir=dest.parent))
+    try:
+        try:
+            fetched = fetch.fetch(
+                download.url, download.sha256, download.size, work, download.unpack, get
+            )
+        except OSError as error:
+            if not download.optional:
+                raise SystemExit(f"could not fetch {download.url}: {error}") from error
+            print(f"skipped {download.dest} (optional; could not fetch it: {error})")
+            return None
+        found = describe(fetched)
+        expected = lock.get(download.dest)
+        if expected and found["sha256"] != expected.get("sha256"):
+            raise SystemExit(
+                f"{download.url} unpacked to something other than the lock records for "
+                f"{download.dest}. Nothing was installed."
+            )
+        _remove(dest)
+        fetched.replace(dest)
+        return found
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def _no_unknown_keys(table: dict, allowed: set[str], where: str) -> None:

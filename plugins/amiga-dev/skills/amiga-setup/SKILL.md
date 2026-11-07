@@ -103,6 +103,16 @@ amiga-env media           # copy everything in and write the checksum lock
 amiga-env media-verify
 ```
 
+Freely licensed material from the internet (a MIDI dataset, a sample set)
+is a `[[download]]` in the manifest, written by hand: `dest`, a pinned
+`https://` `url` (a release, never a branch), the download's `sha256` and
+`size`, its `licence`, and `unpack = "zip"` or `"tar"` for an archive.
+`amiga-env media` fetches it into a fresh directory, refuses it unless size
+and checksum match, unpacks only regular files and directories inside
+`dest` with no execute bits, and locks the result beside the URL. Nothing
+from a download is run. Mark it `optional = true` unless every user of the
+project needs it.
+
 `amiga-env media source NAME --env VAR --description TEXT` adds a source the
 scaffold lacks. An `--optional` item is skipped, with a note, when its source
 is not set; a required item with an unset source stops with the variable's

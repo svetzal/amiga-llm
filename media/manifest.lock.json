@@ -294,6 +294,15 @@
     "licence": "Motorola reference manual, personal copy",
     "optional": true
   },
+  "maestro": {
+    "kind": "tree",
+    "sha256": "3d45eef2d1e8443651b30692bb1e1d3eee45565c0308542a90be593040f3415f",
+    "files": 1280,
+    "url": "https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0-midi.zip",
+    "download_sha256": "70470ee253295c8d2c71e6d9d4a815189e35c89624b76d22fce5a019d5dde12c",
+    "licence": "CC BY-NC-SA 4.0 (Google LLC, MAESTRO v3.0.0)",
+    "optional": true
+  },
   "mui/README.txt": {
     "kind": "file",
     "sha256": "4509143817f1123642b8e767ecf673acd1289b95fd04122ac44a3e33b44c534e",
@@ -586,5 +595,14 @@
     "source": "amiga_forever",
     "origin": "Shared/rom/rom.key",
     "licence": "Amiga Forever 10 Plus"
+  },
+  "salamander": {
+    "kind": "tree",
+    "sha256": "17baeef181fea37572aa8a27cd9d8d8d39af60f16e6c95be436cca5c142ae853",
+    "files": 644,
+    "url": "https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/SalamanderGrandPianoV3+20161209_44khz16bit.tar.xz",
+    "download_sha256": "58750eb1366761e187f71ddb9b932355ea894d28ec4331e74ab8acb44c819936",
+    "licence": "CC BY 3.0 (Alexander Holm, Salamander Grand Piano V3)",
+    "optional": true
   }
 }

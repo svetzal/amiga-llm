@@ -21,7 +21,18 @@
 #   optional    true when the project works without it: `amiga-env media`
 #               skips it if its source is not set
 #
-# Add entries with `amiga-env media source` and `amiga-env media add`.
+# [[download]] is freely licensed material fetched from the internet:
+#   dest        path relative to media/
+#   url         a pinned https:// address (a release, never a branch)
+#   sha256      the download's SHA-256; anything else is refused
+#   size        the download's length in bytes
+#   licence     the licence it is distributed under
+#   unpack      "zip" or "tar" to unpack an archive into dest (as data only)
+#   optional    true when the project works without it: a failed fetch is
+#               skipped with a note
+#
+# Add entries with `amiga-env media source` and `amiga-env media add`;
+# write a [[download]] by hand.
 
 [sources.amiga_forever]
 env = "AMIGA_FOREVER_DIR"

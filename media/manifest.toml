@@ -21,7 +21,18 @@
 #   optional    true when the project works without it: `amiga-env media`
 #               skips it if its source is not set
 #
-# Add entries with `amiga-env media source` and `amiga-env media add`.
+# [[download]] is freely licensed material fetched from the internet:
+#   dest        path relative to media/
+#   url         a pinned https:// address (a release, never a branch)
+#   sha256      the download's SHA-256; anything else is refused
+#   size        the download's length in bytes
+#   licence     the licence it is distributed under
+#   unpack      "zip" or "tar" to unpack an archive into dest (as data only)
+#   optional    true when the project works without it: a failed fetch is
+#               skipped with a note
+#
+# Add entries with `amiga-env media source` and `amiga-env media add`;
+# write a [[download]] by hand.
 
 [sources.amiga_forever]
 env = "AMIGA_FOREVER_DIR"
@@ -495,3 +506,28 @@ dest = "adf/3.2/Backdrops3.2.adf"
 source = "amigaos32"
 origin = "ADF/Backdrops3.2.adf"
 licence = "AmigaOS 3.2 CD-ROM"
+
+# ---- Downloads: freely licensed material for EXP-004, the expressive piano --
+
+# MAESTRO v3.0.0 (Google Magenta): Disklavier performances as MIDI.
+[[download]]
+dest = "maestro"
+url = "https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0-midi.zip"
+sha256 = "70470ee253295c8d2c71e6d9d4a815189e35c89624b76d22fce5a019d5dde12c"
+size = 58416533
+licence = "CC BY-NC-SA 4.0 (Google LLC, MAESTRO v3.0.0)"
+unpack = "zip"
+optional = true
+
+# Salamander Grand Piano V3 (Alexander Holm, Yamaha C5), the 44.1 kHz 16-bit
+# SFZ and WAV package dated 2016-12-09 from freepats, the download
+# sfzinstruments.github.io/pianos/salamander links. The GitHub repository has
+# no releases or tags, so this dated archive is the pinned edition.
+[[download]]
+dest = "salamander"
+url = "https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/SalamanderGrandPianoV3+20161209_44khz16bit.tar.xz"
+sha256 = "58750eb1366761e187f71ddb9b932355ea894d28ec4331e74ab8acb44c819936"
+size = 412313804
+licence = "CC BY 3.0 (Alexander Holm, Salamander Grand Piano V3)"
+unpack = "tar"
+optional = true
