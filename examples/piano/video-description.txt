@@ -1,0 +1,34 @@
+One unattended run of the expressive piano floppy, from the boot to the end of its tenth piece. Nobody touches the machine. Fifteen seconds after its screen appears it plays the first piece, and fifteen seconds after each piece ends it plays the next.
+
+The machine is a stock NTSC Amiga 500 with 1 MB of memory and Kickstart 1.2, emulated cycle-exact in Amiberry 8.5.0. The pieces are human performances, with each note's velocity and the sustain pedal. A 68000 program plays them through Paula, the Amiga's sound chip: four 8-bit voices, from samples of a real grand piano. The samples, the scores and the program were made with modern tools on a Mac; the Amiga does the playing. The line of the piece playing turns gold, and the scopes at the bottom show the four voices and their mix.
+
+This is the emulator's own picture and sound, every frame and every sample, with nothing cut: the boot, the gaps between pieces, and every piece in full. Each piece starts about a second after its line turns gold, because each recording starts with that much silence.
+
+The project: https://github.com/svetzal/amiga-llm (EXP-004, the expressive piano)
+
+Chapters
+{chapters}
+
+Credits and licences
+
+The piano
+Salamander Grand Piano V3 (2016-12-09), a Yamaha C5, by Alexander Holm.
+Licence: Creative Commons Attribution 3.0 (CC BY 3.0), https://creativecommons.org/licenses/by/3.0/
+Source: https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/
+Changed for this disk: one velocity layer and one sample every three semitones, converted to 8 bits, resampled to Paula's rates, cut to a recorded attack plus a short crossfaded loop, and set to new levels.
+
+The performances
+MAESTRO dataset v3.0.0 by Google LLC (Magenta), MIDI recorded at the International Piano-e-Competition.
+Licence: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0), https://creativecommons.org/licenses/by-nc-sa/4.0/
+Source: https://magenta.tensorflow.org/datasets/maestro
+Changed for this disk: each performance's notes, velocities and sustain pedal converted to the player's score format. The titles on the screen were written for this disk.
+
+The picture
+Generated with OpenAI's image model from the project's own description, then cropped, reduced to 13 colours and dithered for this screen.
+
+The player and the font
+Copyright (c) 2026 Stacey Vetzal, under the MIT licence (LICENSE in the amiga-llm project).
+
+This video
+Shared under CC BY-NC-SA 4.0, as the performances are: https://creativecommons.org/licenses/by-nc-sa/4.0/
+Not for commercial use. The video is not monetised.

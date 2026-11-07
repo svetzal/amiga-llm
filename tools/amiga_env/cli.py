@@ -206,6 +206,32 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     )
     rotation.add_argument("--name", default="emulator-rotation", help="the run's files' name")
 
+    film = sub.add_parser(
+        "piano-video",
+        help="record the piano floppy playing by itself, frame by frame, and make YouTube "
+        "masters, chapters and a description in runs/video",
+    )
+    film.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    film.add_argument("--machine", default="a500", help="a machine from amiga.toml; a500")
+    film.add_argument(
+        "--floppy", type=Path, metavar="ADF", help="the player's disk; build/piano/piano.adf"
+    )
+    film.add_argument("--out", type=Path, metavar="DIR", help="where it all goes; runs/video")
+    film.add_argument(
+        "--seconds", type=float, metavar="S", help="stop after S seconds of emulated time (a test)"
+    )
+    film.add_argument(
+        "--steps",
+        default="record,master,measure",
+        help="which of record, master, measure to do; all three",
+    )
+    film.add_argument(
+        "--description",
+        type=Path,
+        metavar="TXT",
+        help="the description with {chapters}; video-description.txt beside the recipe",
+    )
+
     # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
     return parser, sub
@@ -243,6 +269,7 @@ COMMANDS = {
     "piano-survey": lambda args: _piano_survey(args),
     "piano-run": lambda args: _piano_run(args),
     "piano-rotation": lambda args: _piano_rotation(args),
+    "piano-video": lambda args: _piano_video(args),
 }
 
 
@@ -394,6 +421,35 @@ def _piano_rotation(args: argparse.Namespace) -> int:
         print(f"{step}: {json.dumps(result)}")
     logs = [r for step, r in found["steps"].items() if step.endswith("_log") or "_log_" in step]
     return 0 if all(r["same_ticks"] for r in logs) and found["steps"]["quit"]["ended"] else 1
+
+
+def _piano_video(args: argparse.Namespace) -> int:
+    from .piano import build, disk, recording
+
+    recipe = build.load_recipe(args.recipe)
+    if recipe.screen is None:
+        raise SystemExit(f"{args.recipe} has no [screen] table")
+    out = args.out or project.root() / "runs" / "video"
+    found = recording.make_video(
+        profile.load_machines(reserved=command_names())[args.machine],
+        args.floppy or project.build_dir() / "piano" / disk.DISK_NAMES[0],
+        out,
+        disk.titles(recipe),
+        recipe.screen,
+        args.description or args.recipe.parent / "video-description.txt",
+        steps=[step.strip() for step in args.steps.split(",") if step.strip()],
+        max_seconds=args.seconds,
+    )
+    if "record" in found:
+        made = found["record"]
+        print(
+            f"recorded {made['frames']} frames ({made['seconds']} s) and {made['samples']} "
+            f"samples ({made['samples_off_by']} off the frame rate's count)"
+        )
+    if "chapters" in found:
+        print("\n".join(found["chapters"]["lines"]))
+    print(f"results: {out / 'video.json'}")
+    return 0
 
 
 def _ready(machine: profile.Machine) -> None:
