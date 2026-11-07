@@ -42,3 +42,24 @@ system = "a3000-dev"
 volumes = { Work = "work" }
 settings = ["ntsc=true", "a3000mem_size=8"]
 purpose = "boot the A3000 development system (3.2, SAS/C, NDU 3.1, MUI) with Work:"
+
+# The same development system on the A3000 as Stacey runs it: a Z3660
+# accelerator, a 68060 at 50 MHz (set in its z3660cfg.txt), with the
+# 68060's own FPU and MMU, 32-bit addressing, and fast RAM in Zorro III
+# space. A 68060 cannot run cycle-exact in Amiberry, and cpu_compatible
+# stays on unless cycle-exact is off. The Z3660's RAM size is not yet read
+# off the board; 256 MB until it is. The Z3660's own drivers (SCSI, RTG,
+# network) are not in the system; see EXP-003.
+[machines.a3000-dev-060]
+model = "A3000"
+kickstart = "rom/3.2/kick-a3000.rom"
+system = "a3000-dev"
+volumes = { Work = "work" }
+settings = [
+  "ntsc=true", "a3000mem_size=8",
+  "cpu_model=68060", "fpu_model=68060", "mmu_model=68060",
+  "cpu_compatible=false", "cpu_24bit_addressing=false",
+  "cycle_exact=false", "cpu_cycle_exact=false", "cpu_memory_cycle_exact=false",
+  "z3mem_size=256",
+]
+purpose = "boot the A3000 development system on a 68060 with MMU and FPU, as with the Z3660"

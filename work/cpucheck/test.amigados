@@ -1,0 +1,29 @@
+; Check the CPU support the 3.2 Installer sets up, on either A3000 machine:
+;   uv run amiga-env exec a3000-dev work/cpucheck/test.amigados
+;   uv run amiga-env exec a3000-dev-060 work/cpucheck/test.amigados
+; CPU CHECKINSTALL returns 0 when the libraries the CPU needs are in place,
+; 5 (a warning) when they are missing, as the startup-sequence tests.
+; CPU lists the FPU flags exec sets, so it says 68882 on a 68060 too; FPU
+; (from MMULibs) names the FPU itself. MuScan prints the MMU table that
+; mmu.library built, which shows the MMU is in use.
+FailAt 21
+CPU CHECKINSTALL
+Echo "CPU CHECKINSTALL returned $RC"
+CPU
+FPU
+MuScan
+Version 680x0.library FULL
+Echo "680x0.library: $RC"
+Version 68030.library FULL
+Echo "68030.library: $RC"
+Version 68040.library FULL
+Echo "68040.library: $RC"
+Version 68060.library FULL
+Echo "68060.library: $RC"
+Version mmu.library FULL
+Echo "mmu.library: $RC"
+Version exec.library
+Avail
+List C:Assign S:Startup-sequence S:User-Startup LIBS:68060.library
+Echo "Startup-sequence: " NOLINE
+Version S:Startup-sequence

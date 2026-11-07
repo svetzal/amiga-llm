@@ -50,8 +50,22 @@ def test_the_a3000_dev_boots_its_built_system_as_dh0_and_work_as_dh1():
     ]
 
 
-def test_amiga_llm_defines_its_three_machines():
-    assert list(MACHINES) == ["a500", "a3000", "a3000-dev"]
+def test_the_a3000_dev_060_runs_the_same_system_on_a_68060_with_its_fpu_and_mmu():
+    args = machine_args(MACHINES["a3000-dev-060"], media=MEDIA, root=Path("/project"))
+    settings = _settings(args)
+
+    assert _value(args, "--model") == "A3000"
+    assert _value(args, "-r") == "/project/media/rom/3.2/kick-a3000.rom"
+    for wanted in ("cpu_model=68060", "fpu_model=68060", "mmu_model=68060"):
+        assert wanted in settings
+    assert "cpu_24bit_addressing=false" in settings
+    assert "cpu_compatible=false" in settings
+    assert "z3mem_size=256" in settings
+    assert "filesystem2=rw,DH0:System:/project/runs/systems/a3000-dev,0" in settings
+
+
+def test_amiga_llm_defines_its_four_machines():
+    assert list(MACHINES) == ["a500", "a3000", "a3000-dev", "a3000-dev-060"]
 
 
 @pytest.mark.parametrize("name", MACHINES)
