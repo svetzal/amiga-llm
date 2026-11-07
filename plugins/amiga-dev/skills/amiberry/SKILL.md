@@ -139,10 +139,13 @@ Verified commands:
 | `QUIT` | `OK`; the emulator exits and removes the socket file |
 | `GET_VERSION` | `OK  version=Amiberry 8.5.0 (2026.10.27)  sdl=SDL 3.4.18` |
 | `HELP` | The full command list, in `references/ipc-commands.md` |
+| `READ_MEM <addr> <width>` | `OK  <value>`, the value in decimal; width 4 reads a big-endian long. About 0.09 ms a call on an Apple silicon Mac, so 350 KB read a long at a time takes under 3 s |
+| `SET_WARP 1` | Runs as fast as the host can; a cycle-exact A500 did 223 s of emulated time in about 30 s |
+| `GET_CONFIG <key>` | `OK  <value>` for some keys (`sound_output`), `ERROR  Unknown option` for others (`sound_frequency`); `--dump-config` shows them all |
 
 The list also has keyboard and mouse input (`SEND_KEY`, `SEND_MOUSE`),
-memory access (`READ_MEM`, `WRITE_MEM`), floppy changes (`INSERTFLOPPY`,
-`EJECT_FLOPPY`), save states, `FRAME_ADVANCE`, warp mode and a debugger
+`WRITE_MEM`, floppy changes (`INSERTFLOPPY`,
+`EJECT_FLOPPY`), save states, `FRAME_ADVANCE` and a debugger
 (`DEBUG_STEP`, `GET_CPU_REGS`, `DISASSEMBLE`, breakpoints). These are listed
 by Amiberry but not yet verified here. Avoid `CHOOSE_MEDIA`: it opens a
 system file dialog and blocks the socket until a person answers it.
@@ -150,6 +153,31 @@ system file dialog and blocks the socket until a person answers it.
 A scripted run is: launch in the background with `-G`, wait for the socket,
 act, take a screenshot and look at it, then send `QUIT`. Do not kill the
 process unless `QUIT` fails.
+
+### Hand results to the host through memory
+
+`MONITOR` passes GDB monitor commands, not the UAE debugger's, so it cannot
+dump memory to a file. A program can leave a status block at a fixed
+address (the unused 68000 vectors from `$100` work on any Amiga) holding a
+magic word, a state and the address of a buffer; the host polls it with
+`READ_MEM` and then reads the buffer.
+
+### Record what Amiberry plays
+
+Amiberry has no command for sound recording, but its SDL 3 has the disk
+audio driver. Launch it with:
+
+```sh
+SDL_AUDIODRIVER=disk SDL_AUDIO_DISK_OUTPUT_FILE=/abs/out.raw amiberry ...
+```
+
+The log says `Writing to file [...], format=S16LE channels=2 freq=44100`:
+raw signed 16-bit little-endian stereo, which needs only a WAV header. The
+driver plays in real time, so the run takes as long as the music; do not
+use warp. The A500 model's defaults are `sound_stereo_separation=7` (a real
+Amiga is 10, full separation), `sound_filter=emulated`,
+`sound_filter_type=standard` and `sound_interpol=anti`; pass `-s
+sound_stereo_separation=10` for the real machine's stereo.
 
 ## Gotchas
 

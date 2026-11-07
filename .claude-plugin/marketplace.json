@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Skills for agent-driven Commodore Amiga development: emulation, cross-tools and real hardware",
-    "version": "0.3.1"
+    "version": "0.4.0"
   },
   "plugins": [
     {
       "name": "amiga-dev",
       "source": "./plugins/amiga-dev",
       "description": "Skills for developing Commodore Amiga software with an agent. Starts with Amiberry: installing it reproducibly, keeping it isolated from a personal setup, booting a stock machine from the command line, and driving and observing it through its control socket.",
-      "version": "0.3.1"
+      "version": "0.4.0"
     }
   ]
 }
