@@ -234,13 +234,29 @@ def _sha1(path: Path) -> str:
     return hashlib.sha1(path.read_bytes()).hexdigest()
 
 
-def master(out: Path, masters: Sequence[video.Master]) -> dict:
+def master(out: Path, masters: Sequence[video.Master], delay_ms: int = 0) -> dict:
     """Every master from the capture and the sound, in one ffmpeg pass."""
     started = time.monotonic()
-    subprocess.run(
-        video.master_command(ffmpeg(), out / "capture.mkv", out / "audio.wav", masters), check=True
+    command = video.master_command(
+        ffmpeg(), out / "capture.mkv", out / "audio.wav", masters, delay_ms=delay_ms
     )
-    return {"masters": [str(m.path) for m in masters], "wall_s": round(time.monotonic() - started)}
+    subprocess.run(command, check=True)
+    return {
+        "masters": [str(m.path) for m in masters],
+        "sound_delayed_ms": delay_ms,
+        "wall_s": round(time.monotonic() - started),
+    }
+
+
+def sound_offset(found: dict, fps: Fraction) -> dict:
+    """The sound's offset against the picture from a measure's first notes."""
+    lags = [
+        p["first_sound_after_the_players_note_ms"]
+        for p in found["pieces"]
+        if p["first_sound_after_the_players_note_ms"] is not None
+    ]
+    low, high = video.sound_offset_ms(lags, 1000 / float(fps))
+    return {"lags_ms": lags, "offset_ms": [low, high]}
 
 
 def probe(path: Path) -> dict:
@@ -431,7 +447,9 @@ def make_video(
     """Record, master and measure; write the description with the chapters.
 
     The chapters come from the 4K master's own frames; the capture's are read
-    too, and must put every piece on the same frame.
+    too, and must put every piece on the same frame. The capture's first notes
+    give the sound's offset against the picture, which the masters correct;
+    the master's own sound is measured again.
     """
     unknown = sorted(set(steps) - set(STEPS))
     if unknown:
@@ -441,10 +459,14 @@ def make_video(
     if "record" in steps:
         found["record"] = record(machine_, floppy, out, len(titles), max_seconds, fps)
     targets = masters(out)
+    layout = layout_of(spec, len(titles))
+    if "master" in steps or "measure" in steps:
+        found["capture"] = measure(out, out / "capture.mkv", CAPTURE_PICTURE, layout, titles, fps)
+        found["capture_sound_offset"] = sound_offset(found["capture"], fps)
     if "master" in steps:
-        found["master"] = master(out, targets) | {"probe": [probe(m.path) for m in targets]}
+        delay = video.audio_delay_ms(tuple(found["capture_sound_offset"]["offset_ms"]))
+        found["master"] = master(out, targets, delay) | {"probe": [probe(m.path) for m in targets]}
     if "measure" in steps:
-        layout = layout_of(spec, len(titles))
         largest = targets[0]
         in_master = (
             (largest.width - largest.picture_width) // 2,
@@ -452,8 +474,8 @@ def make_video(
             largest.picture_width,
             largest.height,
         )
-        found["capture"] = measure(out, out / "capture.mkv", CAPTURE_PICTURE, layout, titles, fps)
         found["video"] = measure(out, largest.path, in_master, layout, titles, fps)
+        found["video_sound_offset"] = sound_offset(found["video"], fps)
         found["chapters"] = _chapters(found, template, out, fps)
     (out / "video.json").write_text(json.dumps(found, indent=2) + "\n")
     return found

@@ -332,10 +332,16 @@ def picture_filter(masters: Sequence[Master]) -> str:
 
 
 def master_command(
-    ffmpeg: str, capture: Path, audio: Path, masters: Sequence[Master], crf: int = 16
+    ffmpeg: str,
+    capture: Path,
+    audio: Path,
+    masters: Sequence[Master],
+    crf: int = 16,
+    delay_ms: int = 0,
 ) -> list[str]:
     """ffmpeg making every master in one pass: H.264 High, CRF `crf`, the capture's
-    frames one for one, AAC at 256 kb/s, 48 kHz stereo; tagged BT.709."""
+    frames one for one, AAC at 256 kb/s, 48 kHz stereo; tagged BT.709. The sound
+    starts `delay_ms` late (see audio_delay_ms)."""
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     command += ["-i", str(capture), "-i", str(audio), "-filter_complex", picture_filter(masters)]
     for i, master in enumerate(masters):
@@ -360,6 +366,7 @@ def master_command(
             "bt709",
             "-color_trc",
             "bt709",
+            *(["-af", f"adelay={delay_ms}:all=1"] if delay_ms else []),
             "-c:a",
             "aac",
             "-b:a",
@@ -400,6 +407,28 @@ def list_command(ffmpeg: str, video: Path, layout: ListLayout, picture: tuple[in
         "rawvideo",
         "-",
     ]
+
+
+def sound_offset_ms(lags_ms: Sequence[float], frame_ms: float) -> tuple[float, float]:
+    """The range the sound's offset against the picture must lie in (negative: sound early).
+
+    Each lag is a first note's sound measured from the start of the frame in
+    which the player wrote it. The note was written somewhere in that frame,
+    so each lag bounds the offset to [lag - frame_ms, lag]; all must hold.
+    """
+    if not lags_ms:
+        raise SystemExit("no first notes to measure the sound's offset by")
+    low, high = max(lags_ms) - frame_ms, min(lags_ms)
+    if low > high:
+        raise SystemExit(f"the first notes do not agree on one offset: {list(lags_ms)}")
+    return round(low, 1), round(high, 1)
+
+
+def audio_delay_ms(offset_ms: tuple[float, float]) -> int:
+    """Whole milliseconds to delay the sound by so the middle of `offset_ms` is zero;
+    0 when the sound is not early."""
+    middle = sum(offset_ms) / 2
+    return round(-middle) if middle < 0 else 0
 
 
 def first_sound(samples: np.ndarray, start: int, threshold: int = 256) -> int | None:

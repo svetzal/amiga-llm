@@ -282,3 +282,27 @@ class TestSound:
         assert video.frame_of(1, counts) == 3
         assert video.frame_of(4, counts) == 6
         assert video.frame_of(5, counts) is None
+
+
+class TestSoundOffset:
+    def test_each_note_bounds_the_offset_by_one_frame(self):
+        assert video.sound_offset_ms([-5.2, -20.1, -12.5], 16.7) == pytest.approx((-21.9, -20.1))
+
+    def test_bounds_that_do_not_meet_are_refused(self):
+        with pytest.raises(SystemExit, match="do not agree"):
+            video.sound_offset_ms([0.0, -30.0], 16.7)
+
+    def test_no_notes_no_bound(self):
+        with pytest.raises(SystemExit, match="no first notes"):
+            video.sound_offset_ms([], 16.7)
+
+    def test_the_delay_puts_the_middle_of_the_bound_on_zero(self):
+        assert video.audio_delay_ms((-21.9, -20.1)) == 21
+
+    def test_sound_that_lags_is_left_alone(self):
+        assert video.audio_delay_ms((-8.1, 8.6)) == 0
+
+    def test_the_master_delays_the_sound(self):
+        masters = [video.Master(1920, 1080, 1440, Path("hd.mp4"))]
+        command = video.master_command("ffmpeg", Path("c.mkv"), Path("a.wav"), masters, delay_ms=21)
+        assert command[command.index("-af") + 1] == "adelay=21:all=1"
