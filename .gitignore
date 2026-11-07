@@ -16,3 +16,4 @@ media/*
 # Emulator run state and build products
 build/
 runs/
+.coverage
