@@ -7,5 +7,12 @@
   },
   "homepage": "https://github.com/svetzal/amiga-llm",
   "repository": "https://github.com/svetzal/amiga-llm",
-  "keywords": ["amiga", "amiberry", "emulation", "retrocomputing", "68000"]
+  "keywords": [
+    "amiga",
+    "amiberry",
+    "emulation",
+    "retrocomputing",
+    "68000"
+  ],
+  "license": "MIT"
 }

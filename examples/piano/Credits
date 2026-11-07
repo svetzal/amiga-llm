@@ -38,7 +38,9 @@ Generated with OpenAI's image model from the project's own
 description (piano-title.json), then cropped, reduced to
 13 colours and dithered for this screen.
 
-THE FONT
-The list's pixel font was drawn for this disk by the
-amiga-llm project (font.txt). It is shared on this disk's
-terms.
+THE PROGRAM AND THE FONT
+The player, its tools and the list's pixel font
+(font.txt) are Copyright (c) 2026 Stacey Vetzal, under
+the MIT licence (see LICENSE in the amiga-llm project).
+The samples and performances keep their own licences,
+above.

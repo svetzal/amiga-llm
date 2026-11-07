@@ -1086,9 +1086,10 @@ unchanged.
 
 Open:
 
-- Schubert "D. 962": which piece the recording is (someone listens).
-- The repository has no licence file, so the font's own terms are only
-  "this disk's terms". Stacey's decision.
+- Schubert "D. 962": Stacey decided on 2026-11-07 to keep MAESTRO's label
+  until someone identifies the recording.
+- Licence: settled on 2026-11-07. The repository, the player and the font
+  are MIT, Copyright (c) 2026 Stacey Vetzal; `Credits` says so.
 - The worst millisecond, 708 of 716 in the nocturne: watch it on the real
   A500.
 - The scopes run at 20 frames a second. Drawing is about 60% of their

@@ -200,3 +200,16 @@ still to be read off the machine. See `AGENTS.md`.
 - **Purpose beyond the environment.** Whether the first model experiment
   repeats coco-llm's live-training thesis at Amiga scale or asks a question
   only the larger machine can answer.
+
+## Licence
+
+The code, documentation, skills, the piano player and its pixel font are
+Copyright (c) 2026 Stacey Vetzal, under the [MIT licence](LICENSE).
+
+Licensed Amiga media (Kickstart ROMs, OS floppies, developer kits, MUI) is
+not in this repository and is not covered by that licence: each user brings
+their own. Downloaded material keeps its own licence: the Salamander Grand
+Piano samples are CC BY 3.0 (Alexander Holm) and the MAESTRO performances are
+CC BY-NC-SA 4.0 (Google Magenta), so a piano disk built from them is shared
+under CC BY-NC-SA 4.0 and not for commercial use. See
+`examples/piano/Credits`.
