@@ -1274,3 +1274,83 @@ Open:
 - The preload adds 8.4 s to the boot. Loading the scores after the screen
   appears, during the first quiet, would hide it, at the cost of a slow
   first choice in those seconds.
+
+### A video of the disk playing by itself (2026-11-07)
+
+Stacey asked for one raw, unattended playthrough of `build/piano/piano.adf`
+(SHA-1 `8a630dc5...`) for YouTube, with chapters. `amiga-env piano-video
+examples/piano/piano.toml` makes it (commands and evidence for the recorder
+in `research/emulator.md`, "Recording a run").
+
+#### How it was recorded (machine tier)
+
+Amiberry 8.5.0's own recorder is not compiled in, and the socket's
+`FRAME_ADVANCE` runs no frame, so the run went through the release's
+libretro core: every emulated frame and every sample, in emulated time. The
+core's command line resolves to the same configuration as the a500
+profile's (`--dump-config`, differing only in `use_gui`), with full stereo
+separation, the emulated filter and 48 kHz sound. Nothing was sent to the
+machine. The run was not warped; the core paces itself at about real time
+(43.3 min wall for 43.0 min recorded), and the files do not depend on it.
+
+| Check | Found |
+| --- | --- |
+| Recording | 154,517 frames at 59.826 frames a second (NTSC), 43:02.77, boot to 5 s after piece 10 ended |
+| Frames | 752x486, every one emulated and kept; none repeated by the core; frames 0 to 134 (the first 2.2 s) were 752x484 and put on the canvas with 2 black rows |
+| Sound | 123,969,930 samples at 48 kHz, 802.325 a frame, steady; no frame without sound after the start |
+| 4K master (`runs/video/piano-playthrough-4k.mp4`) | 154,517 frames, H.264 High CRF 16, BT.709, AAC 256 kb/s 48 kHz stereo; 1.05 GB |
+| Picture | the 320x200 screen cut from its 640x400 area (the border is the screen's colour 0) and widened with nearest neighbour to 2880x2160 in a 3840x2160 frame |
+| Levels | the whole run RMS -29.5 dBFS, peak -7.0; the pieces from -38.6 (Debussy) to -27.0 RMS, peaks -12.5 to -7.0 |
+| Digital silence of 20 ms or more within pieces | 14 runs, all at rests: the host model is silent at 10 of them, and quiet (-29 to -53 dBFS) within tens of milliseconds of a rest at the other 4 |
+
+The picture choice: nearest neighbour gives each Amiga pixel exactly 9
+columns and 10 or 11 rows and adds no colours; an integer x11 then one area
+resample made even rows but blended one row in five; Lanczos softened and
+rang. At this size the first two look the same, so the master keeps only
+the screen's own colours. Intuition's pointer stays top left, as on the
+machine.
+
+#### Sound against picture
+
+Each piece's first note, as sound, measured from the start of the frame in
+which the player wrote it, bounds the offset to one frame. In the capture
+the ten notes put the sound 20.1 to 21.8 ms early; a 75 s test run gave
+-8.1 to +8.6 ms, so the offset comes from the core's start and varies by
+run. The master delays the sound by 21 ms; measured again from its own
+AAC, the ten notes put it at -0.8 to +0.9 ms. The picture is unchanged.
+
+#### Where each piece starts
+
+Read from the 4K master's own frames (the frame its line turns gold), the
+same frame in the lossless capture and in the player's own stamp for all
+ten. Times from piece 1's first note (65.339 s into the video).
+
+| Piece | Gold at (video) | Chapter | From the first note |
+| --- | --- | --- | --- |
+| Chopin: Nocturne Op. 9 No. 2 | 64.320 s (frame 3848) | 1:04 | -1.019 s |
+| Bach: Prelude & Fugue in C | 302.477 s | 5:02 | 237.138 s |
+| Bach: Duet in E minor | 557.950 s | 9:17 | 492.611 s |
+| Scarlatti: Sonata K. 145 | 705.027 s | 11:45 | 639.688 s |
+| Haydn: Sonata Hob. XVI:23, I | 926.953 s | 15:26 | 861.614 s |
+| Mozart: Sonata K. 333, I | 1150.719 s | 19:10 | 1085.380 s |
+| Beethoven: Op. 31 No. 3, I | 1468.088 s | 24:28 | 1402.749 s |
+| Schubert: Sonata D. 962 | 1836.239 s | 30:36 | 1770.900 s |
+| Chopin: Nocturne in C# minor | 2069.247 s | 34:29 | 2003.908 s |
+| Debussy: Des pas sur la neige | 2327.011 s | 38:47 | 2261.672 s |
+
+The screen opened at frame 2951 (49.3 s); the player's screen stamp was 789
+vertical blanks, as in the app (788). The first chapter is "Boot and title
+screen" at 0:00. Chapters round down, so each begins at or before its gold
+line; each first note follows its gold line by 0.7 to 1.1 s, the
+recordings' own lead-in.
+
+`runs/video/youtube-description.generated.txt` is the generated draft;
+Stacey edits `youtube-description.txt`, which the command never writes.
+
+Open:
+
+- Two boots of the same disk opened the screen 4 frames apart. Each
+  recording is measured on its own; why the boot varies is not known.
+- The lossless capture is 24.6 GB (FFV1 codes every frame whole). An
+  encoder that codes the differences between frames losslessly would be far
+  smaller; not tried.

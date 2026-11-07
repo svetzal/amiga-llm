@@ -242,4 +242,8 @@ A/V sync, from the 75 s test (`runs/video/test`): the player stamped piece
 recording's sound passed -42 dBFS 8.6 ms after that frame began. A note
 written inside a 16.7 ms frame puts the offset of sound against picture
 between -8.1 ms and +8.6 ms. The MP4's AAC, decoded, gave the same onset
-to 0.1 ms. The ten pieces of the full run narrow this (EXP-004).
+to 0.1 ms. In the full run (EXP-004, the expressive piano) the ten
+first notes put the sound 20.1 to 21.8 ms early, so the offset varies by
+run; `amiga-env piano-video` measures it on each capture and delays the
+master's sound by its middle (21 ms there, after which the master measured
+-0.8 to +0.9 ms).
