@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import amiberry, home, media, profile
+from . import amiberry, home, media, profile, toolchain
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,6 +31,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("media-verify", help="check media/ against manifest.lock.json")
     sub.add_parser("doctor", help="report what is installed and what is missing")
 
+    build = sub.add_parser("toolchain", help="build the pinned vasm and vlink into .tools/")
+    build.add_argument("--force", action="store_true", help="rebuild even if present")
+
     # Listed for --help only; `run` is dispatched above, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
     sub.add_parser(
@@ -50,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if media.verify() else 1
     elif args.command == "doctor":
         return _doctor()
+    elif args.command == "toolchain":
+        toolchain.install_all(args.force)
     return 0
 
 
@@ -77,8 +82,31 @@ def _doctor() -> int:
     else:
         print("amiberry  not installed; run `make tools`")
         ok = False
+    ok = _toolchain_report() and ok
     ok = media.verify() and ok
     return 0 if ok else 1
+
+
+def _toolchain_report() -> bool:
+    try:
+        listing = toolchain.fetch_listing()
+    except OSError as error:
+        listing = None
+        print(f"toolchain could not check for newer releases: {error}")
+    ok = True
+    for source in toolchain.SOURCES:
+        version = toolchain.installed_version(source)
+        if version is None:
+            print(f"{source.name:<9} not installed; run `make toolchain`")
+            ok = False
+            continue
+        note = "" if version == source.version else f" (pinned is {source.version})"
+        if listing is not None:
+            newest = toolchain.listed_versions(listing, source.name)[-1:]
+            if newest and toolchain.version_key(newest[0]) > toolchain.version_key(source.version):
+                note += f" ({newest[0]} is available; update the pin in toolchain.py)"
+        print(f"{source.name:<9} {version}{note}")
+    return ok
 
 
 def _latest_note(version: str) -> str:
