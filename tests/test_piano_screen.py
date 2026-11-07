@@ -141,3 +141,72 @@ def test_the_recipe_makes_a_screen_with_its_text_on_the_dark_wall_and_floor():
     assert rows.max() < recipe.screen.scope_band.top
     cols = np.flatnonzero((made.indices == screen.TEXT_REGISTER).any(axis=0))
     assert cols.min() >= recipe.screen.list_box.left
+
+
+PALETTE = np.array([[0, 0, 17], [17, 51, 102], [102, 85, 68]])  # $001 $136 $654
+
+
+class TestPictureRegisters:
+    def test_a_colour_is_found_among_the_pictures_registers(self):
+        assert screen.register_of(PALETTE, "654") == 2
+
+    def test_a_colour_the_picture_lacks_is_refused(self):
+        with pytest.raises(SystemExit, match="not one of the picture's"):
+            screen.register_of(PALETTE, "EDB")
+
+    def test_lines_are_drawn_in_the_register_given(self):
+        indices = np.zeros((10, 10), dtype=np.uint8)
+
+        found = screen.draw(indices, [screen.Line("A", 1, 1)], TINY, register=9)
+
+        assert set(np.unique(found)) == {0, 9}
+
+
+TALL_BAND = screen.Box(0, 152, 320, 200)
+
+
+class TestSignature:
+    def test_its_ink_is_one_pixel_from_the_right_and_bottom_edges(self):
+        line = screen.signature_line("A", TINY)
+        indices = screen.draw(np.zeros((200, 320), dtype=np.uint8), [line], TINY, register=7)
+
+        rows, cols = np.nonzero(indices == 7)
+        assert (rows.max(), cols.max()) == (198, 318)
+
+    def test_a_scope_over_its_columns_in_the_band_is_refused(self):
+        line = screen.signature_line("AAAA", TINY)
+
+        with pytest.raises(SystemExit, match="signature"):
+            screen.check_signature(screen.text_box(line, TINY), spec(scope_band=TALL_BAND))
+
+    def test_a_scope_that_ends_left_of_it_is_allowed(self):
+        line = screen.signature_line("AAAA", TINY)
+
+        screen.check_signature(
+            screen.text_box(line, TINY), spec(scope_band=TALL_BAND, mix_scope=(180, 120))
+        )
+
+    def test_rows_below_the_band_are_never_drawn_on(self):
+        line = screen.signature_line("AAAA", TINY)  # rows 197 to 199; the band ends at 197
+
+        screen.check_signature(screen.text_box(line, TINY), spec())
+
+
+def test_the_recipes_credits_and_signature_are_in_picture_colours_off_register_13():
+    recipe = build.load_recipe(RECIPE)
+    spec_ = recipe.screen
+
+    made = screen.make([p.title for p in recipe.pieces], spec_, REPO)
+
+    credits_register = made.colours.index(picture.parse_ocs(spec_.attribution_colour))
+    signature_register = made.colours.index(picture.parse_ocs(spec_.signature_colour))
+    text_rows = np.flatnonzero((made.indices == screen.TEXT_REGISTER).any(axis=1))
+    first_credit = made.layout.attribution[0].top
+    assert text_rows.max() < first_credit  # register 13 is the list's alone
+    signature = made.layout.signature
+    ink = font.load(REPO / spec_.font).render(signature.text)
+    rows, cols = np.nonzero(ink)
+    rows, cols = rows + signature.top, cols + signature.left
+    assert (rows.max(), cols.max()) == (198, 318)
+    assert (made.indices[rows, cols] == signature_register).all()
+    assert (made.indices[first_credit : first_credit + 9] == credits_register).sum() > 50

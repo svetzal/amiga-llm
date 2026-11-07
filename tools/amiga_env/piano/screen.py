@@ -3,8 +3,10 @@
 `amiga-env piano-disk` makes it from the recipe's `[screen]` table:
 
 - the picture (picture.py) takes colour registers 0 to 12;
-- the song list, one line a piece, and two lines of attribution are drawn
-  into it in the project font (font.py), all in register 13;
+- the song list, one line a piece, is drawn into it in the project font
+  (font.py) in register 13; the attribution lines and a signature in the
+  lower right corner are drawn in colours of the picture itself, so the
+  copper list that turns register 13 gold never touches them;
 - registers 14 and 15 are the scopes' traces (the player draws them);
 - the result is an uncompressed IFF ILBM for the disk, a preview PNG, and
   an include file (`screen.i`) that tells the player where each line is,
@@ -58,6 +60,9 @@ class ScreenSpec(NamedTuple):
     voice_scope_width: int
     mix_scope: tuple[int, int]  # the mixed scope's left column and width
     scope_centre: int  # the row of the traces' zero
+    attribution_colour: str = ""  # one of the picture's colours, OCS hex; "" for register 13
+    signature: str = ""  # drawn in the lower right corner; "" for none
+    signature_colour: str = ""  # one of the picture's colours, OCS hex
 
 
 def load_spec(table: dict) -> ScreenSpec:
@@ -78,6 +83,9 @@ def load_spec(table: dict) -> ScreenSpec:
         voice_scope_width=table["voice_scope_width"],
         mix_scope=tuple(table["mix_scope"]),
         scope_centre=table["scope_centre"],
+        attribution_colour=table.get("attribution_colour", ""),
+        signature=table.get("signature", ""),
+        signature_colour=table.get("signature_colour", ""),
     )
 
 
@@ -90,6 +98,7 @@ class Line(NamedTuple):
 class Layout(NamedTuple):
     pieces: list[Line]  # one a piece, in menu order
     attribution: list[Line]
+    signature: Line | None = None
 
 
 def layout(titles: Sequence[str], spec: ScreenSpec, font: font_mod.Font) -> Layout:
@@ -122,15 +131,53 @@ def brightest_under(indices: np.ndarray, palette: np.ndarray, box: Box) -> float
     return float(picture.luminance(palette[np.unique(area)]).max())
 
 
-def draw(indices: np.ndarray, lines: Sequence[Line], font: font_mod.Font) -> np.ndarray:
-    """`indices` with every line's ink set to register 13."""
+def draw(
+    indices: np.ndarray,
+    lines: Sequence[Line],
+    font: font_mod.Font,
+    register: int = TEXT_REGISTER,
+) -> np.ndarray:
+    """`indices` with every line's ink set to `register`."""
     out = indices.copy()
     for line in lines:
         ink = font.render(line.text)
         rows, cols = ink.shape
         area = out[line.top : line.top + rows, line.left : line.left + cols]
-        area[ink] = TEXT_REGISTER
+        if ink[area.shape[0] :].any() or ink[:, area.shape[1] :].any():
+            raise SystemExit(f"{line.text!r} runs off the screen")
+        area[ink[: area.shape[0], : area.shape[1]]] = register
     return out
+
+
+def register_of(palette: np.ndarray, colour: str) -> int:
+    """The picture's register that holds `colour` (OCS hex); SystemExit when none does."""
+    words = [picture.ocs_word(c) for c in palette]
+    try:
+        return words.index(picture.parse_ocs(colour))
+    except ValueError:
+        raise SystemExit(f"${colour} is not one of the picture's colours") from None
+
+
+def signature_line(text: str, font: font_mod.Font) -> Line:
+    """`text` placed with its ink one pixel from the screen's right and bottom edges."""
+    rows, cols = np.nonzero(font.render(text))
+    return Line(text, picture.WIDTH - 2 - int(cols.max()), picture.HEIGHT - 2 - int(rows.max()))
+
+
+def check_signature(box: Box, spec: ScreenSpec) -> None:
+    """No scope may draw where the signature is: SystemExit when a scope's columns
+    meet the signature's on rows of the scope band."""
+    band = spec.scope_band
+    if box.bottom <= band.top or box.top >= band.bottom:
+        return
+    spans = [(x, x + spec.voice_scope_width) for x in spec.voice_scopes]
+    spans.append((spec.mix_scope[0], spec.mix_scope[0] + spec.mix_scope[1]))
+    for left, right in spans:
+        if left < box.right and box.left < right:
+            raise SystemExit(
+                f"a scope (columns {left} to {right - 1}) would draw over the signature "
+                f"(columns {box.left} to {box.right - 1})"
+            )
 
 
 def colours(palette: np.ndarray, spec: ScreenSpec) -> list[int]:
@@ -153,12 +200,23 @@ def make(titles: Sequence[str], spec: ScreenSpec, root: Path) -> Screen:
     font = font_mod.load(root / spec.font)
     lines = layout(titles, spec, font)
     made = picture.convert(Image.open(root / spec.master), spec.picture)
-    for line in lines.pieces + lines.attribution:
+    signature = signature_line(spec.signature, font) if spec.signature else None
+    if signature:
+        check_signature(text_box(signature, font), spec)
+    for line in [*lines.pieces, *lines.attribution, *([signature] if signature else [])]:
         brightest = brightest_under(made.indices, made.palette, text_box(line, font))
         if brightest > DARK_LUMINANCE:
             raise SystemExit(f"{line.text!r} would sit on the picture (luminance {brightest:.0f})")
-    indices = draw(made.indices, lines.pieces + lines.attribution, font)
-    return Screen(indices, colours(made.palette, spec), lines, len(made.palette))
+    credits = TEXT_REGISTER
+    if spec.attribution_colour:
+        credits = register_of(made.palette, spec.attribution_colour)
+    indices = draw(made.indices, lines.pieces, font)
+    indices = draw(indices, lines.attribution, font, credits)
+    if signature:
+        indices = draw(indices, [signature], font, register_of(made.palette, spec.signature_colour))
+    return Screen(
+        indices, colours(made.palette, spec), lines._replace(signature=signature), len(made.palette)
+    )
 
 
 def include(screen: Screen, spec: ScreenSpec, font: font_mod.Font) -> str:

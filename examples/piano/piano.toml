@@ -40,6 +40,9 @@ list_box = [190, 8, 318, 152]     # left, top, right, bottom: the dark wall and 
 line_pitch = 11
 attribution = ["Piano: A. Holm, CC BY 3.0", "MAESTRO, CC BY-NC-SA 4.0"]
 attribution_gap = 14              # on the floor, below the bright line where floor meets wall
+attribution_colour = "654"        # the picture's own dim brown, not register 13: never turns gold
+signature = "svetzal"
+signature_colour = "136"          # the picture's lighter blue; ink 1 pixel in from the right and bottom
 text = "EDB"                      # register 13: the picture's ivory
 highlight = "B95"                 # register 13 on the playing line: the picture's gold
 voice_trace = "5BC"               # register 14: soft cyan
@@ -48,7 +51,7 @@ scope_band = [0, 152, 320, 197]   # whole rows, restored from a copy each scope 
 scope_centre = 174
 voice_scopes = [8, 50, 92, 134]
 voice_scope_width = 36
-mix_scope = [180, 132]            # left, width
+mix_scope = [180, 108]            # left, width: ends at column 287, left of the signature
 
 [screen.picture]
 colours = 13
