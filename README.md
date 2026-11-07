@@ -158,7 +158,14 @@ runs it at normal speed and reports how long each choice took to sound.
 it touches nothing until piece 1 starts, then clicks, wraps, presses Space
 and a key, and compares each piece's log. `amiga-env piano-survey
 examples/piano/piano.toml` measures every MAESTRO performance of 2 to 6
-minutes for four voices, for choosing pieces.
+minutes for four voices, for choosing pieces. `amiga-env piano-video
+examples/piano/piano.toml` records the disk playing by itself, from the
+boot to 5 s after its tenth piece, through Amiberry's libretro core (every
+emulated frame and every sample, in `runs/video/`), makes 4K and 1080p
+YouTube masters, reads where each piece's line turns gold from the 4K
+master's own frames, and writes `youtube-description.txt` with the
+chapters from `examples/piano/video-description.txt`. `--seconds S` stops
+early, for a test; `--steps master,measure` redoes the later steps.
 
 `amiga-env run` and the machine commands set `HOME` to `runs/home/` so
 Amiberry's settings, ROM path, save states and screenshots stay inside the
