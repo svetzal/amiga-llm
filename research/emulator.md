@@ -119,10 +119,9 @@ From EXP-003, the A3000 dev machine:
   Eight at once worked: System, AmigaEnv, and the six SAS/C disks as
   `SASC_6.50_Disk_1:` to `_6:` (a volume name with `.` in it works).
   `Info` lists each with its device name (`DH0`, `DH1`, `AENV`).
-- **Attributes.** Files in a host folder show `----rwed` on the Amiga. The
-  `p` and `s` bits of the original disk are not kept, and Amiberry wrote no
-  `_UAEFSDB.___` files during these runs. Commands without `p` still run,
-  and `Resident ... PURE` still works.
+- **Attributes.** A host file with no sidecar shows `----rwed` on the
+  Amiga. See "Amiga attributes in host folders" below for how to keep `p`,
+  `s`, dates and comments.
 - **No window.** With `SDL_VIDEODRIVER=dummy` and `SDL_AUDIODRIVER=dummy`
   Amiberry runs with no window and no sound, and the socket's `SCREENSHOT`
   still writes the emulated display. `amiga-env exec` sets both unless the
@@ -142,3 +141,58 @@ From EXP-003, the A3000 dev machine:
   `SYS:Locale` did not exist (the 3.2 startup-sequence assigns `LOCALE:` to
   it only then). A headless run then waits until its timeout; take a
   screenshot at the timeout to see why.
+
+## Amiga attributes in host folders (verified 2026-11-07, Amiberry 8.5.0, macOS)
+
+From EXP-003, the A3000 dev machine. Amiberry 8.5.0 keeps what a host file
+cannot hold in an FS-UAE sidecar, `NAME.uaem` beside `NAME`, not in
+`_UAEFSDB.___` (both strings are in the binary; only `.uaem` was seen):
+
+```text
+-s--rw-d 2021-04-13 02:42:22.10 an optional comment
+```
+
+- The flags are `hsparwed`, a letter when set and `-` when clear. The date
+  is the Amiga's wall clock, with hundredths of a second, and Amiberry
+  shows it as written: no time zone is applied.
+- Amiberry writes a sidecar when the Amiga sets `s`, `h`, `a` or a comment
+  (`Protect +s`, `FileNote`). It does not write one for `Protect +p`: the
+  `p` shows until the emulator stops and is gone after the next boot.
+  Clearing `w` changes the host mode to read-only instead.
+- Sidecars written on the host before boot are read: protection, date and
+  comment all show in `List`. A trailing newline is optional.
+- A drawer can have one too (`Drawer.uaem`).
+
+amitools 0.9.0 reads and writes the same format (`xdftool IMAGE unpack DIR
+fsuae`, and `pack` reads `.uaem` files), but it converts Amiga datestamps
+through the host's local time: in summer its sidecars read an hour later
+than the Amiga shows, and `pack` drops the 1/50 s ticks. amiga-env writes
+sidecars itself (`tools/amiga_env/uaem.py`).
+
+## The 68060 with its FPU and MMU (verified 2026-11-07, Amiberry 8.5.0, macOS)
+
+On the A3000 model, `-s cpu_model=68060 -s fpu_model=68060 -s
+mmu_model=68060 -s cpu_24bit_addressing=false -s z3mem_size=256` gives a
+68060 with its own FPU and MMU and 256 MB of Zorro III RAM (at 0x40000000 on
+the 3.2 A3000 ROM). `cpu_compatible=false` takes effect only with
+`cycle_exact`, `cpu_cycle_exact` and `cpu_memory_cycle_exact` all false;
+with the preset's cycle-exact on, `--dump-config` showed
+`cpu_compatible=true` whatever was set. `--dump-config` also prints a
+`cpu_type=68040` line for this configuration; `cpu_model` is the one that
+counts (the 3.2 `CPU` command reports a 68060 Rev6).
+
+With MMULibs installed, 3.2's `CPU` showed `68060 68882 68060-MMU ...
+(DATA: Cache CopyBack)` and `Superscalar` dispatch; MMULibs' `FPU` showed
+`68060`, and `MuScan` printed mmu.library's table with 4 KB pages.
+
+## Booting an RDB hard-disk image (verified 2026-11-07, Amiberry 8.5.0, macOS)
+
+`-s hardfile2=rw,DH0:/abs/path/disk.hdf,0,0,0,512,0,,uaehf0` attaches an RDB
+image to UAE's hard-disk controller. With sectors, surfaces and reserved
+blocks 0, Amiberry reads the geometry and the partitions from the RDB; the
+`DH0` in the setting is not used, and the partitions keep their RDB names.
+The log shows each `PART` block and "RDB filesystem 444F5303 (DOS\3)
+version 47.4" when the RDB carries a filesystem. An image from `amiga-env
+system export` (built with amitools' rdbtool) booted the 3.2 A3000 ROM to
+Workbench on the 68060 machine. A host-folder volume (`filesystem2`) can be
+mounted beside it; do not give it a device or volume name the RDB uses.

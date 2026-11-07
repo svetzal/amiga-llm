@@ -69,9 +69,13 @@ applications target this machine, not the A500.
 | Kickstart (profile) | 3.2 (`media/rom/3.2/kick-a3000.rom`) | chosen 2026-11-07 |
 | Boot floppy (profile) | `media/adf/3.2/Install3.2.adf` | `Workbench3.2.adf` does not boot alone |
 
-Not yet known: the Kickstart actually in the machine, and whether the Z3660
-accelerator is fitted and how a fitted one is labelled. Stacey's MUI
-licence is a 3.8 registration (`media/mui/README.txt`).
+| Kickstart (machine) | 3.2 A3000 ROM, checksum identical to `media/rom/3.2/kick-a3000.rom` | Stacey, 2026-11-07 |
+| Accelerator | Z3660: 68060 at 50 MHz (its `z3660cfg.txt`), with the 68060's FPU and MMU | Stacey, 2026-11-07 |
+| Hard disk | RDB image, 32 heads, 63 sectors; FFS 47.4 in the RDB; `Workbench` (49 MiB, DOS3, boots) and `Work` (748 MiB, DOS3) | her `A3000Current.hdf`, read 2026-11-07 |
+| Workbench install | the 3.2 Installer's full install and MMULibs 46.21 (68060.library 46.4); Z3660, Picasso96, AHI and Roadshow drivers | her Workbench partition, 2026-11-07 (EXP-003) |
+
+Not yet known: the Z3660's fast RAM size. Stacey's MUI licence is a 3.8
+registration (`media/mui/README.txt`).
 
 ### a3000-dev: the A3000 as a development machine
 
@@ -79,7 +83,14 @@ The same A3000 profile, booting a system built from
 `systems/a3000-dev.toml` (`make system`) as `DH0:` instead of a floppy,
 with the project's `work/` folder as `Work:`. Boot it with `make a3000-dev`;
 run a script on it with no person present with `amiga-env exec a3000-dev
-SCRIPT`. The tools are Stacey's choice (2026-11-07):
+SCRIPT`. `a3000-dev-060` runs the same system on a 68060 with its FPU and
+MMU and Zorro III RAM, as the Z3660 does; check either with
+`work/cpucheck/test.amigados`. The OS is installed as the 3.2 Installer's
+full install and its CPU support libraries install would install it, with
+the floppies' protection bits and dates (EXP-003).
+`amiga-env system export a3000-dev OUT.hdf` writes an RDB image for the
+real machine; `exec --image OUT.hdf` boots one. The tools are Stacey's
+choice (2026-11-07):
 
 | Part | Version | From |
 | --- | --- | --- |
@@ -89,8 +100,11 @@ SCRIPT`. The tools are Stacey's choice (2026-11-07):
 | GUI | MUI 3.8 (`SYS:MUI`, `S:mui.key`, `Developer:MUI`) | `media/mui/` |
 
 `INCLUDE:` and `LIB:` search NDU 3.1 first, then MUI, then SAS/C's own.
-The built tree holds `S:mui.key`, which must not leave Stacey's machines.
-See EXP-003, the A3000 dev machine.
+The built tree holds `S:mui.key`, which must not leave Stacey's machines;
+the recipe marks it personal, so an export leaves it out unless
+`--include-personal` is given. An exported image is licensed media: keep
+it out of git and never publish it. The Z3660 drivers are not in the
+system yet. See EXP-003, the A3000 dev machine.
 
 ## Scope boundary
 
