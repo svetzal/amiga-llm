@@ -455,15 +455,15 @@ console_mode:
 .out:   movem.l (sp)+,d2/a2-a3
         rts
 
-; The pieces named in the arguments, one menu key each, in order.
+; The pieces named in the arguments, one menu key each, in order; d0 is
+; the first key.
 play_arguments:
-.next:  bsr     next_argument
-        bmi.s   .out
-        bsr     piece_for_key
-        bmi.s   .next
+.piece: bsr     piece_for_key
+        bmi.s   .next                   ; not a key on the menu
         bsr     play_piece
-        bra.s   .next
-.out:   rts
+.next:  bsr     next_argument
+        bpl.s   .piece
+        rts
 
 ; d0: the next non-space character of the argument line, upper case for
 ; letters, negative at its end.
