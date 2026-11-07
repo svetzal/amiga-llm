@@ -286,3 +286,282 @@ and `samples.json` hold the samples end to end with their offsets and loops.
   (of 64). The control steals more often (BWV 846's notes are denser) but
   mostly notes already released, at a median volume of 5.
 - Hypothesis 3 is untested: there is no 68000 player yet.
+
+### 2026-11-07: Stacey listens to the host renders
+
+Stacey listened to the step 3 renders (`runs/exp004/*.wav`) on 2026-11-07.
+Her words: "I am noticing some notes clipped early, it's a little jarring,
+but in general it sounds quite nice."
+
+Against hypothesis 2: refuted as stated. Four voices with quietest-voice
+stealing do not play the pedalled nocturne without audible gaps; the notes
+that are stolen are not all already faded. She did not say whether she
+heard the clipping in the control as well.
+
+### 2026-11-07: the clipped notes, found and changed (host tier)
+
+How each note's sound ends, from the model's own record (`clips.py`, now in
+`report.json` under `clips`). A note is released when its key and the
+sustain pedal are both up: at its note off if the pedal is up, else at the
+next pedal up. A note the player ends before that was cut while held.
+Notes ended during their release fade are not counted as cut: the damper is
+already stopping them. "Before" is the step 3 model; "after" is the changed
+one. Counts per minute of the performance:
+
+| Cause | Nocturne before | Nocturne after | BWV 846 before | BWV 846 after |
+| --- | --- | --- | --- | --- |
+| Stolen while its key was down | 87.5 | 7.3 | 45.8 | 29.0 |
+| Stolen while only the pedal held it | 127.0 | 219.1 | 4.8 | 9.8 |
+| Its key struck again while held (restrike) | 84.8 | 74.2 | 0.3 | 0.3 |
+| All cut while held | 299.3 | 300.7 | 50.8 | 39.0 |
+| Cut while held at Paula volume 4 or more | 282.5 | 281.9 | 48.3 | 37.3 |
+| Faded to silence while held | 0 | 0 | 1.3 | 2.0 |
+| Stolen during its release fade | 93.2 | 92.4 | 305.1 | 331.6 |
+
+Causes, in order of size:
+
+1. **Steals of held notes**, the cause. The pedalled nocturne keeps 21
+   strings ringing at its 95th percentile, and four voices cannot hold
+   them. Under the old rule (quietest first) the melody, held under the
+   finger while it decays, was stolen 87.5 times a minute by fresh, louder
+   accompaniment notes.
+2. **Restrikes**, a second, smaller source. In the changed model, 137 of
+   the nocturne's 315 restrikes replace a sound louder than the new note's start, 21 of
+   them by a factor of two or more. On a piano the string struck again
+   keeps ringing. Not changed: it is the same key sounding again, not a
+   note that stops.
+3. **The 1 s release on key-up**: not a cause. A note ended in its release
+   is already being damped.
+4. **The attack-to-loop join**: not a cause. The loop starts where the
+   attack ends in the recording, so the level is continuous there.
+5. **Fading to silence while held**: rare (0 and 5 to 8 notes a piece), and
+   it follows each root's measured decay.
+
+What changed in the model (`player.py`), and why it suits a 68000:
+
+- **Steal a key-up note first.** The voice stolen is the quietest whose key
+  is up (held by the pedal only, or released); only when every key is down
+  is it the quietest of all. On the 68000 that is one more word compare in
+  the steal loop. It cuts melody steals in the nocturne from 87.5 to 7.3 a
+  minute, and in BWV 846 from 45.8 to 29.0. The total cut while held does
+  not fall: the nocturne loses pedal-held notes instead (127.0 to 219.1),
+  which are mostly the inner notes of the accompaniment, and some of them
+  are louder than the old rule's choice (the loudest stolen note is now
+  volume 32 of 64, from 25).
+- **Fade a cut note out instead of cutting it.** A note that takes a
+  sounding voice waits while the old one fades: Paula volume 3/4, 2/4 and
+  1/4 of what it was, one step a millisecond, then the channel stops, and
+  the new note starts a millisecond later, 5 ms after its time in the
+  score. The largest step in the old note's signal is a quarter of a cut's
+  (12 dB smaller). Only notes that take a sounding voice are delayed; a
+  free voice starts at once. It costs no extra interrupt (the player already runs every
+  millisecond), and it gives Paula a stopped millisecond before the
+  channel restarts, which a 68000 player needs anyway.
+
+Rejected, with the numbers that decided it:
+
+- **Eight voices mixed in software into four channels.** Run with eight
+  voices (same rules otherwise), the nocturne still cuts 116.6 restrikes and
+  75.8 steals a minute while held: it rings beyond eight voices too.
+  BWV 846 would fall to 1.4 a minute. Mixing two voices into each channel
+  at about 11 kHz, with a resampling step and a volume table per output
+  sample, is about 88,000 voice samples a second, of the order of a third
+  of the 68000, with nearest-neighbour resampling in place of Paula's
+  exact periods. The nocturne does not repay that.
+- **The treble-loop fix from step 3** (normalise each loop on its own and
+  lower the voice's volume at the loop start). The loops would gain 6 to
+  28 dB (x2 to x25), so a note's Paula volume would fall by the same factor
+  at its loop: 564 of the nocturne's 1,498 notes and 303 of BWV 846's 1,925
+  would go to Paula volume 0 at their loop start, and 842 and 1,079 more to
+  volume 1 or 2. That would cut notes short, the problem being fixed. Not
+  applied.
+
+The model now runs a millisecond at a time, in the order the 68000 player
+does (fades, then the score's events, then the frame tick), and its voice
+log has one more column, `out`, Paula's volume register, which differs from
+the note's volume while a cut fades.
+
+Re-rendered for Stacey (host tier, same settings as step 3):
+
+- after: `runs/exp004/nocturne-op9-2.wav`, `runs/exp004/bwv846.wav` and
+  their `-a500-filter` versions;
+- before, for comparison: the same names in `runs/exp004/before/`.
+
+### 2026-11-07: procedure steps 4 and 5, the 68000 player (machine tier)
+
+Everything here ran on Amiberry 8.5.0 on the Mac, on the `a500` machine:
+Kickstart 1.2, a 68000 at the NTSC clock, OCS, 512 KB chip plus 512 KB
+slow RAM, cycle-exact. Nothing has run on the real A500 yet.
+
+#### The player
+
+`examples/piano/player.s`, 68000 assembly for vasm (Motorola syntax),
+built by `make piano-disk` (`amiga-env piano-disk
+examples/piano/piano.toml`) from the data `make piano` writes to
+`runs/exp004/m68k/`: the key table (88 keys, 12 bytes each: sample, period,
+level, held and release factors, attack ticks), the sample table, the
+velocity table, the samples and both scores, all INCBINed, big-endian
+(`m68k.py`). It implements the changed model in integer arithmetic:
+
+- **Timing.** CIA-B timer A, taken through `ciab.resource`
+  (`AddICRVector` returned 0: the timer is free on 1.2), runs continuously
+  with a latch of 715, an interrupt every 716 E-clock ticks (1.000127 ms).
+  Each interrupt is one millisecond of the model: fades, then the score's
+  events due, then the frame tick if one falls on it.
+- **Frame ticks are counted in milliseconds, not taken from VBlank.** Tick
+  k falls at k * 1000 // 60 ms, as in the model, kept with a 16-or-17
+  counter and a remainder. The NTSC VBlank is not locked to the CIA timer
+  (Amiberry reports 59.83 Hz), so a VBlank tick would fall a millisecond
+  earlier or later than the model's now and then, and the logs could not
+  match. The decay runs 0.3% faster than it would at 59.83 Hz.
+- **Score reader, voice choice, volumes, decay, fades.** As the model:
+  the same byte stream, the steal order (key down, volume, note number),
+  `max(256, velocity[v] * level >> 8)`, `(volume * factor) >> 16` with one
+  MULU and a SWAP, and the 3/4, 2/4, 1/4, stop, start fade.
+- **Paula.** A start writes AUDxLC and AUDxLEN for the whole sample, the
+  period and volume, clears and enables the channel's audio interrupt and
+  sets its DMA bit. The audio interrupt (taken with `SetIntVector`) writes
+  the loop's start and length, which Paula takes when the sample ends, and
+  turns that channel's interrupt off until its next note. A stop clears the
+  DMA bit and sets volume 0.
+- **The system.** The player stays inside the OS. It Forbid()s task
+  switching, takes CIA-B timer A and the four audio interrupt vectors,
+  drives Paula directly, and busy-waits for the end. At the end it stops
+  the timer, gives back the vector and the interrupts, silences Paula,
+  Permit()s and prints its measurements to the CLI. It does not disable
+  interrupts, so the system's own (VBlank, keyboard, disk) still run.
+- **Samples in chip RAM.** The samples are a `data_c` section. Kickstart
+  1.2's LoadSeg honoured the chip flag in the hunk header: the samples
+  loaded at `$12920` and `TypeOfMem` reported chip memory. The player
+  checks this at run time and would copy them into chip RAM from
+  `AllocMem(MEMF_CHIP)` otherwise; that path did not run.
+- **The piece.** One program holds both scores; its argument chooses (a
+  first letter b is BWV 846). Each floppy's startup-sequence runs `piano
+  <piece>`: `build/piano/nocturne-op9-2.adf` and `build/piano/bwv846.adf`,
+  and the test builds `...-log.adf`. Each OFS floppy holds the program in
+  738 of its 1,756 free blocks.
+- **Status for the host.** The player keeps a status block at `$100`
+  (unused 68000 vectors): a magic word, its state, where its log is, where
+  the samples are, and its measurements. The host polls it with `READ_MEM`.
+
+#### Memory
+
+| Part | Bytes | Where it loaded |
+| --- | --- | --- |
+| Samples (chip hunk) | 328,796 | chip RAM, `$12920` |
+| Tables, both scores, interrupt structures (data hunk) | 23,044 | anywhere |
+| Code | 2,548 (2,696 in the test build) | anywhere |
+| Variables (BSS) | 732 | anywhere |
+| Voice log, test build only (AllocMem) | 400,000 | slow RAM, `$C0FC98` |
+
+Chip RAM holds only the samples: 328,796 bytes, against the 389,120-byte
+budget of step 2, which also counted the score, tables and program.
+
+#### The voice logs: identical
+
+The test build (`LOG=1`) writes, on every frame tick, the same record the
+model writes for each voice: key, sample, period, volume and Paula volume,
+6 bytes, 24 a tick. `amiga-env piano-run examples/piano/piano.toml PIECE
+--log` boots it headless with warp on, waits for the status to say done,
+reads the log back with `READ_MEM` a long at a time (350 KB in 2.5 s), and
+compares it with the model's `runs/exp004/m68k/PIECE.log`.
+
+| Piece | Model ticks | Emulator ticks | Result |
+| --- | --- | --- | --- |
+| Nocturne Op. 9 No. 2 | 13,380 | 13,380 | identical, every byte, the whole piece |
+| BWV 846 | 14,420 | 14,420 | identical, every byte, the whole piece |
+
+The first run matched; no difference had to be fixed. The log records
+what the player wrote to Paula's registers and when, at frame resolution,
+not Paula's output.
+
+#### CPU time
+
+Measured by the player itself with CIA-B timer A's count: at the end of
+each interrupt, the E-clock ticks since the timer ran out (which includes
+exec's and ciab.resource's dispatch before the handler starts), and the
+time spent in each audio interrupt. A frame here is a model tick, 16 or 17
+ms; 11,932 E-clock ticks is 1/60 s.
+
+| Build, piece | Player share of the 68000 | Average per frame | Worst frame | Worst millisecond | Of which dispatch |
+| --- | --- | --- | --- | --- | --- |
+| Player, nocturne | 17.3% | 2,069 ticks | 4,450 (37%) | 556 of 716 | 9.4% |
+| Player, BWV 846 | 17.5% | 2,085 ticks | 3,904 (33%) | 571 of 716 | 9.4% |
+| Test build, nocturne | 18.1% | 2,158 ticks | 4,523 (38%) | 639 of 716 | 9.4% |
+| Test build, BWV 846 | 18.2% | 2,174 ticks | 3,995 (33%) | 660 of 716 | 9.4% |
+
+The player rows come from the real-time audio runs, the test build rows
+from the warp runs. The worst frame moves by a few ticks between runs of
+the same build (4,443 and 4,450 for the nocturne) as the system's own
+interrupts fall differently; the logs do not change.
+
+More than half the cost is getting called: 67 E-clock ticks (about 670
+CPU cycles) from the timer running out to the handler, a thousand times a
+second, 9.4% of the CPU. Most milliseconds have nothing to do, and the
+handler returns at once on those. Only about 100 milliseconds a second
+have work (events, ticks or fade steps: 21,454 of the nocturne's 222,984).
+A one-shot timer set to the next millisecond with work would take that to
+about 1% of the CPU, with the same log; not done, because 17% leaves the
+68000 most of its time. The worst millisecond used 660 of its 716 ticks:
+one that overran would delay the next interrupt, not lose it, unless it
+overran by a whole period.
+
+#### What the screen shows
+
+The player prints to the boot CLI window: the experiment, the piece,
+where the samples are, "Playing...", and at the end the frame count and
+its CPU figures (`runs/exp004/emulator-*-playing.png` and `-done.png`,
+looked at). There is no other display while it plays.
+
+#### Audio from the emulator
+
+Amiberry has no sound recording command, but its SDL 3 has the disk audio
+driver: with `SDL_AUDIODRIVER=disk` and `SDL_AUDIO_DISK_OUTPUT_FILE`, it
+writes what Amiberry plays as 16-bit stereo at 44.1 kHz, in real time.
+`amiga-env piano-run examples/piano/piano.toml PIECE --audio` runs the
+player that way, with `sound_stereo_separation=10` (the A500 model's
+default is 7; a real Amiga separates fully), and drops the 37 s of boot
+before the music, less 1 s. The first try quit as soon as the player
+finished and lost the nocturne's last 5 s, so a run now plays 15 s of
+silence before it quits.
+
+- `runs/exp004/emulator-nocturne-op9-2.wav` (232 s)
+- `runs/exp004/emulator-bwv846.wav` (250 s)
+
+They include Amiberry's A500 filter emulation (`sound_filter=emulated`,
+`standard`) and `sound_interpol=anti`. The power LED is on while the
+player runs (CIA-A port A read `$FC`: bit 1 low), and on an A500 that also
+switches on the LED low-pass filter; the player leaves it as the system set
+it. Against the host render without a filter, the emulator's level is
+within 0.5 dB (RMS -30.0 and -29.5 dBFS for the nocturne, -27.3 and -26.9
+for BWV 846), and the two loudness envelopes, in 10 ms frames, correlate at
+0.98 and 0.99 over 10 s near the start once aligned. That says the notes are at
+the same times and levels, not that the sound is the same; Stacey judges.
+
+To listen on the emulated A500 in a window, from the project folder:
+
+```sh
+uv run amiga-env a500 build/piano/nocturne-op9-2.adf
+uv run amiga-env a500 build/piano/bwv846.adf
+```
+
+The music starts about 37 s after the boot (the floppy loads 355 KB).
+`make piano piano-disk` rebuilds the floppies from the media.
+
+#### Where the hypotheses stand
+
+- Hypothesis 1 holds at the machine tier: the samples take 328,796 bytes
+  of chip RAM, and the program, tables and scores another 26,324 bytes
+  outside it.
+- Hypothesis 2 is refuted as stated (Stacey, above). The changed stealing
+  moves the cuts from the melody to the pedalled accompaniment and fades
+  them; whether that is acceptable is for her ears.
+- Hypothesis 3 holds at the machine tier: the 68000 player's voice log is
+  the model's to the byte, for the whole of both pieces. The host model's
+  WAV is therefore a fair preview of the register writes; whether it is a
+  fair preview of Paula's sound (filters, the hold between samples) is what
+  the emulator WAVs and then the real A500 answer.
+
+Next: Stacey listens to the host renders before and after the change and
+to the emulator WAVs; then the floppies on her A500, where the CPU figures
+are printed on the screen at the end of each piece.

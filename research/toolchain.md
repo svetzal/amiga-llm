@@ -103,6 +103,48 @@ Kickstart 1.2", then a `1>` prompt. The boot printed no error for the missing
 `C:`. Screenshot taken through the control socket, about 25 seconds after
 launch (`runs/hello/hello-boot.png`, not tracked).
 
+## Kickstart 1.2 findings from the piano player (verified 2026-11-07, machine tier)
+
+From EXP-004, the expressive piano (`examples/piano/player.s`), on Amiberry
+8.5.0's A500 model (Kickstart 1.2, 512 KB chip plus 512 KB slow RAM, NTSC):
+
+- **LoadSeg honours the chip flag.** `section samples,data_c` makes vasm
+  (with `-kick1hunks`) set bit 30 of that hunk's size in the header
+  (`0x40014117`) and write a plain `HUNK_DATA` (`0x3EA`) in the body. The
+  1.2 loader put the 328,796-byte hunk at `$12920`, and `TypeOfMem` reported
+  `MEMF_CHIP`, so the player's fallback (AllocMem `MEMF_CHIP` and a copy)
+  did not run. The program checks at run time all the same, since a loader
+  that ignored the flag would load the samples into slow RAM, where Paula
+  cannot read them.
+- **CIA-B timer A is free on 1.2.** `AddICRVector(ciab.resource, 0, ...)`
+  returned 0 with the boot CLI running. The player loads its latch with 715
+  (716 E-clock ticks, 1.000127 ms on NTSC) and runs it continuously.
+- **Interrupt dispatch costs.** From the timer running out to the player's
+  handler, exec's level 6 dispatch and ciab.resource took 67 E-clock ticks
+  on average (about 670 CPU cycles), so a 1 kHz interrupt through the OS
+  costs 9.4% of the 68000 before the handler does anything.
+- **Attack then loop with the audio interrupt.** Write AUDxLC and AUDxLEN for
+  the whole sample, clear the channel's INTREQ bit, enable its INTENA bit,
+  and set its DMACON bit. Paula raises the channel's interrupt once it has
+  taken the start and length; the handler (installed with `SetIntVector` on
+  `INTB_AUD0` to `INTB_AUD3`, called with the custom chips in a0 and is_Data
+  in a1) writes the loop's start and length, which Paula takes when the
+  sample ends, then clears the channel's INTENA and INTREQ bits. The voice
+  logs match the host model to the byte, which says the loop timing is as
+  modelled only indirectly: the log records register writes, not Paula's
+  output.
+- **Restarting a channel.** The player always leaves at least a millisecond
+  between clearing a channel's DMACON bit and setting it again (a cut note
+  fades for 4 ms, its channel stops, and the next note starts 1 ms later),
+  so it never needs the busy-wait that restarting a playing channel
+  otherwise takes.
+- **Where things went.** ExecBase was at `$C00276` (in the slow RAM) and the
+  player's AllocMem without `MEMF_CHIP` returned slow RAM (`$C0FC98`).
+- **Unused 68000 vectors as a mailbox.** The player keeps its status at
+  `$100` (the user interrupt vectors from 64 on, which the Amiga does not
+  use), where the host reads it with Amiberry's `READ_MEM` without knowing
+  where LoadSeg put the program.
+
 ## Candidates
 
 | Candidate | What it is | Notes |
