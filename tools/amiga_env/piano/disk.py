@@ -139,7 +139,8 @@ def scope_regions(recipe: Recipe) -> tuple[tuple, tuple[int, int]]:
     return scopes, (spec.scope_band.top, spec.scope_band.bottom)
 
 
-def build_disks(recipe: Recipe, root: Path | None = None) -> list[Path]:
+def build_disks(recipe: Recipe, root: Path | None = None, out: Path | None = None) -> list[Path]:
+    """Assemble both builds and write both disks into `out` (build/piano)."""
     root = root or project.root()
     data = root / recipe.out / "m68k"
     if not (data / "samples.bin").is_file():
@@ -148,7 +149,7 @@ def build_disks(recipe: Recipe, root: Path | None = None) -> list[Path]:
         raise SystemExit("the recipe needs a [screen] table and `credits`")
     names = titles(recipe)
     entries = menu([(p.name, t) for p, t in zip(recipe.pieces, names, strict=True)])
-    out = project.build_dir() / "piano"
+    out = out or project.build_dir() / "piano"
     out.mkdir(parents=True, exist_ok=True)
     made = screen_mod.make(names, recipe.screen, root)
     picture = screen_mod.write(made, recipe.screen, root, data, root / recipe.out)

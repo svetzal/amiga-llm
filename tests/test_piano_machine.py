@@ -186,3 +186,34 @@ def test_the_recipes_scopes_are_checked_with_their_trace_colours():
     assert rows == (152, 197)
     assert [s.left for s in scopes] == [8, 50, 92, 134, 180]
     assert scopes[0].colour == (85, 187, 204) and scopes[4].colour == (221, 187, 136)
+
+
+class TestLatency:
+    def test_each_step_is_milliseconds_after_the_choice(self):
+        found = machine.latency_report(
+            status(
+                vblank_hz=60,
+                chosen_at=600,
+                gold_at=601,
+                loaded_at=601,
+                playing_at=602,
+                first_note_at=662,
+                first_note_ms=1000,
+            )
+        )
+
+        assert found == {
+            "line_gold_ms": 17,
+            "score_ready_ms": 17,
+            "timer_started_ms": 33,
+            "first_note_ms": 1033,
+            "first_note_in_the_score_ms": 1000,
+            "frame_ms": 16.7,
+        }
+
+    def test_the_piece_before_counts_only_when_it_ended_for_this_one(self):
+        switched = status(vblank_hz=60, chosen_at=600, ended_at=606, playing_at=607)
+        own_end = status(vblank_hz=60, chosen_at=600, ended_at=9000, playing_at=607)
+
+        assert machine.latency_report(switched)["previous_piece_ended_ms"] == 100
+        assert "previous_piece_ended_ms" not in machine.latency_report(own_end)

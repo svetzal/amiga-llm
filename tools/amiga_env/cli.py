@@ -146,6 +146,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         "piano-disk", help="assemble the recipe's 68000 player onto a boot floppy per piece"
     )
     disks.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    disks.add_argument("--out", type=Path, metavar="DIR", help="where the disks go; build/piano")
     survey = sub.add_parser(
         "piano-survey",
         help="measure every MAESTRO performance of a length for the recipe's four voices",
@@ -180,9 +181,18 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         help="take N more screenshots while each piece plays and count scopes caught half drawn",
     )
     check.add_argument("--name", help="what the run's files are called; emulator-screen[-log]")
+    check.add_argument(
+        "--floppy",
+        type=Path,
+        metavar="ADF",
+        help="the disk to boot; build/piano/piano-log.adf with --log, else build/piano/piano.adf",
+    )
     mode = check.add_mutually_exclusive_group(required=True)
     mode.add_argument("--log", action="store_true", help="the test build: compare the voice log")
     mode.add_argument("--audio", action="store_true", help="the player, in real time, to a WAV")
+    mode.add_argument(
+        "--realtime", action="store_true", help="the player, in real time, with no recording"
+    )
 
     # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
@@ -217,7 +227,7 @@ COMMANDS = {
     "system": lambda args: _system(args),
     "exec": lambda args: _exec(args),
     "piano": lambda args: _piano(args.recipe),
-    "piano-disk": lambda args: _piano_disk(args.recipe),
+    "piano-disk": lambda args: _piano_disk(args.recipe, args.out),
     "piano-survey": lambda args: _piano_survey(args),
     "piano-run": lambda args: _piano_run(args),
 }
@@ -272,10 +282,10 @@ def _piano(recipe: Path) -> None:
         )
 
 
-def _piano_disk(recipe: Path) -> None:
+def _piano_disk(recipe: Path, out: Path | None) -> None:
     from .piano import build, disk
 
-    disk.build_disks(build.load_recipe(recipe))
+    disk.build_disks(build.load_recipe(recipe), out=out)
 
 
 def _piano_survey(args: argparse.Namespace) -> None:
@@ -307,7 +317,7 @@ def _piano_run(args: argparse.Namespace) -> int:
     scopes = machine.ScopeCheck(*disk.scope_regions(recipe), args.scope_shots)
     found = machine.run_menu(
         machines[args.machine],
-        project.build_dir() / "piano" / (test if args.log else player),
+        args.floppy or project.build_dir() / "piano" / (test if args.log else player),
         [machine.Choice(n, keys[n], out / "m68k" / f"{n}.log", lines[n]) for n in args.pieces],
         out,
         name,
@@ -316,6 +326,7 @@ def _piano_run(args: argparse.Namespace) -> int:
         switch_after_ms=switch_ms,
         click=args.click,
         scopes=scopes,
+        realtime=args.realtime,
     )
     print(f"samples in chip RAM at {found['samples_in_chip']['address']}")
     print(f"chip RAM free with the screen open: {found['chip_free_with_the_screen_open']}")

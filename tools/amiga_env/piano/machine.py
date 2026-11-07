@@ -66,6 +66,22 @@ STATUS_FIELDS = (
     "screen_chip",
     "draw_e",
     "draw_max_e",
+    "vblanks",
+    "vblank_hz",
+    "screen_at",
+    "chosen_at",
+    "ended_at",
+    "loaded_at",
+    "gold_at",
+    "playing_at",
+    "first_note_at",
+    "first_note_ms",
+    "starts",
+    "rotated",
+    "next",
+    "rotate_at",
+    "preload_frames",
+    "scores_bytes",
 )
 # Window fields (struct Window): the pointer's position in the window.
 WINDOW_MOUSE_Y, WINDOW_MOUSE_X = 12, 14
@@ -115,6 +131,22 @@ class Status(NamedTuple):
     screen_chip: int
     draw_e: int
     draw_max_e: int
+    vblanks: int  # vertical blanks since the program started; the times below are counts of it
+    vblank_hz: int
+    screen_at: int
+    chosen_at: int  # the task took the choice (or the rotation's alarm)
+    ended_at: int  # the piece before was ended and given back
+    loaded_at: int  # the chosen score was ready
+    gold_at: int  # its line was gold
+    playing_at: int  # its timer started: the piece's millisecond 0
+    first_note_at: int
+    first_note_ms: int  # the piece's millisecond of its first note
+    starts: int
+    rotated: int  # pieces the rotation started
+    next: int  # the piece the rotation plays next
+    rotate_at: int  # when, 0xFFFFFFFF while it waits for a choice
+    preload_frames: int  # vertical blanks loading every score at the start
+    scores_bytes: int
 
 
 def parse_status(longs: Sequence[int]) -> Status:
@@ -169,6 +201,34 @@ def scope_report(status: Status) -> dict:
         "player_e_per_frame": round(player_share * frame_e),
         "scope_e_per_frame": round(scope_share * frame_e),
         "player_and_scopes_percent_of_cpu": round(100 * (player_share + scope_share), 1),
+    }
+
+
+def latency_report(status: Status) -> dict:
+    """Milliseconds from the task taking a choice to each step of the piece starting.
+
+    The player stamps each step with its vertical blank count, so a figure
+    is good to one frame (1/60 s on NTSC). A step that happened before the
+    choice was taken (none in a run that waited for it) is left out.
+    """
+    hz = status.vblank_hz or 60
+    steps = {
+        "previous_piece_ended": status.ended_at,
+        "score_ready": status.loaded_at,
+        "line_gold": status.gold_at,
+        "timer_started": status.playing_at,
+        "first_note": status.first_note_at,
+    }
+    found: dict = {
+        f"{step}_ms": round((at - status.chosen_at) * 1000 / hz)
+        for step, at in steps.items()
+        if at and at >= status.chosen_at
+    }
+    if status.ended_at > status.playing_at:  # that was this piece's own end
+        found.pop("previous_piece_ended_ms", None)
+    return found | {
+        "first_note_in_the_score_ms": status.first_note_ms,
+        "frame_ms": round(1000 / hz, 1),
     }
 
 
@@ -377,10 +437,12 @@ def run_menu(
     click: bool = False,
     scopes: "ScopeCheck | None" = None,
     timeout: float = 900.0,
+    realtime: bool = False,
 ) -> dict:
     """Boot `floppy`, choose each piece in turn, then quit; record each.
 
-    With `click` a piece is chosen by clicking its line, else by its key.
+    Without `audio` or `realtime` the emulator runs in warp. With `click` a
+    piece is chosen by clicking its line, else by its key.
     With `switch_after_ms` each piece but the last is played only that long,
     and the next is chosen while it plays. With `scopes`, screenshots taken
     while a piece plays are checked for scopes caught half drawn.
@@ -401,13 +463,14 @@ def run_menu(
     found: dict = {
         "floppy": str(floppy),
         "audio": audio,
-        "warp": not audio,
+        "warp": not (audio or realtime),
         "chosen_by": "click" if click else "key",
         "pieces": {},
     }
     try:
         amiga.connect(floppy.resolve())
-        if not audio:
+        found["floppy_speed"] = " ".join(amiga.send("GET_FLOPPY_SPEED")[1:])
+        if found["warp"]:
             amiga.send("SET_WARP", "1")
         status = _wait_for(amiga, lambda s: s.state in (MENU, ENDED, FAILED), timeout)
         if status.state != MENU:
@@ -513,6 +576,7 @@ def _play(amiga: Amiga, choice: Choice, number: int, stem: Path, options: _Optio
         "status": status._asdict(),
         "left_playing_for_the_next_choice": switched,
         "highlighted_line": status.highlight if switched else None,
+        "latency": latency_report(status),
         "cpu": cpu_report(status),
         "scopes": scope_report(status),
         "memory_free_while_playing": {"chip": status.chip_free, "other": status.other_free},

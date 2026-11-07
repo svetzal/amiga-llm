@@ -56,6 +56,12 @@ _LVOFreeMem         equ -210
 _LVOAvailMem        equ -216
 _LVOSetSignal       equ -306
 _LVOSetIntVector    equ -162
+_LVOAddIntServer    equ -168
+_LVORemIntServer    equ -174
+_LVOFindTask        equ -294
+_LVOSignal          equ -324
+_LVOAllocSignal     equ -330
+_LVOFreeSignal      equ -336
 _LVOAllocMem        equ -198
 _LVOWait            equ -318
 _LVOGetMsg          equ -372
@@ -72,6 +78,9 @@ _LVORead            equ -42
 _LVOWrite           equ -48
 _LVOOutput          equ -60
 _LVOSeek            equ -66
+_LVOLock            equ -84
+_LVOUnLock          equ -90
+_LVOExamine         equ -102
 _LVODelay           equ -198
 ; graphics.library (V33), from graphics_lib.sfd
 _LVOLoadRGB4        equ -192
@@ -95,15 +104,19 @@ _LVORemICRVector    equ -12
 _LVOAbleICR         equ -18
 
 ExecBase        equ 4
+VBlankFrequency equ 530         ; in ExecBase: 60 on NTSC, 50 on PAL
 MEMF_PUBLIC     equ 1
 MEMF_CHIP       equ 2
 MEMF_CLEAR      equ $10000
 NT_INTERRUPT    equ 2
+INTB_VERTB      equ 5
 INTB_AUD0       equ 7
 CIAICRB_TA      equ 0
 SIGBREAKF_CTRL_C equ $1000
 
 MODE_OLDFILE    equ 1005
+ACCESS_READ     equ -2
+fib_Size        equ 124
 OFFSET_BEGINNING equ -1
 OFFSET_END      equ 1
 
@@ -160,7 +173,7 @@ TIMER_PERIOD    equ TIMER_LATCH+1
 PAULA_PER_MS    equ TIMER_PERIOD*5
 VOICES          equ 4
 FADE_MS         equ 5           ; as player.FADE_MS
-LOG_BYTES       equ 400000      ; 16,666 ticks, 277 s
+LOG_BYTES       equ 362400      ; 15,100 ticks, 251 s: room for the scores beside it
 MAX_PIECES      equ 34          ; 1-9 and A-Z without Q
 
 ; The screen and the scopes; screen.i (made with the picture) has the rows.
@@ -215,7 +228,24 @@ ST_HIGHLIGHT    equ 112         ; the line in gold, -1 for none
 ST_SCREEN_CHIP  equ 116         ; chip RAM free with the screen open, before a piece
 ST_DRAW_E       equ 120         ; E-clock ticks taking back and plotting points (after ST_SCOPE_E's)
 ST_DRAW_MAX_E   equ 124         ; the most for one frame
-ST_END          equ 128
+; Times are vertical blanks counted from the start of the program (ST_VBLANKS).
+ST_VBLANKS      equ 128         ; vertical blanks since the program started
+ST_VBLANK_HZ    equ 132         ; their rate
+ST_SCREEN_AT    equ 136         ; when the screen was up and taking choices
+ST_CHOSEN_AT    equ 140         ; when the task took the last choice
+ST_ENDED_AT     equ 144         ; when the last piece was ended and given back
+ST_LOADED_AT    equ 148         ; when the chosen piece's score was ready
+ST_GOLD_AT      equ 152         ; when its line was gold
+ST_PLAYING_AT   equ 156         ; when its timer started: its millisecond 0
+ST_FIRST_NOTE_AT equ 160        ; when its first note started
+ST_FIRST_NOTE_MS equ 164        ; and the piece's millisecond for that note
+ST_STARTS       equ 168         ; pieces started
+ST_ROTATED      equ 172         ; of those, started by the rotation
+ST_NEXT         equ 176         ; the piece the rotation plays next, from 0
+ST_ROTATE_AT    equ 180         ; when it will, -1 when it waits for a choice
+ST_PRELOAD_FRAMES equ 184       ; vertical blanks loading every score at the start
+ST_SCORES_BYTES equ 188         ; their bytes
+ST_END          equ 192
 ST_PER_PIECE    equ ST_TOTAL_E  ; cleared before each piece, to ST_PLAYED
 
 ; A voice
@@ -294,6 +324,9 @@ start:
         jsr     _LVOOpenLibrary(a6)
         move.l  d0,dosbase
         beq     failed
+        bsr     start_clock
+        tst.l   d0
+        beq     failed
 
         bsr     samples_to_chip
         tst.l   d0
@@ -309,6 +342,7 @@ start:
         bsr     read_index
         tst.l   d0
         beq     failed
+        bsr     load_scores
 
         lea     banner(pc),a0
         lea     fmt_args,a1
@@ -340,7 +374,8 @@ no_memory:
         bsr     print
 failed: move.l  #-1,STATUS+ST_STATE.w
         bsr     close_display
-close:  move.l  index_mem,d0
+close:  bsr     free_scores
+        move.l  index_mem,d0
         beq.s   .log
         move.l  d0,a1
         move.l  index_bytes,d0
@@ -355,11 +390,70 @@ close:  move.l  index_mem,d0
         jsr     _LVOFreeMem(a6)
 .dos:
         endif
+        bsr     stop_clock
         move.l  dosbase,d0
         beq.s   .out
         move.l  d0,a1
         jsr     _LVOCloseLibrary(a6)
 .out:   moveq   #0,d0
+        rts
+
+; The vertical blank count (ST_VBLANKS) and the alarm: a signal the
+; vertical blank server sends the task when the count reaches alarm_at
+; while alarm_on is set. d0: 0 when there is no signal for it.
+start_clock:
+        move.b  VBlankFrequency(a6),d0
+        and.l   #$ff,d0
+        move.l  d0,STATUS+ST_VBLANK_HZ.w
+        sub.l   a1,a1
+        jsr     _LVOFindTask(a6)
+        move.l  d0,task
+        moveq   #-1,d0
+        jsr     _LVOAllocSignal(a6)
+        move.b  d0,alarm_bit
+        bmi.s   .none
+        moveq   #0,d1
+        bset    d0,d1
+        move.l  d1,alarm_mask
+        moveq   #INTB_VERTB,d0
+        lea     vbint,a1
+        jsr     _LVOAddIntServer(a6)
+        move.w  #1,clock_on
+        moveq   #1,d0
+        rts
+.none:  moveq   #0,d0
+        rts
+
+stop_clock:
+        tst.w   clock_on
+        beq.s   .signal
+        moveq   #INTB_VERTB,d0
+        lea     vbint,a1
+        jsr     _LVORemIntServer(a6)
+        clr.w   clock_on
+.signal:
+        move.b  alarm_bit,d0
+        ble.s   .out                    ; none (or 0, which AllocSignal(-1) never gives)
+        ext.w   d0
+        ext.l   d0
+        jsr     _LVOFreeSignal(a6)
+        clr.b   alarm_bit
+.out:   rts
+
+; The vertical blank server: count, and signal the task at its alarm.
+vb_handler:
+        addq.l  #1,STATUS+ST_VBLANKS.w
+        tst.w   alarm_on
+        beq.s   .out
+        move.l  STATUS+ST_VBLANKS.w,d0
+        sub.l   alarm_at,d0
+        bmi.s   .out
+        clr.w   alarm_on
+        move.l  task,a1
+        move.l  alarm_mask,d0
+        move.l  ExecBase.w,a6
+        jsr     _LVOSignal(a6)
+.out:   moveq   #0,d0                   ; the rest of the chain runs too
         rts
 
 ; ---------------------------------------------------------------------------
@@ -420,6 +514,54 @@ read_index:
         moveq   #1,d0
         rts
 
+; Load every piece's score now, so that a choice never waits for the
+; floppy: score_table gets each one's memory and size (0 for a score that
+; cannot be loaded; choosing it says so). AllocMem takes memory other than
+; chip RAM first when the machine has some.
+load_scores:
+        movem.l d2-d3/a2,-(sp)
+        move.l  STATUS+ST_VBLANKS.w,d3
+        lea     score_table,a2
+        moveq   #0,d2
+.next:  cmp.l   pieces,d2
+        beq.s   .done
+        lea     files,a0
+        move.l  d2,d0
+        lsl.l   #2,d0
+        move.l  0(a0,d0.l),a0
+        bsr     load_file
+        move.l  d0,(a2)+
+        move.l  d1,(a2)+
+        add.l   d1,STATUS+ST_SCORES_BYTES.w
+        addq.l  #1,d2
+        bra.s   .next
+.done:  move.l  STATUS+ST_VBLANKS.w,d0
+        sub.l   d3,d0
+        move.l  d0,STATUS+ST_PRELOAD_FRAMES.w
+        lea     fmt_args,a1
+        move.l  STATUS+ST_SCORES_BYTES.w,(a1)
+        move.l  d0,4(a1)
+        lea     scores_text(pc),a0
+        bsr     print
+        movem.l (sp)+,d2-d3/a2
+        rts
+
+free_scores:
+        movem.l d2/a2,-(sp)
+        lea     score_table,a2
+        moveq   #MAX_PIECES-1,d2
+.next:  move.l  (a2),d0
+        beq.s   .skip
+        move.l  d0,a1
+        move.l  4(a2),d0
+        addq.l  #1,d0
+        jsr     _LVOFreeMem(a6)
+        clr.l   (a2)
+.skip:  addq.l  #8,a2
+        dbf     d2,.next
+        movem.l (sp)+,d2/a2
+        rts
+
 ; d0: the piece for the key character in d0 (from 0), negative for none.
 piece_for_key:
         lea     menu_keys(pc),a0
@@ -456,7 +598,8 @@ play_arguments:
         move.l  ExecBase.w,a6
         bra.s   .wait
 .stop:  move.l  #1,STATUS+ST_STOPPED.w
-.end:   bsr     end_piece
+.end:   moveq   #-1,d0
+        bsr     end_piece
 .next:  bsr     next_argument
         bpl.s   .piece
         rts
@@ -795,10 +938,12 @@ make_tables:
 ; are drawn after every vertical blank.
 choose:
         move.l  #3,STATUS+ST_STATE.w
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_SCREEN_AT.w
 .loop:  tst.w   playing
         beq.s   .idle
         tst.w   finished
         beq.s   .draw
+        moveq   #-1,d0
         bsr     end_piece               ; it played to its end
         bra.s   .loop
 .draw:  bsr     scope_frame
@@ -820,13 +965,14 @@ choose:
         tst.w   playing
         beq.s   .start
         move.l  #1,STATUS+ST_STOPPED.w
-        bsr     end_piece
+        bsr     end_piece               ; and its line gold at once
 .start: move.l  (sp)+,d0
         bsr     start_piece
         bra.s   .loop
 .quit:  tst.w   playing
         beq.s   .out
         move.l  #1,STATUS+ST_STOPPED.w
+        moveq   #-1,d0
         bsr     end_piece
 .out:   rts
 
@@ -896,6 +1042,7 @@ next_choice:
 .chosen:
         addq.l  #1,d0
         move.l  d0,d4
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_CHOSEN_AT.w
         bra     .next
 .quit:  moveq   #-1,d4
         bra     .next
@@ -911,6 +1058,8 @@ highlight:
         movem.l d2-d3/a2-a3,-(sp)
         move.l  screen,d1
         beq     .out
+        cmp.l   STATUS+ST_HIGHLIGHT.w,d0
+        beq     .already
         move.l  d0,d2
         sub.l   a2,a2                   ; the new list, none for -1
         tst.l   d2
@@ -968,6 +1117,9 @@ highlight:
         CALLINT MakeScreen
         CALLINT RethinkDisplay
         move.l  d2,STATUS+ST_HIGHLIGHT.w
+        bmi.s   .gone
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_GOLD_AT.w
+.gone:
         move.l  a3,d0
         beq.s   .out
         CALLGFX WaitTOF                 ; the copper has the new list now
@@ -978,62 +1130,54 @@ highlight:
         jsr     _LVOFreeMem(a6)
 .out:   movem.l (sp)+,d2-d3/a2-a3
         rts
+.already:                               ; that line is gold already: since
+        tst.l   d0                      ; this choice, unless it is the piece
+        bmi.s   .out                    ; that was playing, chosen again
+        move.l  STATUS+ST_GOLD_AT.w,d1
+        cmp.l   STATUS+ST_CHOSEN_AT.w,d1
+        bcc.s   .out
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_GOLD_AT.w
+        bra.s   .out
 
 ; ---------------------------------------------------------------------------
 ; One piece: load its score, start it, end it.
 ; ---------------------------------------------------------------------------
 
-; Load piece d0 (from 0), start it playing and put its line in gold.
+; Start piece d0 (from 0): its line gold first, so the choice shows at
+; once, then its score (in memory since the start) and its timer.
 ; d0: 0 when it plays.
 start_piece:
         movem.l d2-d7/a2-a5,-(sp)
+        clr.l   STATUS+ST_LOADED_AT.w   ; this piece's times, to come (a
+        clr.l   STATUS+ST_PLAYING_AT.w  ; switch has put the line in gold)
+        clr.l   STATUS+ST_FIRST_NOTE_AT.w
+        clr.l   STATUS+ST_FIRST_NOTE_MS.w
         move.l  d0,d6
-        move.l  d0,d7
-        lsl.l   #2,d7
-        lea     fmt_args,a1
-        lea     titles,a0
-        move.l  0(a0,d7.l),(a1)
-        lea     loading_text(pc),a0
-        bsr     print
-        lea     files,a0
-        move.l  0(a0,d7.l),a0
-        bsr     load_file
-        tst.l   d0
+        lsl.l   #3,d0
+        lea     score_table,a0
+        move.l  0(a0,d0.l),score_mem
+        move.l  4(a0,d0.l),score_bytes
+        tst.l   score_mem
         bne.s   .loaded
         lea     no_score_text(pc),a0
         bsr     print
         moveq   #1,d0
         bra     .out
 .loaded:
-        move.l  d0,score_mem
-        move.l  d1,score_bytes
+        move.l  d6,d0
+        bsr     highlight               ; a switch has done it already
         bsr     reset_piece
         move.l  d6,STATUS+ST_PIECE.w
         move.l  score_mem,score_ptr
         move.l  score_mem,STATUS+ST_SCORE.w
         move.l  score_bytes,STATUS+ST_SCORE_BYTES.w
-        moveq   #MEMF_CHIP,d1
-        jsr     _LVOAvailMem(a6)
-        move.l  d0,STATUS+ST_CHIP_FREE.w
-        moveq   #0,d1
-        jsr     _LVOAvailMem(a6)
-        sub.l   STATUS+ST_CHIP_FREE.w,d0
-        move.l  d0,STATUS+ST_OTHER_FREE.w
-        lea     fmt_args,a1
-        move.l  score_bytes,(a1)
-        move.l  score_mem,4(a1)
-        move.l  STATUS+ST_CHIP_FREE.w,8(a1)
-        move.l  STATUS+ST_OTHER_FREE.w,12(a1)
-        lea     playing_text(pc),a0
-        bsr     print
-        move.l  d6,d0
-        bsr     highlight
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_LOADED_AT.w
         bsr     take_audio
         bsr     take_timer
         tst.l   d0
         beq.s   .play
         bsr     give_audio              ; the timer is someone else's
-        bsr     free_score
+        clr.l   score_mem
         lea     busy_text(pc),a0
         bsr     print
         moveq   #-1,d0
@@ -1041,39 +1185,55 @@ start_piece:
         moveq   #1,d0
         bra.s   .out
 .play:  move.w  #1,playing
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_PLAYING_AT.w
+        addq.l  #1,STATUS+ST_STARTS.w
         move.l  #1,STATUS+ST_STATE.w
+        moveq   #MEMF_CHIP,d1           ; then what it found, while it plays
+        jsr     _LVOAvailMem(a6)
+        move.l  d0,STATUS+ST_CHIP_FREE.w
+        moveq   #0,d1
+        jsr     _LVOAvailMem(a6)
+        sub.l   STATUS+ST_CHIP_FREE.w,d0
+        move.l  d0,STATUS+ST_OTHER_FREE.w
+        lea     fmt_args,a1
+        lea     titles,a0
+        move.l  d6,d0
+        lsl.l   #2,d0
+        move.l  0(a0,d0.l),(a1)
+        lea     loading_text(pc),a0
+        bsr     print
+        lea     fmt_args,a1
+        move.l  score_bytes,(a1)
+        move.l  score_mem,4(a1)
+        move.l  STATUS+ST_CHIP_FREE.w,8(a1)
+        move.l  STATUS+ST_OTHER_FREE.w,12(a1)
+        lea     playing_text(pc),a0
+        bsr     print
         moveq   #0,d0
 .out:   movem.l (sp)+,d2-d7/a2-a5
         rts
 
-; Stop the piece playing (or finished), give everything back, and say what
-; it measured.
+; Stop the piece playing (or finished), give everything back, put line d0
+; in gold (-1 for none: a switch passes the next piece's), and say what it
+; measured. Its score stays in memory.
 end_piece:
         movem.l d2-d7/a2-a5,-(sp)
+        move.l  d0,d6                   ; (give_audio uses d2)
         bsr     give_timer
         bsr     give_audio
         clr.w   playing
-        bsr     free_score
+        clr.l   score_mem
         addq.l  #1,STATUS+ST_PLAYED.w
-        moveq   #-1,d0
+        move.l  d6,d0
         bsr     highlight
         tst.l   screen
         beq.s   .print
         bsr     restore_band            ; the traces go
 .print: bsr     print_results
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_ENDED_AT.w
         move.l  #3,STATUS+ST_STATE.w
         movem.l (sp)+,d2-d7/a2-a5
         rts
-
-free_score:
-        move.l  score_mem,d0
-        beq.s   .out
-        move.l  d0,a1
-        move.l  score_bytes,d0
-        addq.l  #1,d0
-        jsr     _LVOFreeMem(a6)
-        clr.l   score_mem
-.out:   rts
 
 ; ---------------------------------------------------------------------------
 ; The scopes: four voices and their mix, in the floor band.
@@ -1506,29 +1666,37 @@ print_results:
 
 ; Load the file named a0 (a C string) into new public memory, with a 0
 ; after it. d0: the memory, or 0 when the file or the memory is missing;
-; d1: the file's size. Free it with FreeMem(d0, d1 + 1).
+; d1: the file's size. Free it with FreeMem(d0, d1 + 1). The size comes
+; from Examine, which reads only the file's header block.
 load_file:
         movem.l d2-d5/a2,-(sp)
         move.l  dosbase,a6
+        move.l  a0,-(sp)                ; the name, for Open
         move.l  a0,d1
+        moveq   #ACCESS_READ,d2
+        jsr     _LVOLock(a6)
+        move.l  d0,d4
+        beq     .nolock
+        move.l  d4,d1
+        move.l  #fib,d2
+        jsr     _LVOExamine(a6)
+        move.l  d0,d3
+        move.l  d4,d1
+        jsr     _LVOUnLock(a6)
+        tst.l   d3
+        beq    .nolock
+        move.l  fib+fib_Size,d5
+        move.l  (sp)+,d1
         move.l  #MODE_OLDFILE,d2
         jsr     _LVOOpen(a6)
         move.l  d0,d4
         beq.s   .fail
-        move.l  d4,d1
-        moveq   #0,d2
-        moveq   #OFFSET_END,d3
-        jsr     _LVOSeek(a6)
-        move.l  d4,d1
-        moveq   #0,d2
-        moveq   #OFFSET_BEGINNING,d3
-        jsr     _LVOSeek(a6)            ; returns where it was: the end
-        move.l  d0,d5
+        tst.l   d5
         ble.s   .close
         move.l  ExecBase.w,a6
         move.l  d5,d0
         addq.l  #1,d0
-        move.l  #MEMF_PUBLIC|$10000,d1  ; cleared, so the 0 after it is there
+        move.l  #MEMF_PUBLIC|MEMF_CLEAR,d1  ; cleared, so the 0 after it is there
         jsr     _LVOAllocMem(a6)
         move.l  dosbase,a6
         move.l  d0,a2
@@ -1552,6 +1720,9 @@ load_file:
         move.l  a2,d0
         move.l  d5,d1
         bra.s   .out
+.nolock:
+        addq.l  #4,sp
+        bra.s   .fail
 .close: move.l  d4,d1
         jsr     _LVOClose(a6)
 .fail:  moveq   #0,d0
@@ -1950,6 +2121,11 @@ read_events:
 ; Note on: key d0, velocity d1. Keeps a2 and d6.
 note_on:
         addq.w  #1,serial
+        cmp.w   #1,serial
+        bne.s   .later
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_FIRST_NOTE_AT.w  ; for the host
+        move.l  now,STATUS+ST_FIRST_NOTE_MS.w
+.later:
         move.w  d0,d2                   ; key
         mulu    #K_SIZE,d0
         lea     keys,a4
@@ -2161,6 +2337,7 @@ banner:         dc.b "EXP-004, the expressive piano: %ld pieces.",10
 loaded:         dc.b "where LoadSeg put them",0
 copied:         dc.b "copied there from elsewhere",0
 loading_text:   dc.b 10,"%s",10,0
+scores_text:    dc.b "Scores: %ld bytes, loaded in %ld vertical blanks.",10,0
 playing_text:   dc.b "Score: %ld bytes at $%lx.",10
                 dc.b "Free memory: %ld bytes chip, %ld other.",10,0
 results:        dc.b "Done: %ld frames (1/60 s). Player time a frame",10
@@ -2201,6 +2378,9 @@ newwindow:      dc.w 0,0,SCREEN_WIDTH,SCREEN_HEIGHT
 ciaint:         dc.l 0,0
                 dc.b NT_INTERRUPT,0
                 dc.l intname,0,cia_handler
+vbint:          dc.l 0,0
+                dc.b NT_INTERRUPT,0
+                dc.l intname,0,vb_handler
 audints:
         rept    VOICES
                 dc.l 0,0
@@ -2251,8 +2431,9 @@ files:          ds.l MAX_PIECES
 titles:         ds.l MAX_PIECES
 index_mem:      ds.l 1
 index_bytes:    ds.l 1
-score_mem:      ds.l 1
+score_mem:      ds.l 1                  ; the score playing
 score_bytes:    ds.l 1
+score_table:    ds.l 2*MAX_PIECES       ; each piece's score: memory and size
 log_ptr:        ds.l 1
 log_end:        ds.l 1
 fmt_args:       ds.l 4
@@ -2283,6 +2464,15 @@ trace_sets:     ds.b 2*MIX_SCOPE_WIDTH*(VOICES+1)
 watch_count:    ds.w 1
 watch_ms:       ds.l 1
 watch_isr:      ds.l 1
+task:           ds.l 1                  ; this program's task, for the alarm
+alarm_mask:     ds.l 1
+alarm_at:       ds.l 1                  ; the vertical blank count it goes off at
+alarm_on:       ds.w 1
+clock_on:       ds.w 1                  ; 1 while the vertical blank server is in
+alarm_bit:      ds.b 1
+                ds.b 1
+                cnop 0,4
+fib:            ds.b 260                ; a FileInfoBlock, longword aligned
 textbuf:        ds.b 512
                 ds.w 1
 bss_end:
