@@ -1,0 +1,33 @@
+# amiga-env project file for amiga-llm: Stacey's two target machines.
+#
+# AGENTS.md records both machines and where each fact came from. Each profile
+# starts from Amiberry's quick-start model and sets only what differs on the
+# real machine. Boot one with `make a500`, `make a3000` or
+# `amiga-env <machine> [DISK.adf] [amiberry options]`.
+#
+# model      Amiberry quick-start model (--model)
+# kickstart  Kickstart ROM, relative to media/
+# disk       floppy for drive 0 when no DISK.adf is given, relative to media/
+# settings   extra Amiberry settings, each passed as -s
+# purpose    one line for `amiga-env --help`
+
+# Demos, games and code that drives the hardware directly, and the
+# performance contract. Amiberry's A500 model already matches the facts not
+# yet read off the machine (68000, OCS, 512 KB chip plus 512 KB slow RAM,
+# cycle-exact).
+[machines.a500]
+model = "A500"
+kickstart = "rom/forever/amiga-os-120.rom"
+disk = "adf/1.2/workbench.adf"
+settings = ["ntsc=true"]
+purpose = "boot the A500 (Kickstart 1.2, Workbench 1.2): demos, games, hardware"
+
+# Desktop applications (C, MUI). Amiberry's A3000 model has no fast RAM; the
+# real machine has 8 MB on the motherboard, per the configuration Stacey kept
+# for it (media/reference/stock-a3000.uae).
+[machines.a3000]
+model = "A3000"
+kickstart = "rom/3.2/kick-a3000.rom"
+disk = "adf/3.2/Install3.2.adf"
+settings = ["ntsc=true", "a3000mem_size=8"]
+purpose = "boot the A3000 (Kickstart 3.2, Workbench 3.2): desktop applications"

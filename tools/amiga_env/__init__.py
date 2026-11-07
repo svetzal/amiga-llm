@@ -1,7 +1,5 @@
-"""Host-side tooling for the amiga-llm environment."""
+"""amiga-env: an environment for agent-driven Commodore Amiga development.
 
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
-TOOLS_DIR = ROOT / ".tools"
-MEDIA_DIR = ROOT / "media"
+The project directory comes from `project.root()`, found at run time from the
+current directory, so the package works installed as a tool in any project.
+"""

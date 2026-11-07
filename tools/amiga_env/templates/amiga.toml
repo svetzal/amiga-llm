@@ -1,0 +1,23 @@
+# amiga-env project file. Its presence marks the project root: amiga-env looks
+# for it in the current directory and then in each parent directory.
+#
+# Each [machines.NAME] table is a machine you can boot with
+#
+#   amiga-env NAME [DISK.adf] [amiberry options]
+#
+# model      Amiberry quick-start model (--model), for example A500, A1200, A3000
+# kickstart  Kickstart ROM, relative to media/ (required)
+# disk       floppy for drive 0 when no DISK.adf is given, relative to media/
+# settings   extra Amiberry settings, each passed as -s, for example "ntsc=true"
+# purpose    one line for `amiga-env --help`
+#
+# Put the ROM and the floppy in media/ first, with `amiga-env media add` and
+# `amiga-env media`. `amiga-env doctor` checks that each machine's files are
+# there. An example, to copy and change:
+#
+# [machines.a500]
+# model = "A500"
+# kickstart = "rom/forever/amiga-os-130.rom"
+# disk = "adf/1.3/workbench.adf"
+# settings = ["ntsc=true"]
+# purpose = "boot an A500 on Kickstart 1.3"

@@ -1,6 +1,10 @@
 """Copy licensed media into media/ once, and verify it against recorded checksums.
 
-media/manifest.toml says what is needed and where it came from.
+media/manifest.toml says what is needed and where it comes from: named
+sources (an Amiga Forever installation, an AmigaOS 3.2 CD, a personal
+folder), and items, each a file or folder in one source. A source's location
+is never written in a tracked file. It comes from the environment variable
+the source names, usually set in the project's .env (see dotenv.py).
 media/manifest.lock.json records what was copied: size and SHA-256 for each
 file, and a tree digest for each directory. Both are checked in; the media is
 not.
@@ -8,42 +12,105 @@ not.
 Each item is copied to a hidden `.partial` sibling and moved into place only
 when complete, and the lock is rewritten after every item, so an interrupted
 migration leaves no half-copied media and keeps what it finished. An item
-already present and matching its lock is not copied again. A copy that does not
-match its locked checksum is refused, so a different origin cannot silently
-replace the media the lock describes.
+already present and matching its lock is not copied again, so its source need
+not be set. A copy that does not match its locked checksum is refused, so a
+different origin cannot silently replace the media the lock describes.
 """
 
 import hashlib
 import json
+import os
+import re
 import shutil
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import MEDIA_DIR
+from . import dotenv, project
 
-MANIFEST = MEDIA_DIR / "manifest.toml"
-LOCK = MEDIA_DIR / "manifest.lock.json"
+MANIFEST_NAME = "manifest.toml"
+LOCK_NAME = "manifest.lock.json"
+SOURCE_NAME = re.compile(r"[a-z0-9_]+")
+ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
+SOURCE_KEYS = {"env", "description"}
+ITEM_REQUIRED = {"dest", "source", "origin", "licence"}
+ITEM_KEYS = ITEM_REQUIRED | {"optional"}
+DIGEST_KEYS = ("kind", "sha256", "size", "files")
+
+
+@dataclass(frozen=True)
+class Source:
+    name: str
+    env: str
+    description: str
 
 
 @dataclass(frozen=True)
 class Item:
     dest: str
+    source: str
     origin: str
     licence: str
+    optional: bool = False
 
 
-def load_manifest(path: Path = MANIFEST) -> tuple[Path, list[Item]]:
-    data = tomllib.loads(path.read_text())
-    root = Path(data["origin_root"]).expanduser()
-    items = [Item(i["dest"], i["origin"], i["licence"]) for i in data["item"]]
-    for item in items:
-        if Path(item.dest).is_absolute() or ".." in Path(item.dest).parts:
-            raise SystemExit(f"manifest.toml dest must stay inside media/: {item.dest}")
+@dataclass(frozen=True)
+class Manifest:
+    sources: dict[str, Source]
+    items: list[Item]
+
+
+def manifest_path() -> Path:
+    return project.media_dir() / MANIFEST_NAME
+
+
+def parse_manifest(text: str) -> Manifest:
+    """The sources and items in manifest.toml text, checked."""
+    data = tomllib.loads(text)
+    if "origin_root" in data:
+        raise SystemExit(
+            "manifest.toml: origin_root is no longer used; name [sources] and give each "
+            "[[item]] a source (see the comment at the top of a fresh `amiga-env init` manifest)"
+        )
+    _no_unknown_keys(data, {"sources", "item"}, "manifest.toml")
+    sources = {name: _source(name, table) for name, table in data.get("sources", {}).items()}
+    envs = [s.env for s in sources.values()]
+    if len(set(envs)) != len(envs):
+        raise SystemExit("manifest.toml: two sources use the same environment variable")
+    items = [_item(table, sources) for table in data.get("item", [])]
     dests = [i.dest for i in items]
     if len(set(dests)) != len(dests):
         raise SystemExit("manifest.toml lists the same dest twice")
-    return root, items
+    return Manifest(sources, items)
+
+
+def load_manifest(path: Path | None = None) -> Manifest:
+    path = path or manifest_path()
+    if not path.is_file():
+        raise SystemExit(f"No {path}; run `amiga-env init`")
+    return parse_manifest(path.read_text())
+
+
+def check_dest(dest: str) -> str:
+    """A dest names a path inside media/ that is not the manifest or its lock."""
+    path = Path(dest)
+    if not dest or path.is_absolute() or ".." in path.parts or path.parts[:1] == (".",):
+        raise SystemExit(f"manifest.toml dest must stay inside media/: {dest!r}")
+    if path.parts[0] in (MANIFEST_NAME, LOCK_NAME):
+        raise SystemExit(f"dest {dest!r} would replace media/{path.parts[0]}")
+    return path.as_posix()
+
+
+def source_folders(manifest: Manifest, values: Mapping[str, str]) -> dict[str, Path | None]:
+    """Each source's folder from the variable it names; None when the variable is unset."""
+    return {name: dotenv.folder(values.get(s.env)) for name, s in manifest.sources.items()}
+
+
+def project_values(root: Path, environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Variables from root/.env, overridden by the real environment."""
+    environ = os.environ if environ is None else environ
+    return dotenv.merged(dotenv.load(root / dotenv.ENV_FILE), environ)
 
 
 def file_digest(path: Path) -> str:
@@ -72,58 +139,311 @@ def describe(path: Path) -> dict:
     return {"kind": "file", "sha256": file_digest(path), "size": path.stat().st_size}
 
 
-def migrate(origin_root: Path | None = None, manifest: Path = MANIFEST) -> None:
-    root, items = load_manifest(manifest)
-    root = origin_root or root
-    if not root.is_dir():
-        raise SystemExit(f"Origin root not found: {root}")
+def lock_entry(digest: dict, item: Item) -> dict:
+    """What the lock records for an item: its checksum, and where it came from."""
+    entry = {k: digest[k] for k in DIGEST_KEYS if k in digest}
+    entry |= {"source": item.source, "origin": item.origin, "licence": item.licence}
+    return entry | ({"optional": True} if item.optional else {})
+
+
+def migrate(
+    overrides: Mapping[str, Path] | None = None,
+    manifest: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> None:
+    """Copy every item not already present. `overrides` maps source names to folders."""
+    manifest = manifest or manifest_path()
+    loaded = load_manifest(manifest)
     media_dir = manifest.parent
-    lock_path = media_dir / LOCK.name
+    folders = source_folders(loaded, project_values(media_dir.parent, environ))
+    folders |= dict(overrides or {})
+    lock_path = media_dir / LOCK_NAME
     previous = _read_lock(lock_path)
-    lock = {item.dest: previous[item.dest] for item in items if item.dest in previous}
-    for item in items:
-        dest = media_dir / item.dest
-        expected = lock.get(item.dest)
-        if expected and dest.exists() and describe(dest)["sha256"] == expected["sha256"]:
+    lock = {i.dest: previous[i.dest] for i in loaded.items if i.dest in previous}
+    present = {i.dest for i in loaded.items if _matches_lock(media_dir / i.dest, lock.get(i.dest))}
+    pending = [i for i in loaded.items if i.dest not in present]
+    _require_sources(loaded, pending, folders)
+    for item in loaded.items:
+        if item.dest in present:
+            lock[item.dest] = lock_entry(lock[item.dest], item)
             print(f"present {item.dest}")
             continue
-        source = root / item.origin
-        if not source.exists():
-            raise SystemExit(f"Missing in origin: {item.origin}")
-        partial = _copy_beside(source, dest)
-        found = describe(partial)
-        if expected and found["sha256"] != expected["sha256"]:
-            _remove(partial)
-            raise SystemExit(f"{item.origin} does not match the checksum locked for {item.dest}")
-        if dest.is_dir():
-            shutil.rmtree(dest)
-        partial.replace(dest)
-        lock[item.dest] = found | {"origin": item.origin, "licence": item.licence}
-        _write_lock(lock_path, lock)
-        print(f"copied  {item.dest}")
+        found = _copy_item(item, loaded.sources[item.source], folders, media_dir, lock)
+        if found is not None:
+            lock[item.dest] = lock_entry(found, item)
+            _write_lock(lock_path, lock)
+            print(f"copied  {item.dest}")
     _write_lock(lock_path, lock)
     print(f"Recorded {len(lock)} items in {lock_path.relative_to(media_dir.parent)}")
 
 
-def verify(manifest: Path = MANIFEST) -> bool:
-    _, items = load_manifest(manifest)
+def verify(manifest: Path | None = None) -> bool:
+    manifest = manifest or manifest_path()
+    loaded = load_manifest(manifest)
     media_dir = manifest.parent
-    lock = _read_lock(media_dir / LOCK.name)
+    lock = _read_lock(media_dir / LOCK_NAME)
     ok = True
-    for item in items:
+    for item in loaded.items:
         dest = media_dir / item.dest
         expected = lock.get(item.dest)
-        if expected is None:
-            print(f"UNLOCKED {item.dest} (run `make media`)")
+        if not dest.exists() and item.optional:
+            print(f"optional {item.dest} not copied")
+        elif expected is None:
+            print(f"UNLOCKED {item.dest} (run `amiga-env media`)")
             ok = False
         elif not dest.exists():
             print(f"MISSING  {item.dest}")
             ok = False
-        elif describe(dest)["sha256"] != expected["sha256"]:
+        elif describe(dest)["sha256"] != expected.get("sha256"):
             print(f"CHANGED  {item.dest}")
             ok = False
     print("media verified" if ok else "media verification FAILED")
     return ok
+
+
+def add(
+    source: str,
+    origin: str,
+    dest: str,
+    licence: str,
+    optional: bool = False,
+    manifest: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> Item:
+    """Append one item to the manifest. The media is copied by `migrate`."""
+    manifest = manifest or manifest_path()
+    loaded = load_manifest(manifest)
+    if source not in loaded.sources:
+        known = ", ".join(loaded.sources) or "none yet; add one with `amiga-env media source`"
+        raise SystemExit(f"No source named {source} in manifest.toml (sources: {known})")
+    env = loaded.sources[source].env
+    folder = source_folders(loaded, project_values(manifest.parent.parent, environ))[source]
+    if folder is None or not folder.is_dir():
+        raise SystemExit(f"{env} must name the {source} folder to add from it; set it in .env")
+    relative = relative_origin(origin, folder)
+    if not (folder / relative).exists():
+        raise SystemExit(f"Not found in {source} ({env}): {relative}")
+    if not licence.strip():
+        raise SystemExit("--licence must say what entitles this copy")
+    dest = check_new_dest(dest, [i.dest for i in loaded.items])
+    item = Item(dest, source, relative, licence, optional)
+    _write_text(manifest, with_item(manifest.read_text(), item))
+    print(f"added   {item.dest} <- {source}:{relative}; run `amiga-env media` to copy it in")
+    return item
+
+
+def add_source(name: str, env: str, description: str, manifest: Path | None = None) -> Source:
+    """Add a named source to the manifest, and its variable to .env.example."""
+    manifest = manifest or manifest_path()
+    loaded = load_manifest(manifest)
+    source = _source(name, {"env": env, "description": description})
+    if name in loaded.sources:
+        raise SystemExit(f"manifest.toml already has a source named {name}")
+    if env in {s.env for s in loaded.sources.values()}:
+        raise SystemExit(f"another source already uses {env}")
+    _write_text(manifest, with_source(manifest.read_text(), source))
+    example = manifest.parent.parent / dotenv.EXAMPLE_FILE
+    _document_variable(example, source, loaded)
+    print(f"added   source {name}; set {env} in .env to the folder")
+    return source
+
+
+def relative_origin(origin: str, folder: Path) -> str:
+    """An origin as a path under its source folder. An absolute one must already be under it."""
+    path = Path(origin).expanduser()
+    if path.is_absolute():
+        for base, full in ((folder, path), (folder.resolve(), path.resolve())):
+            if full.is_relative_to(base) and full != base:
+                path = full.relative_to(base)
+                break
+        else:
+            raise SystemExit(f"{origin} is not inside {folder}")
+    relative = Path(os.path.normpath(path))
+    if relative.parts[:1] in (("..",), (".",)):
+        raise SystemExit(f"{origin} is not inside {folder}")
+    return relative.as_posix()
+
+
+def check_new_dest(dest: str, existing: list[str]) -> str:
+    """A dest for a new item: inside media/, not taken, not inside or around another."""
+    dest = check_dest(dest)
+    for other in existing:
+        if dest == other:
+            raise SystemExit(f"media/{dest} is already in the manifest")
+        if dest.startswith(f"{other}/") or other.startswith(f"{dest}/"):
+            raise SystemExit(f"media/{dest} overlaps media/{other}, already in the manifest")
+    return dest
+
+
+def with_item(text: str, item: Item) -> str:
+    """The manifest text with one [[item]] appended. Comments are kept as written."""
+    block = (
+        "[[item]]\n"
+        f"dest = {_toml_string(item.dest)}\n"
+        f"source = {_toml_string(item.source)}\n"
+        f"origin = {_toml_string(item.origin)}\n"
+        f"licence = {_toml_string(item.licence)}\n"
+    ) + ("optional = true\n" if item.optional else "")
+    updated = f"{text.rstrip()}\n\n{block}" if text.strip() else block
+    if parse_manifest(updated).items[-1] != item:
+        raise SystemExit("could not append the item to manifest.toml")
+    return updated
+
+
+def with_source(text: str, source: Source) -> str:
+    """The manifest text with a [sources.NAME] table after the last one. Comments are kept."""
+    block = (
+        f"[sources.{source.name}]\n"
+        f"env = {_toml_string(source.env)}\n"
+        f"description = {_toml_string(source.description)}\n"
+    )
+    headers = list(re.finditer(r"^\[sources\.[^\]]+\][ \t]*$", text, re.MULTILINE))
+    if headers:
+        end = re.compile(r"^(?:[ \t]*$|\[)", re.MULTILINE).search(text, headers[-1].end() + 1)
+        pos = end.start() if end else len(text)
+        head = text[:pos] if text[:pos].endswith("\n") else text[:pos] + "\n"
+        updated = f"{head}\n{block}{text[pos:]}"
+    else:
+        first = re.search(r"^\[", text, re.MULTILINE)
+        if first is None:
+            updated = f"{text.rstrip()}\n\n{block}" if text.strip() else block
+        else:
+            start = text.rfind("\n\n", 0, first.start())
+            pos = start + 2 if start >= 0 else 0
+            updated = f"{text[:pos]}{block}\n{text[pos:]}"
+    if parse_manifest(updated).sources.get(source.name) != source:
+        raise SystemExit("could not add the source to manifest.toml")
+    return updated
+
+
+def _source(name: str, table: object) -> Source:
+    where = f"manifest.toml [sources.{name}]"
+    if not SOURCE_NAME.fullmatch(name):
+        raise SystemExit(f"{where}: a source name is lower case letters, digits and _")
+    if not isinstance(table, dict):
+        raise SystemExit(f"{where} must be a table")
+    _no_unknown_keys(table, SOURCE_KEYS, where)
+    env, description = table.get("env"), table.get("description")
+    if not isinstance(env, str) or not ENV_NAME.fullmatch(env):
+        raise SystemExit(f"{where}: env must be a variable name like AMIGA_FOREVER_DIR")
+    if not isinstance(description, str) or not description.strip():
+        raise SystemExit(f"{where}: description must say what folder the variable names")
+    return Source(name, env, description)
+
+
+def _item(table: object, sources: dict[str, Source]) -> Item:
+    if not isinstance(table, dict):
+        raise SystemExit("manifest.toml: each [[item]] must be a table")
+    where = f"manifest.toml [[item]] {table.get('dest', '(no dest)')}"
+    _no_unknown_keys(table, ITEM_KEYS, where)
+    missing = sorted(ITEM_REQUIRED - table.keys())
+    if missing:
+        raise SystemExit(f"{where} has no {', '.join(missing)}")
+    if table["source"] not in sources:
+        raise SystemExit(f"{where}: no source named {table['source']} in [sources]")
+    origin = Path(table["origin"])
+    if origin.is_absolute() or os.path.normpath(origin).startswith(".."):
+        raise SystemExit(f"{where}: origin must be relative to its source folder")
+    if not isinstance(table.get("optional", False), bool):
+        raise SystemExit(f"{where}: optional is true or false")
+    return Item(
+        dest=check_dest(table["dest"]),
+        source=table["source"],
+        origin=origin.as_posix(),
+        licence=table["licence"],
+        optional=table.get("optional", False),
+    )
+
+
+def _no_unknown_keys(table: dict, allowed: set[str], where: str) -> None:
+    unknown = sorted(table.keys() - allowed)
+    if unknown:
+        raise SystemExit(
+            f"{where}: unknown key {', '.join(unknown)} (allowed: {', '.join(sorted(allowed))})"
+        )
+
+
+def _matches_lock(dest: Path, expected: dict | None) -> bool:
+    return bool(expected) and dest.exists() and describe(dest)["sha256"] == expected.get("sha256")
+
+
+def _require_sources(
+    manifest: Manifest, pending: list[Item], folders: Mapping[str, Path | None]
+) -> None:
+    """Refuse to start when a required item still to copy has no usable source."""
+    problems = {}
+    for item in pending:
+        source = manifest.sources[item.source]
+        folder = folders.get(item.source)
+        if item.optional or (folder is not None and folder.is_dir()):
+            continue
+        problems[source.name] = (
+            f"{source.env} is not set"
+            if folder is None
+            else f"{source.env} is {folder}, which is not a folder"
+        )
+    if problems:
+        lines = "".join(f"\n  {name}: {why}" for name, why in problems.items())
+        raise SystemExit(
+            f"Media still to copy needs these sources:{lines}\n"
+            "Set each variable in .env (.env.example lists them) or in the environment."
+        )
+
+
+def _copy_item(
+    item: Item,
+    source: Source,
+    folders: Mapping[str, Path | None],
+    media_dir: Path,
+    lock: dict,
+) -> dict | None:
+    """Copy one item into media/ and return its description; None when an optional item is
+    skipped."""
+    folder = folders.get(item.source)
+    if folder is None or not folder.is_dir():
+        print(f"skipped {item.dest} (optional; {source.env} is not set to a folder)")
+        return None
+    origin = folder / item.origin
+    if not origin.exists():
+        if item.optional:
+            print(f"skipped {item.dest} (optional; not found in {item.source})")
+            return None
+        raise SystemExit(f"Missing in origin: {item.origin} (source {item.source}, {source.env})")
+    dest = media_dir / item.dest
+    partial = _copy_beside(origin, dest)
+    found = describe(partial)
+    expected = lock.get(item.dest)
+    if expected and found["sha256"] != expected.get("sha256"):
+        _remove(partial)
+        raise SystemExit(
+            f"{item.origin} in source {item.source} ({source.env}) does not match the checksum "
+            f"locked for {item.dest}.\nA different edition or dump of the same file is the "
+            "likely cause. Nothing was copied."
+        )
+    if dest.is_dir():
+        shutil.rmtree(dest)
+    partial.replace(dest)
+    return found
+
+
+def _document_variable(example: Path, source: Source, before: Manifest) -> None:
+    if not example.exists():
+        entries = [(s.env, s.description) for s in [*before.sources.values(), source]]
+        example.write_text(dotenv.render_example(entries))
+    elif not re.search(rf"^{source.env}=", example.read_text(), re.MULTILINE):
+        with example.open("a") as f:
+            f.write(dotenv.example_entry(source.env, source.description))
+
+
+def _toml_string(value: str) -> str:
+    # A JSON string is a valid TOML basic string.
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _write_text(path: Path, text: str) -> None:
+    partial = path.with_name(f".{path.name}.partial")
+    partial.write_text(text)
+    partial.replace(path)
 
 
 def _copy_beside(source: Path, dest: Path) -> Path:

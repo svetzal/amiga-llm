@@ -1,8 +1,8 @@
 """Give Amiberry a private home directory inside the project.
 
 Amiberry reads its settings from ~/Library/Application Support/Amiberry
-(macOS) and stores content under a base path named there. On this Mac that
-global file points into OneDrive. Running the emulator with HOME set to
+(macOS) and stores content under a base path named there. A personal setup
+can point that global file anywhere. Running the emulator with HOME set to
 runs/home/ moves every one of those paths into the project, so a run never
 reads or writes anything outside it. The marker-file portable mode is not an
 option on macOS: the system refuses writes inside the app bundle.
@@ -13,23 +13,26 @@ import platform
 import subprocess
 from pathlib import Path
 
-from . import MEDIA_DIR, ROOT, amiberry
-
-HOME = ROOT / "runs" / "home"
+from . import amiberry, project
 
 
-def settings_dir(home: Path = HOME) -> Path:
+def home_dir() -> Path:
+    return project.runs_dir() / "home"
+
+
+def settings_dir(home: Path) -> Path:
     if platform.system() == "Darwin":
         return home / "Library" / "Application Support" / "Amiberry"
     return home / ".config" / "amiberry"
 
 
-def content_dir(home: Path = HOME) -> Path:
+def content_dir(home: Path) -> Path:
     return home / "Amiberry"
 
 
-def render_conf(home: Path = HOME, media: Path = MEDIA_DIR) -> str:
+def render_conf(home: Path, media: Path | None = None) -> str:
     """The path settings this project owns. Amiberry fills in the rest."""
+    media = media or project.media_dir()
     content = content_dir(home)
     return (
         f"base_content_path={content}/\n"
@@ -62,24 +65,26 @@ def merge_conf(existing: str, owned: str) -> str:
     return "\n".join(merged) + "\n"
 
 
-def prepare(home: Path = HOME) -> Path:
+def prepare(home: Path | None = None, media: Path | None = None) -> Path:
+    home = home or home_dir()
     conf = settings_dir(home) / "amiberry.conf"
     conf.parent.mkdir(parents=True, exist_ok=True)
     content_dir(home).mkdir(parents=True, exist_ok=True)
     existing = conf.read_text() if conf.exists() else ""
-    wanted = merge_conf(existing, render_conf(home))
+    wanted = merge_conf(existing, render_conf(home, media))
     if wanted != existing:
         conf.write_text(wanted)
     return conf
 
 
-def environment(home: Path = HOME) -> dict[str, str]:
+def environment(home: Path | None = None) -> dict[str, str]:
     env = dict(os.environ)
-    env["HOME"] = str(home)
+    env["HOME"] = str(home or home_dir())
     return env
 
 
-def run(args: list[str], home: Path = HOME) -> int:
+def run(args: list[str], home: Path | None = None) -> int:
+    home = home or home_dir()
     binary = amiberry.installed_binary()
     prepare(home)
     return subprocess.run([str(binary), *args], env=environment(home), check=False).returncode

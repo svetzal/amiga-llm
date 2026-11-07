@@ -24,7 +24,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import TOOLS_DIR
+from . import project
 
 BASE_URL = "http://phoenix.owl.de/tags/"
 USER_AGENT = "amiga-llm-tools"
@@ -48,7 +48,7 @@ class Source:
 
     @property
     def tool_dir(self) -> Path:
-        return TOOLS_DIR / self.name
+        return project.tools_dir() / self.name
 
 
 VASM = Source(
@@ -118,7 +118,7 @@ def binary(product: str) -> Path:
         if product in source.products:
             path = source.tool_dir / "current" / product
             if not path.exists():
-                raise SystemExit(f"{product} is not installed; run `make toolchain`")
+                raise SystemExit(f"{product} is not installed; run `amiga-env toolchain`")
             return path
     raise SystemExit(f"{product} is not part of the toolchain")
 

@@ -1,0 +1,36 @@
+# Licensed Amiga media this project needs, and where each item comes from.
+#
+# The files themselves are copyrighted and live only in this directory, which
+# git ignores except for this manifest and manifest.lock.json. `amiga-env
+# media` copies them in once from your own copies; after that nothing in the
+# project reads the sources again. `amiga-env media-verify` checks every file
+# against the checksums recorded in manifest.lock.json.
+#
+# [sources.NAME] is a distribution or folder you own a copy of. Where it is on
+# your disk is not written here, so this file means the same on every machine:
+#   env         the environment variable that names the folder, set in .env
+#               at the project root (git ignores .env; .env.example lists
+#               every variable). Real environment variables override .env.
+#   description what the folder is, so a reader can find their own copy
+#
+# [[item]] is one file or folder to copy:
+#   source      a name from [sources]
+#   origin      path relative to that source's folder
+#   dest        path relative to media/
+#   licence     what entitles this copy
+#   optional    true when the project works without it: `amiga-env media`
+#               skips it if its source is not set
+#
+# Add entries with `amiga-env media source` and `amiga-env media add`.
+
+[sources.amiga_forever]
+env = "AMIGA_FOREVER_DIR"
+description = "The 'Amiga Files' folder of an Amiga Forever installation (contains Shared/rom and Shared/adf)"
+
+[sources.amigaos32]
+env = "AMIGAOS32_DIR"
+description = "The root of the AmigaOS 3.2 CD or download (contains ROM/, ADF/, NDK3.2/)"
+
+[sources.collection]
+env = "AMIGA_COLLECTION_DIR"
+description = "A personal folder of other material (manuals, configurations)"

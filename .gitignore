@@ -17,3 +17,6 @@ media/*
 build/
 runs/
 .coverage
+
+# Where each media source is on this machine; .env.example is tracked
+.env

@@ -1,0 +1,10 @@
+# amiga-env: licensed media stays local; only the manifest and its lock are tracked
+media/*
+!media/manifest.toml
+!media/manifest.lock.json
+# amiga-env: where your media sources are on this machine
+.env
+# amiga-env: downloaded tools, emulator state and build products
+.tools/
+runs/
+build/

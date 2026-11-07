@@ -15,12 +15,10 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import TOOLS_DIR
+from . import project
 
 REPO = "BlitterStudio/amiberry"
 API = f"https://api.github.com/repos/{REPO}/releases"
-AMIBERRY_DIR = TOOLS_DIR / "amiberry"
-CURRENT = AMIBERRY_DIR / "current"
 USER_AGENT = "amiga-llm-tools"
 # platform.machine() spelling -> the spelling in Amiberry's AppImage names
 LINUX_ARCHES = {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}
@@ -85,19 +83,26 @@ def binary_path(version_dir: Path) -> Path:
     raise SystemExit(f"No Amiberry binary in {version_dir}")
 
 
+def amiberry_dir() -> Path:
+    return project.tools_dir() / "amiberry"
+
+
 def installed_version() -> str | None:
-    return CURRENT.resolve().name if CURRENT.exists() else None
+    current = amiberry_dir() / "current"
+    return current.resolve().name if current.exists() else None
 
 
 def installed_binary() -> Path:
-    if not CURRENT.exists():
-        raise SystemExit("Amiberry is not installed; run `make tools`")
-    return binary_path(CURRENT.resolve())
+    current = amiberry_dir() / "current"
+    if not current.exists():
+        raise SystemExit("Amiberry is not installed; run `amiga-env amiberry`")
+    return binary_path(current.resolve())
 
 
 def install(tag: str | None = None, force: bool = False) -> Path:
     release = fetch_release(tag)
-    target = AMIBERRY_DIR / release.version
+    base = amiberry_dir()
+    target = base / release.version
     if target.exists() and not force:
         _point_current(target)
         print(f"Amiberry {release.version} already installed at {target}")
@@ -114,8 +119,8 @@ def install(tag: str | None = None, force: bool = False) -> Path:
     if digest != sums[name]:
         raise SystemExit(f"Checksum mismatch for {name}: got {digest}, expected {sums[name]}")
 
-    AMIBERRY_DIR.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=AMIBERRY_DIR))
+    base.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=base))
     try:
         download = staging / name
         download.write_bytes(payload)
@@ -158,6 +163,7 @@ def _unpack_dmg(dmg: Path, dest: Path) -> None:
 
 
 def _point_current(target: Path) -> None:
-    if CURRENT.is_symlink() or CURRENT.exists():
-        CURRENT.unlink()
-    CURRENT.symlink_to(target.name)
+    current = target.parent / "current"
+    if current.is_symlink() or current.exists():
+        current.unlink()
+    current.symlink_to(target.name)

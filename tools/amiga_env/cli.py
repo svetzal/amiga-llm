@@ -1,11 +1,12 @@
-"""amiga-env: set up and check the amiga-llm environment."""
+"""amiga-env: set up, check and run an Amiga development environment in this project."""
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-from . import adf, amiberry, assemble, home, media, profile, toolchain
+from . import adf, amiberry, assemble, guard, home, init, media, profile, project, toolchain
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -13,11 +14,26 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["run"]:
         # Everything after `run` belongs to Amiberry, including its own flags.
         return home.run(argv[1:])
-    if argv[:1] and argv[0] in profile.MACHINES:
-        return home.run(boot_command(argv[0], argv[1:]))
+    parser, sub = build_parser()
+    machines = _machines(set(sub.choices))
+    if argv[:1] and argv[0] in machines:
+        return home.run(boot_command(machines[argv[0]], argv[1:]))
+    for name, machine in machines.items():
+        # Listed for --help only; machines are dispatched above, like `run`.
+        sub.add_parser(name, help=f"{machine.purpose}; or boot DISK.adf; more args go to Amiberry")
+    return dispatch(parser.parse_args(argv))
 
+
+def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]:
     parser = argparse.ArgumentParser(prog="amiga-env", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+
+    scaffold = sub.add_parser("init", help="make this directory an amiga-env project")
+    scaffold.add_argument(
+        "--force",
+        action="store_true",
+        help="rewrite amiga.toml, .env.example and the hello example; never media or .env",
+    )
 
     fetch = sub.add_parser("amiberry", help="install the latest (or a named) Amiberry release")
     fetch.add_argument("--tag", help="release tag, for example v8.5.0; default is latest")
@@ -25,11 +41,30 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("amiberry-path", help="print the path of the installed Amiberry binary")
 
-    migrate = sub.add_parser("media", help="copy licensed media in from the origin collection")
-    migrate.add_argument("--origin-root", type=Path, help="override origin_root in the manifest")
+    migrate = sub.add_parser("media", help="copy licensed media in from the sources in .env")
+    migrate.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        dest="source_overrides",
+        help="use PATH for source NAME this time, instead of its variable; repeatable",
+    )
+    edit = migrate.add_subparsers(dest="media_command")
+    item = edit.add_parser("add", help="add one item to media/manifest.toml")
+    item.add_argument("source", metavar="SOURCE", help="a source name from the manifest")
+    item.add_argument("origin", metavar="ORIGIN", help="path in that source, or absolute under it")
+    item.add_argument("dest", metavar="DEST", help="path under media/")
+    item.add_argument("--licence", required=True, help="what entitles this copy")
+    item.add_argument("--optional", action="store_true", help="the project works without it")
+    origin = edit.add_parser("source", help="add a named source to media/manifest.toml")
+    origin.add_argument("name", metavar="NAME", help="lower case letters, digits and _")
+    origin.add_argument("--env", required=True, help="the variable naming its folder")
+    origin.add_argument("--description", required=True, help="what folder the variable names")
 
     sub.add_parser("media-verify", help="check media/ against manifest.lock.json")
     sub.add_parser("doctor", help="report what is installed and what is missing")
+    sub.add_parser("guard", help="fail if git tracks licensed media or .env")
 
     build = sub.add_parser("toolchain", help="build the pinned vasm and vlink into .tools/")
     build.add_argument("--force", action="store_true", help="rebuild even if present")
@@ -54,61 +89,161 @@ def main(argv: list[str] | None = None) -> int:
     )
     boot.add_argument("source", type=Path, metavar="SOURCE.s")
 
-    # Listed for --help only; `run` is dispatched above, before argparse sees it.
+    # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
-    for name, machine in profile.MACHINES.items():
-        # Listed for --help only; machines are dispatched above, like `run`.
-        sub.add_parser(name, help=f"{machine.purpose}; or boot DISK.adf; more args go to Amiberry")
-
-    args = parser.parse_args(argv)
-    if args.command == "amiberry":
-        amiberry.install(args.tag, args.force)
-    elif args.command == "amiberry-path":
-        print(amiberry.installed_binary())
-    elif args.command == "media":
-        media.migrate(args.origin_root)
-    elif args.command == "media-verify":
-        return 0 if media.verify() else 1
-    elif args.command == "doctor":
-        return _doctor()
-    elif args.command == "toolchain":
-        toolchain.install_all(args.force)
-    elif args.command == "asm":
-        assemble.assemble(args.source, args.output or assemble.outputs(args.source)[0])
-    elif args.command == "adf":
-        adf.make_adf(args.image, args.files, args.startup, args.label)
-    elif args.command == "bootdisk":
-        assemble.bootdisk(args.source)
-    return 0
+    return parser, sub
 
 
-def boot_command(name: str, rest: list[str]) -> list[str]:
+def command_names() -> set[str]:
+    """Every amiga-env command; no machine may take one of these names."""
+    return set(build_parser()[1].choices)
+
+
+def dispatch(args: argparse.Namespace) -> int:
+    """Run a parsed command. A handler's int result is the exit status; anything else is 0."""
+    status = COMMANDS[args.command](args)
+    return status if type(status) is int else 0
+
+
+COMMANDS = {
+    "init": lambda args: init.init(Path.cwd(), args.force),
+    "amiberry": lambda args: amiberry.install(args.tag, args.force),
+    "amiberry-path": lambda args: print(amiberry.installed_binary()),
+    "media": lambda args: _media(args),
+    "media-verify": lambda args: 0 if media.verify() else 1,
+    "doctor": lambda args: _doctor(),
+    "guard": lambda args: guard.run(project.root()),
+    "toolchain": lambda args: toolchain.install_all(args.force),
+    "asm": lambda args: assemble.assemble(
+        args.source, args.output or assemble.outputs(args.source)[0]
+    ),
+    "adf": lambda args: adf.make_adf(args.image, args.files, args.startup, args.label),
+    "bootdisk": lambda args: assemble.bootdisk(args.source),
+}
+
+
+def parse_overrides(pairs: list[str]) -> dict[str, Path]:
+    """`--source NAME=PATH` values as a mapping."""
+    overrides = {}
+    for pair in pairs:
+        name, sep, path = pair.partition("=")
+        if not sep or not name or not path:
+            raise SystemExit(f"--source takes NAME=PATH, not {pair!r}")
+        overrides[name] = Path(path).expanduser()
+    return overrides
+
+
+def boot_command(machine: profile.Machine, rest: list[str], media_dir: Path | None = None):
     """Amiberry arguments for `amiga-env MACHINE [DISK.adf] [amiberry options]`."""
     if rest and not rest[0].startswith("-"):
-        return profile.machine_args(name, Path(rest[0]).resolve()) + rest[1:]
-    return profile.machine_args(name) + rest
+        return profile.machine_args(machine, Path(rest[0]).resolve(), media_dir) + rest[1:]
+    return profile.machine_args(machine, media=media_dir) + rest
+
+
+def _machines(commands: set[str]) -> dict[str, profile.Machine]:
+    """The machines of the project here, or none when there is no project."""
+    if project.current_root() is None:
+        return {}
+    return profile.load_machines(reserved=commands)
+
+
+def _media(args: argparse.Namespace) -> None:
+    if args.media_command == "add":
+        media.add(args.source, args.origin, args.dest, args.licence, args.optional)
+    elif args.media_command == "source":
+        media.add_source(args.name, args.env, args.description)
+    else:
+        overrides = parse_overrides(args.source_overrides)
+        known = media.load_manifest().sources
+        unknown = sorted(overrides.keys() - known.keys())
+        if unknown:
+            raise SystemExit(f"--source names no source in the manifest: {', '.join(unknown)}")
+        media.migrate(overrides)
 
 
 def _doctor() -> int:
-    ok = True
-    version = amiberry.installed_version()
-    if version:
-        print(f"amiberry  {version}{_latest_note(version)}")
-        out = subprocess.run(
-            [str(amiberry.installed_binary()), "--help"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        banner = (out.stdout or out.stderr).splitlines()
-        print(f"          {banner[0] if banner else '(no --help output)'}")
-        ok = _paths_stay_inside_project() and ok
-    else:
-        print("amiberry  not installed; run `make tools`")
-        ok = False
+    root = project.root()
+    print(f"project   {root}")
+    ok = _amiberry_report()
     ok = _toolchain_report() and ok
-    ok = media.verify() and ok
+    ok = _media_report(root) and ok
+    ok = _machines_report() and ok
     return 0 if ok else 1
+
+
+def _amiberry_report() -> bool:
+    version = amiberry.installed_version()
+    if not version:
+        print("amiberry  not installed; run `amiga-env amiberry`")
+        return False
+    print(f"amiberry  {version}{_latest_note(version)}")
+    out = subprocess.run(
+        [str(amiberry.installed_binary()), "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    banner = (out.stdout or out.stderr).splitlines()
+    print(f"          {banner[0] if banner else '(no --help output)'}")
+    return _paths_stay_inside_project()
+
+
+def _media_report(root: Path) -> bool:
+    try:
+        manifest = media.load_manifest()
+    except SystemExit as error:
+        print(f"media     {error}")
+        return False
+    values = media.project_values(root, os.environ)
+    folders = media.source_folders(manifest, values)
+    for line in source_lines(manifest, folders):
+        print(line)
+    return media.verify()
+
+
+def source_lines(manifest: media.Manifest, folders: dict[str, Path | None]) -> list[str]:
+    """One doctor line per source: its variable, and whether it names a folder."""
+    if not manifest.sources:
+        return ["sources   none in media/manifest.toml"]
+    lines = []
+    for index, (name, source) in enumerate(manifest.sources.items()):
+        folder = folders.get(name)
+        if folder is None:
+            state = f"{source.env} is not set (see .env.example)"
+        else:
+            found = "found" if folder.is_dir() else "NOT A FOLDER"
+            state = f"{source.env} = {folder} ({found})"
+        lines.append(f"{'sources' if index == 0 else '':<9} {name:<14} {state}")
+    return lines
+
+
+def _machines_report() -> bool:
+    try:
+        machines = profile.load_machines(reserved=command_names())
+    except SystemExit as error:
+        print(f"machines  {error}")
+        return False
+    if not machines:
+        print(f"machines  none defined; add a [machines.NAME] table to {project.CONFIG}")
+        return True
+    print(f"machines  {', '.join(machines)}")
+    lines, ok = machine_media_lines(machines, project.media_dir())
+    for line in lines:
+        print(line)
+    return ok
+
+
+def machine_media_lines(
+    machines: dict[str, profile.Machine], media_dir: Path
+) -> tuple[list[str], bool]:
+    """Whether each machine's Kickstart and floppy are in media/."""
+    lines, ok = [], True
+    for name, machine in machines.items():
+        for role, path in profile.media_paths(machine).items():
+            present = (media_dir / path).is_file()
+            ok = ok and present
+            lines.append(f"{name:<9} {role:<9} {path} {'present' if present else 'MISSING'}")
+    return lines, ok
 
 
 def _toolchain_report() -> bool:
@@ -121,7 +256,7 @@ def _toolchain_report() -> bool:
     for source in toolchain.SOURCES:
         version = toolchain.installed_version(source)
         if version is None:
-            print(f"{source.name:<9} not installed; run `make toolchain`")
+            print(f"{source.name:<9} not installed; run `amiga-env toolchain`")
             ok = False
             continue
         note = "" if version == source.version else f" (pinned is {source.version})"
@@ -138,7 +273,7 @@ def _latest_note(version: str) -> str:
         latest = amiberry.fetch_release().version
     except OSError as error:  # offline, DNS, GitHub rate limit
         return f" (could not check for a newer release: {error})"
-    return "" if latest == version else f" (latest is {latest}; run `make tools`)"
+    return "" if latest == version else f" (latest is {latest}; run `amiga-env amiberry`)"
 
 
 # Compiled-in fallbacks Amiberry reports but does not use when its bundled
@@ -167,7 +302,7 @@ def _paths_stay_inside_project() -> bool:
         capture_output=True,
         text=True,
     )
-    outside = paths_outside(out.stdout, home.ROOT)
+    outside = paths_outside(out.stdout, project.root())
     if outside:
         print("paths     OUTSIDE the project:")
         for line in outside:

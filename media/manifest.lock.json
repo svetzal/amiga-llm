@@ -3,378 +3,437 @@
     "kind": "file",
     "sha256": "1035a9a317fbbf0056848a25397f245967d7a8f1bc5079b02a018f410899bdf0",
     "size": 901120,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-120-workbench.adf",
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-120-workbench.adf",
     "licence": "Amiga Forever 10 Plus"
   },
   "adf/1.3/extras.adf": {
     "kind": "file",
     "sha256": "c1fc772a25fe7fdb782704fc14349c513d28a56aa6875b8e089de5b86dcef425",
     "size": 901120,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-134-extras.adf",
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-134-extras.adf",
     "licence": "Amiga Forever 10 Plus"
   },
   "adf/1.3/workbench.adf": {
     "kind": "file",
     "sha256": "f732c9ab42516ae721784e1893a35d9afed1fe15fd801aa16f4bc1663ea44758",
     "size": 901120,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-134-workbench.adf",
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-134-workbench.adf",
     "licence": "Amiga Forever 10 Plus"
   },
   "adf/2.04/workbench.adf": {
     "kind": "file",
     "sha256": "9023055f9fdc948f2f46fddd49776303cc9c1a997e86cbe927ec60d8c6ffe9ef",
     "size": 901120,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-204-workbench.adf",
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-204-workbench.adf",
     "licence": "Amiga Forever 10 Plus"
   },
   "adf/3.1/workbench.adf": {
     "kind": "file",
     "sha256": "24dbf267a7f7b01757025fa682a173cef4092a915eff36a5844b264c13fc729c",
     "size": 901120,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-310-workbench.adf",
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-310-workbench.adf",
     "licence": "Amiga Forever 10 Plus"
   },
   "adf/3.2/Classes3.2.adf": {
     "kind": "file",
     "sha256": "4940c19490fa070ccd246be6a3fffa1031d8e919a3e2f8e75992706211fb6f0f",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/Classes3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/Classes3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/Extras3.2.adf": {
     "kind": "file",
     "sha256": "aa0b7c54fadffab7cc26d4d530d61482428810468f8a72a523ed8d0a4addf62c",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/Extras3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/Extras3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/Fonts.adf": {
     "kind": "file",
     "sha256": "61a37a598c9d347825825bc975f7c044634f85c34a8ebb1ffb359d015049e99c",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/Fonts.adf",
+    "source": "amigaos32",
+    "origin": "ADF/Fonts.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/HDSetup3.2.adf": {
     "kind": "file",
     "sha256": "ed8bde7f689f32cd8eb2a47287c6889faf259083d144dba5d1eb5320d5cd35d9",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/HDSetup3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/HDSetup3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/Install3.2.adf": {
     "kind": "file",
     "sha256": "db9ee2f510fcd6108e41c976117f7538a7900ebdee535e4dfc4cb05e5413f40e",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/Install3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/Install3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/Locale-EN.adf": {
     "kind": "file",
     "sha256": "021008f5d217e8b0157676905bc694ccd77ed3ecce659eb9b382092fe938e2e0",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/Locale-EN.adf",
+    "source": "amigaos32",
+    "origin": "ADF/Locale-EN.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/Locale.adf": {
     "kind": "file",
     "sha256": "602c9a93da233950c39b060af8d12d3f0015f96faa49f8b0ff7a45bd86bfc804",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/Locale.adf",
+    "source": "amigaos32",
+    "origin": "ADF/Locale.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/MMULibs.adf": {
     "kind": "file",
     "sha256": "9bc21a026a9e2c871efb6438f30c91d832ea9a4d265c09c2b229ad0040a679b6",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/MMULibs.adf",
+    "source": "amigaos32",
+    "origin": "ADF/MMULibs.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/ModulesA1200_3.2.adf": {
     "kind": "file",
     "sha256": "73ef5b5ac95de5aa827e6d0ff6b5568308153097a2e2205654ade6bc3bbb2dad",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/ModulesA1200_3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/ModulesA1200_3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/ModulesA3000_3.2.adf": {
     "kind": "file",
     "sha256": "e4f8fd853836ce404fd4d52ca24d30c61952d60ca94778f0bf0332b03be4dc82",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/ModulesA3000_3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/ModulesA3000_3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/ModulesA500_3.2.adf": {
     "kind": "file",
     "sha256": "f2ce5ebb036e84fdae75d65633609bcf048d22ef6013037990cff85aed8dd1a4",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/ModulesA500_3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/ModulesA500_3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/Storage3.2.adf": {
     "kind": "file",
     "sha256": "d6bb6c0718487abbbc94a4120ce0fc97f71fb17ef6cc2df9a1f5778337439af3",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/Storage3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/Storage3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/Workbench3.2.adf": {
     "kind": "file",
     "sha256": "e44651f4805bc6e6f227048ba8cc55f152d96895316477f892a3603764d6e3e5",
     "size": 901120,
-    "origin": "AmigaOS3.2CD/ADF/Workbench3.2.adf",
+    "source": "amigaos32",
+    "origin": "ADF/Workbench3.2.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "docs/68000UM.pdf": {
     "kind": "file",
     "sha256": "f1f154e2070318e09b103f0f6641d3d1f3c644953c702666b43ba9435be8f387",
     "size": 1030146,
+    "source": "collection",
     "origin": "Documentation/68000UM.PDF",
-    "licence": "Motorola user manual, personal copy"
+    "licence": "Motorola user manual, personal copy",
+    "optional": true
   },
   "docs/A4000-A3000-Hardware-Developer-Notes.pdf": {
     "kind": "file",
     "sha256": "b9db451f9a0d11aa5693ee6cbebb1351d5633dd76ba15367c4f0ff11eca9da19",
     "size": 8778738,
+    "source": "collection",
     "origin": "Documentation/Commodore_A4000-A3000_Hardware_Developer_Notes_v1.11_ocr.pdf",
-    "licence": "Commodore manual, personal copy"
+    "licence": "Commodore manual, personal copy",
+    "optional": true
   },
   "docs/A500-A2000-Technical-Reference-Manual.pdf": {
     "kind": "file",
     "sha256": "9c42d0a13232a3c4d09691a391a1bf8ff03652cc8e1ae02a0b4021e04c8276e7",
     "size": 20711278,
+    "source": "collection",
     "origin": "Documentation/Commodore_A500-A2000_Technical_Reference_Manual.pdf",
-    "licence": "Commodore manual, personal copy"
+    "licence": "Commodore manual, personal copy",
+    "optional": true
   },
   "docs/M68000PRM.pdf": {
     "kind": "file",
     "sha256": "06e4864b78da0e815054cead9326b7ec9914661f240fd39a455f2061ff47c4e8",
     "size": 4725896,
+    "source": "collection",
     "origin": "Documentation/M68000PRM.pdf",
-    "licence": "Motorola reference manual, personal copy"
+    "licence": "Motorola reference manual, personal copy",
+    "optional": true
   },
   "ndk/3.2": {
     "kind": "tree",
     "sha256": "e7e03d598e8019fe47633632c3f60d83acf7c0b225948e97812b54c55f9f5c03",
     "files": 2125,
-    "origin": "AmigaOS3.2CD/NDK3.2",
+    "source": "amigaos32",
+    "origin": "NDK3.2",
     "licence": "AmigaOS 3.2 CD-ROM (NDK 3.2)"
   },
   "reference/stock-a3000.uae": {
     "kind": "file",
     "sha256": "d0b642ab7721c4acc05d0f2d79d265847366ea8482e94c96416fff0469908134",
     "size": 4554,
+    "source": "collection",
     "origin": "Amiberry/Configurations/Stock A3000.uae",
-    "licence": "Stacey's own configuration"
+    "licence": "Stacey's own configuration",
+    "optional": true
   },
   "rom/3.2/kick-a1200.rom": {
     "kind": "file",
     "sha256": "ffcf6993c1a2df032fee1125036e2192cf29f70add547a50fc2cfff8f4fb9f7a",
     "size": 524288,
-    "origin": "AmigaOS3.2CD/ROM/kicka1200.rom",
+    "source": "amigaos32",
+    "origin": "ROM/kicka1200.rom",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "rom/3.2/kick-a3000.rom": {
     "kind": "file",
     "sha256": "f08f9c905f23a0a53a1cd69f72ab04e0cc48ed83bee2191ad639616e8776967f",
     "size": 524288,
-    "origin": "AmigaOS3.2CD/ROM/kicka3000.rom",
+    "source": "amigaos32",
+    "origin": "ROM/kicka3000.rom",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "rom/3.2/kick-a4000.rom": {
     "kind": "file",
     "sha256": "151f1984fa567a183d761378af8050e35cd8694b169cff2bcb49dd539eb0f86d",
     "size": 524288,
-    "origin": "AmigaOS3.2CD/ROM/kicka4000.rom",
+    "source": "amigaos32",
+    "origin": "ROM/kicka4000.rom",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "rom/3.2/kick-a500-a600-a2000.rom": {
     "kind": "file",
     "sha256": "0ea0943d93a6fdb56ab5da4298beee8463f1bb11d3721ac06e621a2ded20edb1",
     "size": 524288,
-    "origin": "AmigaOS3.2CD/ROM/kickCDTVa1000a500a2000a600.rom",
+    "source": "amigaos32",
+    "origin": "ROM/kickCDTVa1000a500a2000a600.rom",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "rom/forever/amiga-os-120.rom": {
     "kind": "file",
     "sha256": "781a36914b49642ab14b5a6f1e7263c7fc2dcbaba3c1fc141a163fd5299b976d",
     "size": 262155,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-120.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-120.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-130-a3000.rom": {
     "kind": "file",
     "sha256": "559c2b37e2cc2d6b6ca4499543f6637c362c9989b1cc5572cf52976b956b1901",
     "size": 262155,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-a3000.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-130-a3000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-130-a570-ext.rom": {
     "kind": "file",
     "sha256": "cb7d4a755f562bc8c18b22a3b5ef860bc40aa319d347565fb90daa2d71ccae29",
     "size": 262155,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-a570-ext.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-130-a570-ext.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-130-cdtv-ext.rom": {
     "kind": "file",
     "sha256": "2190edbba29e73855e5bf61f1bcaab0914f9dd9b8f4e5ca07f38c8a89e90dcf2",
     "size": 262155,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-cdtv-ext.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-130-cdtv-ext.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-130.rom": {
     "kind": "file",
     "sha256": "caa4910942b8d558c9ae2284405af81db3752535192cc25f7939765c3ea2d5e0",
     "size": 262155,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-130.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-140-a3000.rom": {
     "kind": "file",
     "sha256": "69f13d96a8d47c51644e4302057a2ad54bf6e802b320b6dc2d57d1917ad3c272",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-140-a3000.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-140-a3000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-204-a3000.rom": {
     "kind": "file",
     "sha256": "3cd65ab48bad3238e63f4da4df59fac187ecbbc45b48fdfd78d360133113ddaf",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-204-a3000.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-204-a3000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-204.rom": {
     "kind": "file",
     "sha256": "e1eb7c0a322358bc454166bcef8ea04808791596fa6280df70e531dab2a5b3f1",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-204.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-204.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-205-a600.rom": {
     "kind": "file",
     "sha256": "04a535dba6264db5fc8da5061397ba1506750a4126d41dccc6c3f2b6ba24ca69",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-205-a600.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-205-a600.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-230-cdtv-ext.rom": {
     "kind": "file",
     "sha256": "501825f9749e750c495d042136722203c1f34329c601f5c8986f8d3682f47873",
     "size": 262155,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-230-cdtv-ext.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-230-cdtv-ext.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-300-a1200.rom": {
     "kind": "file",
     "sha256": "d9ac60f1475aa1af5e6ccc522aa49a4555f7e53997cf4350fcae5b07d39bfbb5",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-300-a1200.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-300-a1200.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-300-a4000.rom": {
     "kind": "file",
     "sha256": "f55e0b52711ac35d6a8bc238d2569e57a0463ba0a160f8b5b2bfb65b6f6f8e08",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-300-a4000.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-300-a4000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-310-a1200.rom": {
     "kind": "file",
     "sha256": "541f7467bce4f4b07a6eb5250d4586a4679c2da51ad30b48ba93421a901b1bb0",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a1200.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-310-a1200.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-310-a3000.rom": {
     "kind": "file",
     "sha256": "9d55788d8dc7fa869d1fe49d46e4890ffc1b2370630e243ca190db0910f46712",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a3000.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-310-a3000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-310-a4000.rom": {
     "kind": "file",
     "sha256": "9d21022ad848e36d89e28041ee71ec8620f2c198010fe0c24403490184e48ce7",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a4000.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-310-a4000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-310-a4000t.rom": {
     "kind": "file",
     "sha256": "a5695544dcc273a38ce3381617046eaacceef6e66a10962204abf080546be248",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a4000t.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-310-a4000t.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-310-a600.rom": {
     "kind": "file",
     "sha256": "03ec7583249c686a3f63b5b92634b12e14ce72fc27b0066a8c3cca57f869443e",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a600.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-310-a600.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-310-cd32-ext.rom": {
     "kind": "file",
     "sha256": "c06b29f3bb8fd4ba63fb3fcecbb5bda1246f4bb66692b45b26fd8f6848739077",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-cd32-ext.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-310-cd32-ext.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-310-cd32.rom": {
     "kind": "file",
     "sha256": "cf79b896d88a85e535eb220fd82466199bddf36ffa88f865483376d939ce9f11",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-cd32.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-310-cd32.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-320-walker.rom": {
     "kind": "file",
     "sha256": "615138595bb1a70a34bd5b3efb93726d0c7fa77ff14355e981f53ae18d52c6a6",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-320-walker.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-320-walker.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-3x0-a1200.rom": {
     "kind": "file",
     "sha256": "c6988e48b770fa7d025563dea5f927add338cf79f68a9a62083c304375a06a03",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a1200.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-3x0-a1200.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-3x0-a3000.rom": {
     "kind": "file",
     "sha256": "9ceb473129693d3cb9a7e87f0f0a47d3403769b0b5732862d5f77d5b97493272",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a3000.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-3x0-a3000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-3x0-a4000.rom": {
     "kind": "file",
     "sha256": "1756f729ad5e7c311a85f105dcd1848c19950a461b0d868f41b5a22bff19d51e",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a4000.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-3x0-a4000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-3x0-a4000t.rom": {
     "kind": "file",
     "sha256": "89513d28fa4e084711982122c65fa9984d732ce004e0fb7efef5d973aea15ad0",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a4000t.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-3x0-a4000t.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-3x0-a600.rom": {
     "kind": "file",
     "sha256": "b854d22bfc3ed23248a043ce2c4741a240b9aad70af87d267b7b708c0a8eebda",
     "size": 524299,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a600.rom",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/amiga-os-3x0-a600.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/rom.key": {
     "kind": "file",
     "sha256": "f3b3b35593fef9a677225f559f8155e2b5d97b5bbfb2ccf24ee93738124d9a71",
     "size": 1426,
-    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/rom.key",
+    "source": "amiga_forever",
+    "origin": "Shared/rom/rom.key",
     "licence": "Amiga Forever 10 Plus"
   }
 }

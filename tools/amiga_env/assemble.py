@@ -9,9 +9,8 @@ the 2.0 and later loader reads.
 import subprocess
 from pathlib import Path
 
-from . import ROOT, adf, toolchain
+from . import adf, project, toolchain
 
-BUILD_DIR = ROOT / "build"
 VASM = "vasmm68k_mot"
 
 
@@ -29,8 +28,9 @@ def vasm_args(vasm: Path, source: Path, out: Path) -> list[str]:
     ]
 
 
-def outputs(source: Path, build_dir: Path = BUILD_DIR) -> tuple[Path, Path]:
+def outputs(source: Path, build_dir: Path | None = None) -> tuple[Path, Path]:
     """`hello.s` -> `build/hello` and `build/hello.adf`."""
+    build_dir = build_dir or project.build_dir()
     return build_dir / source.stem, build_dir / f"{source.stem}.adf"
 
 
@@ -43,7 +43,7 @@ def assemble(source: Path, out: Path) -> Path:
     return out
 
 
-def bootdisk(source: Path, build_dir: Path = BUILD_DIR) -> Path:
+def bootdisk(source: Path, build_dir: Path | None = None) -> Path:
     """Assemble `source` and put it on a floppy whose startup-sequence runs it."""
     program, image = outputs(source, build_dir)
     assemble(source, program)
