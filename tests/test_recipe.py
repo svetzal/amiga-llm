@@ -10,6 +10,7 @@ from amiga_env.recipe import (
     fingerprints,
     media_refs,
     parse,
+    personal_paths,
     plan,
 )
 from conftest import REPO
@@ -168,11 +169,52 @@ class TestTheA3000DevRecipe:
         files = [layer for layer in self.RECIPE.layers if isinstance(layer, File)]
         return next(f.text for f in files if f.path == "S/User-Startup")
 
-    def test_it_starts_from_the_3_2_workbench_floppy(self):
-        assert self.RECIPE.layers[0] == Unpack(MediaRef("adf/3.2/Workbench3.2.adf"), "", ())
+    def _amiga(self, name: str) -> Amiga:
+        return next(a for a in self.RECIPE.layers if isinstance(a, Amiga) and a.name == name)
+
+    def _copies_from(self, media: str) -> dict[str, str]:
+        found = {}
+        for layer in self.RECIPE.layers:
+            if isinstance(layer, Copy) and layer.source.media == media:
+                found |= dict(layer.files)
+        return found
+
+    def test_it_copies_the_workbench_disk_as_the_installer_does(self):
+        wanted = Unpack(MediaRef("adf/3.2/Workbench3.2.adf"), "", ("Disk.info", "Locale"))
+
+        assert wanted in self.RECIPE.layers
+
+    def test_the_hard_disk_startup_sequence_replaces_the_floppys(self):
+        update = self._copies_from("adf/3.2/Install3.2.adf")
+
+        assert update["Update/Startup-HardDrive"] == "S/Startup-Sequence"
+
+    def test_the_english_catalogs_and_help_are_decompressed(self):
+        (locale,) = [
+            layer
+            for layer in self.RECIPE.layers
+            if isinstance(layer, Copy) and layer.source.media == "adf/3.2/Locale-EN.adf"
+        ]
+
+        assert locale.decompress
+        assert dict(locale.files)["Help/english/Sys"] == "Locale/Help/english/Sys"
+
+    def test_every_cpu_library_and_the_default_mmu_configuration_are_installed(self):
+        mmulibs = Unpack(MediaRef("adf/3.2/MMULibs.adf"), "", ("Configs", "Locale"))
+        configs = self._copies_from("adf/3.2/MMULibs.adf")
+
+        assert mmulibs in self.RECIPE.layers
+        assert configs["Configs/MMU-Configuration"] == "Prefs/Env-Archive/MMU-Configuration"
+
+    def test_the_machine_steps_run_after_the_cpu_libraries_the_first_boot_needs(self):
+        layers = list(self.RECIPE.layers)
+        mmulibs = next(i for i, x in enumerate(layers) if "MMULibs" in str(x))
+
+        assert layers.index(self._amiga("finish-install")) > mmulibs
+        assert (REPO / self._amiga("finish-install").script).is_file()
 
     def test_sasc_installs_on_the_a3000_from_its_first_five_disks(self):
-        (sasc,) = [layer for layer in self.RECIPE.layers if isinstance(layer, Amiga)]
+        sasc = self._amiga("sasc")
 
         assert self.RECIPE.machine == "a3000"
         assert sasc.script == "systems/a3000-dev/install-sasc"
@@ -180,9 +222,7 @@ class TestTheA3000DevRecipe:
         assert (REPO / sasc.script).is_file()
 
     def test_the_slow_sasc_layer_comes_before_the_developer_files(self):
-        kinds = [type(layer).__name__ for layer in self.RECIPE.layers]
-
-        assert kinds.index("Amiga") < min(
+        assert self.RECIPE.layers.index(self._amiga("sasc")) < min(
             i for i, layer in enumerate(self.RECIPE.layers) if "dev/ndu" in str(layer)
         )
 
@@ -207,7 +247,11 @@ class TestTheA3000DevRecipe:
         assert "      assign add LIBS: MUI:Libs\n" in text
         assert text.rstrip().endswith(";END MUI")
 
-    def test_the_mui_keyfile_goes_to_s(self):
-        copies = [layer for layer in self.RECIPE.layers if isinstance(layer, Copy)]
+    def test_user_startup_adds_to_the_one_the_extras_disk_installs(self):
+        files = [layer for layer in self.RECIPE.layers if isinstance(layer, File)]
 
-        assert Copy(MediaRef("mui/mui.key"), (("mui.key", "S/mui.key"),)) in copies
+        assert all(f.append for f in files if f.path == "S/User-Startup")
+
+    def test_the_mui_keyfile_goes_to_s_and_is_personal(self):
+        assert self._copies_from("mui/mui.key") == {"mui.key": "S/mui.key"}
+        assert personal_paths(self.RECIPE) == ("S/mui.key",)

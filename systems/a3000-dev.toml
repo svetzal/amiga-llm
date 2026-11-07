@@ -1,58 +1,151 @@
 # The A3000 development system (EXP-003, the A3000 dev machine): AmigaOS 3.2,
 # SAS/C 6.50, the Amiga Developer Update 3.1 (NDU 3.1) and MUI 3.8, built
 # into runs/systems/a3000-dev/ by `amiga-env system build a3000-dev` and
-# booted as DH0: by the a3000-dev machine in amiga.toml.
+# booted as DH0: by the a3000-dev machines in amiga.toml.
 #
-# Layers are applied in order. The SAS/C layer runs on the emulated machine
-# and takes minutes, so it comes straight after the OS: editing any later
-# layer restores the snapshot taken after it instead of installing again.
+# Layers are applied in order. The two amiga layers run on the emulated
+# machine; each is snapshotted, so editing a later layer restores the
+# snapshot instead of running them again.
 
 description = "AmigaOS 3.2, SAS/C 6.50, NDU 3.1 and MUI 3.8 for the A3000"
 machine = "a3000"
 
-# ---- AmigaOS 3.2 -------------------------------------------------------------
+# ---- AmigaOS 3.2: the Installer's full install --------------------------------
+# These layers make the copies of the hard-disk branch of the 3.2 Installer
+# script (Install3.2:Install/Install, "FULL INSTALL"), in its order, with
+# these answers: English only, every printer driver and keymap (its default
+# below expert level), no GlowIcons. Files keep the protection bits, dates
+# and comments of their floppies, as the Installer's copyfiles keeps them.
+# The Modules disk is not used: the Installer copies it only when the ROM's
+# expansion.library is older than V47, and the 3.2 Kickstart's is V47.
 
+# "make some new drawers"
+[[layer]]
+type = "dirs"
+paths = [
+  "Prefs/Env-Archive/Sys", "Prefs/Env-Archive/Versions", "Prefs/Presets/Backdrops",
+  "Prefs/Presets/Pointers", "Fonts", "Expansion", "WBStartup", "Locale/Catalogs",
+  "Locale/Languages", "Locale/Countries", "Locale/Help", "Classes/Gadgets",
+  "Classes/DataTypes", "Classes/Images", "Devs/Monitors", "Devs/DataTypes",
+  "Devs/DOSDrivers", "Devs/Printers", "Devs/Keymaps", "Storage/DOSDrivers",
+  "Storage/Printers", "Storage/Monitors", "Storage/Keymaps", "Storage/DataTypes",
+  "Libs", "Tools", "System",
+]
+
+# "copy the needed stuff from the Install disk"; the Update drawer's three
+# files are placed at the end, where the Installer places them.
+[[layer]]
+type = "copy"
+media = "adf/3.2/Install3.2.adf"
+files = { "HDTools/HDToolBox" = "Tools/HDToolBox", "HDTools/HDToolBox.info" = "Tools/HDToolBox.info", "Installer" = "System/Installer", "Libs/workbench.library" = "Libs/workbench.library", "Libs/icon.library" = "Libs/icon.library" }
+
+# "now copy the Workbench disk": everything but Locale and Disk.info.
 [[layer]]
 type = "unpack"
 media = "adf/3.2/Workbench3.2.adf"
+exclude = ["Disk.info", "Locale"]
 
-# The A3000's 3.2 Kickstart asks for these on the first boot from disk.
+# "now copy the DiskDoctor disk"
 [[layer]]
 type = "copy"
-media = "adf/3.2/ModulesA3000_3.2.adf"
-files = { "LIBS/icon.library" = "Libs/icon.library", "LIBS/workbench.library" = "Libs/workbench.library" }
+media = "adf/3.2/DiskDoctor.adf"
+files = { "C/DAControl" = "C/DAControl", "C/DiskDoctor" = "C/DiskDoctor", "Devs/trackfile.device" = "Devs/trackfile.device" }
 
-# CPU CHECKINSTALL in the startup-sequence wants the 68030 MMU libraries.
+# "now copy the Locale disk" (DOLOCALE): the country files, then for English
+# no .language file (English is built in) but the catalogs and help, which
+# UNCOMPRESS writes without their .Z. Its patterns select every file on
+# Locale-EN but Disk.info.
 [[layer]]
 type = "copy"
-media = "adf/3.2/MMULibs.adf"
-files = { "Libs/mmu.library" = "Libs/mmu.library", "Libs/680x0.library" = "Libs/680x0.library", "Libs/68030.library" = "Libs/68030.library", "Libs/memory.library" = "Libs/memory.library", "Libs/disassembler.library" = "Libs/disassembler.library" }
+media = "adf/3.2/Locale.adf"
+files = { "Countries" = "Locale/Countries" }
 
-# Prefs, Tools, L: (the startup-sequence assigns L: to the Extras disk when
-# SYS:L is missing), the ReAction classes and the fonts.
+[[layer]]
+type = "copy"
+media = "adf/3.2/Locale-EN.adf"
+files = { "Catalogs/english/Sys" = "Locale/Catalogs/english/Sys", "Help/english/Sys" = "Locale/Help/english/Sys" }
+decompress = true
+
+# "now copy the Extras disk": all but Disk.info. Its S drawer goes in too,
+# with S/User-startup because the system has none yet (the Installer keeps
+# an existing one).
 [[layer]]
 type = "unpack"
 media = "adf/3.2/Extras3.2.adf"
 exclude = ["Disk.info"]
 
+# "now copy the Classes disk"
 [[layer]]
 type = "unpack"
 media = "adf/3.2/Classes3.2.adf"
 exclude = ["Disk.info"]
 
+# "now copy the Fonts disk"
 [[layer]]
 type = "unpack"
 media = "adf/3.2/Fonts.adf"
 into = "Fonts"
 exclude = ["Disk.info"]
 
-# The startup-sequence assigns LOCALE: to SYS:Locale only when it exists,
-# and MUI's block in S:User-Startup adds to LOCALE:. English needs no
-# catalogs; the country files are what Locale prefs reads.
+# "now copy stuff from the Storage disk", the printer and keymap "schtick"
+# (every driver and keymap), and "do copy old intuition V40" (LIBS).
+# DefIcons holds only icons, which go to ENVARC:Sys. The
+# NTSC monitor goes to Devs/Monitors, not Storage/Monitors: the Installer
+# moves it there when the display runs at 60 Hz, as the A3000's does.
 [[layer]]
 type = "copy"
-media = "adf/3.2/Locale.adf"
-files = { "Countries" = "Locale/Countries" }
+media = "adf/3.2/Storage3.2.adf"
+files = { "DataTypes.info" = "Storage/DataTypes.info", "DOSDrivers.info" = "Storage/DOSDrivers.info", "Keymaps.info" = "Storage/Keymaps.info", "Monitors.info" = "Storage/Monitors.info", "Printers.info" = "Storage/Printers.info", "Classes/DataTypes" = "Classes/DataTypes", "C" = "C", "Presets/Pointers" = "Prefs/Presets/Pointers", "Monitors" = "Storage/Monitors", "DOSDrivers" = "Storage/DOSDrivers", "WBStartup" = "WBStartup", "DefIcons" = "Prefs/Env-Archive/Sys", "Env-Archive/deficons.prefs" = "Prefs/Env-Archive/deficons.prefs", "Env-Archive/Pointer.prefs" = "Prefs/Env-Archive/Sys/Pointer.prefs", "Printers" = "Devs/Printers", "Keymaps" = "Devs/Keymaps", "LIBS" = "Libs", "Monitors/NTSC" = "Devs/Monitors/NTSC", "Monitors/NTSC.info" = "Devs/Monitors/NTSC.info" }
+exclude = ["Monitors/NTSC", "Monitors/NTSC.info"]
+
+# "copy Backdrops"
+[[layer]]
+type = "unpack"
+media = "adf/3.2/Backdrops3.2.adf"
+into = "Prefs/Presets/Backdrops"
+exclude = ["Disk.info"]
+
+# "copy our defaults for HD-User": the drive icon, the hard-disk
+# startup-sequence (Startup-Sequence_HardDrive 47.14) in place of the
+# floppy's, and the release marker.
+[[layer]]
+type = "copy"
+media = "adf/3.2/Install3.2.adf"
+files = { "Update/disk.info" = "disk.info", "Update/Startup-HardDrive" = "S/Startup-Sequence", "Update/Release" = "Prefs/Env-Archive/Versions/Release" }
+
+# ---- CPU support: the Installer's "Install CPU Support Libraries" ------------
+# Its MMU-library branch with the manufacturer answer "Other": a Libs/MMU
+# drawer, everything on MMULibs but Configs and Locale (the 68020 to 68060,
+# 680x0, mmu, memory and disassembler libraries, Libs/MMU's board init
+# files, and the Mu tools and FPU in C), the guides decompressed into
+# SYS:MuTools, and the default MMU-Configuration into ENVARC:. CPU
+# CHECKINSTALL in the startup-sequence needs these before the first boot.
+
+[[layer]]
+type = "dirs"
+paths = ["Libs/MMU", "MuTools"]
+
+[[layer]]
+type = "unpack"
+media = "adf/3.2/MMULibs.adf"
+exclude = ["Configs", "Locale"]
+
+[[layer]]
+type = "copy"
+media = "adf/3.2/MMULibs.adf"
+files = { "Locale/Help/MMULib" = "MuTools", "Configs/MMU-Configuration" = "Prefs/Env-Archive/MMU-Configuration" }
+decompress = true
+
+# ---- The Installer's last steps, on the machine ----------------------------------
+# UpdateWBFiles with NEWWB: on the new system, and IconPos for the drawer
+# icons, from the Install disk's C drawer as the Installer runs them.
+
+[[layer]]
+type = "amiga"
+name = "finish-install"
+script = "systems/a3000-dev/finish-install"
+disks = ["adf/3.2/Install3.2.adf"]
+timeout = 120
 
 # ---- SAS/C 6.50 ------------------------------------------------------------
 # SAS/C's disks hold its files in SAS's own compressed format, which only
@@ -120,6 +213,7 @@ exclude = ["MUI/Install-MUI", "MUI/Install-MUI.info", "MUI/Installer433"]
 type = "copy"
 media = "mui/mui.key"
 files = { "mui.key" = "S/mui.key" }
+personal = true
 
 [[layer]]
 type = "copy"
@@ -127,13 +221,15 @@ media = "mui/mui38dev.lha"
 files = { "MUI/Developer" = "Developer/MUI" }
 
 # ---- S:User-Startup ------------------------------------------------------------
-# amiga-env adds its own block at the end (see `amiga-env exec`).
+# Added to the Extras disk's User-startup, as each package's Installer adds
+# its block. amiga-env adds its own block at the end (see `amiga-env exec`).
 
 [[layer]]
 type = "file"
 path = "S/User-Startup"
+append = true
 text = """
-; User-Startup for the a3000-dev system, written by systems/a3000-dev.toml.
+; Added by systems/a3000-dev.toml.
 
 ; SAS/C 6.50: the assigns and path its Installer adds.
 Assign SC: SYS:SC

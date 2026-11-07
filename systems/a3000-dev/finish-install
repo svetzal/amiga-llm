@@ -1,0 +1,34 @@
+; The last steps of the 3.2 Installer's full install, which need the Amiga.
+;
+; The Installer runs UpdateWBFiles with NEWWB: assigned to the new system
+; (it converts old-style preferences files and .backdrop, if any), then,
+; when GlowIcons are not installed, places the drawer icons with IconPos
+; and gives Storage the Devs drawer's icon. Each call is the Installer's,
+; with its target, SYS:, written out. Both programs come from the Install
+; disk's C drawer, mounted here as Install3.2:. The Installer ignores
+; UpdateWBFiles' return code; on a new system it returns 20.
+
+Assign NEWWB: SYS:
+FailAt 21
+Install3.2:C/UpdateWBFiles
+Echo "UpdateWBFiles returned $RC"
+FailAt 10
+Assign NEWWB:
+
+Install3.2:C/IconPos >NIL: "SYS:Prefs" 12 20
+Install3.2:C/IconPos >NIL: "SYS:Prefs/Printer" 160 48
+Install3.2:C/IconPos >NIL: "SYS:Utilities" 98 4
+Install3.2:C/IconPos >NIL: "SYS:Utilities/Clock" 91 11
+Install3.2:C/IconPos >NIL: "SYS:Utilities/MultiView" 11 11
+Install3.2:C/IconPos >NIL: "SYS:Tools" 98 38
+Install3.2:C/IconPos >NIL: "SYS:Tools/IconEdit" 111 45
+Install3.2:C/IconPos >NIL: "SYS:Tools/HDToolBox" 202 4
+Install3.2:C/IconPos >NIL: "SYS:System" 184 4 DHEIGHT 150
+Install3.2:C/IconPos >NIL: "SYS:WBStartup" 184 38
+Install3.2:C/IconPos >NIL: "SYS:Devs" 270 4
+Copy >NIL: "SYS:Devs.info" "SYS:Storage.info"
+Install3.2:C/IconPos >NIL: "SYS:Storage" 270 38 DXPOS 480 DYPOS 77 DWIDTH 110 DHEIGHT 199
+Install3.2:C/IconPos >NIL: "SYS:Storage/Monitors" DXPOS 156 DYPOS 77 DWIDTH 270 DHEIGHT 199
+Install3.2:C/IconPos >NIL: "SYS:Storage/Printers" DXPOS 480 DYPOS 77 DWIDTH 107 DHEIGHT 199
+Install3.2:C/IconPos >NIL: "SYS:Expansion" 356 20
+Install3.2:C/IconPos >NIL: "SYS:Disk" DXPOS 28 DYPOS 39 DWIDTH 462 DHEIGHT 103
