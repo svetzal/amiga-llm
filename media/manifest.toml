@@ -1,0 +1,188 @@
+# Licensed Amiga media this environment needs, and where each item came from.
+#
+# The files themselves are copyrighted and live only in this directory, which
+# git ignores except for this manifest and manifest.lock.json. `make media`
+# copies them in once from the origin collection; after that nothing in the
+# project reads the origin again. `make media-verify` checks every file against
+# the checksums recorded in manifest.lock.json.
+#
+# origin  — path relative to the origin root (Stacey's "Amiga Retro" folder)
+# dest    — path relative to media/
+# licence — what entitles this copy
+
+origin_root = "~/Library/CloudStorage/OneDrive-Personal/Amiga Retro"
+
+# ---- Kickstart ROMs: AmigaOS 3.2 (purchased from Hyperion) -----------------
+
+[[item]]
+dest = "rom/3.2/kick-a500-a600-a2000.rom"
+origin = "AmigaOS3.2CD/ROM/kickCDTVa1000a500a2000a600.rom"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "rom/3.2/kick-a1200.rom"
+origin = "AmigaOS3.2CD/ROM/kicka1200.rom"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "rom/3.2/kick-a3000.rom"
+origin = "AmigaOS3.2CD/ROM/kicka3000.rom"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "rom/3.2/kick-a4000.rom"
+origin = "AmigaOS3.2CD/ROM/kicka4000.rom"
+licence = "AmigaOS 3.2 CD-ROM"
+
+# ---- Kickstart ROMs: classic releases (Amiga Forever 10 Plus) ---------------
+# Amiga Forever ROMs can be encrypted; rom.key decrypts them and Amiberry
+# reads it from the same directory.
+
+[[item]]
+dest = "rom/forever/rom.key"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/rom.key"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-130.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-204.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-204.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-310-a1200.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a1200.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-310-a3000.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a3000.rom"
+licence = "Amiga Forever 10 Plus"
+
+# ---- AmigaOS 3.2 install floppies -------------------------------------------
+
+[[item]]
+dest = "adf/3.2/Install3.2.adf"
+origin = "AmigaOS3.2CD/ADF/Install3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/Workbench3.2.adf"
+origin = "AmigaOS3.2CD/ADF/Workbench3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/Extras3.2.adf"
+origin = "AmigaOS3.2CD/ADF/Extras3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/Classes3.2.adf"
+origin = "AmigaOS3.2CD/ADF/Classes3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/Fonts.adf"
+origin = "AmigaOS3.2CD/ADF/Fonts.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/Storage3.2.adf"
+origin = "AmigaOS3.2CD/ADF/Storage3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/Locale.adf"
+origin = "AmigaOS3.2CD/ADF/Locale.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/Locale-EN.adf"
+origin = "AmigaOS3.2CD/ADF/Locale-EN.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/HDSetup3.2.adf"
+origin = "AmigaOS3.2CD/ADF/HDSetup3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/MMULibs.adf"
+origin = "AmigaOS3.2CD/ADF/MMULibs.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/ModulesA500_3.2.adf"
+origin = "AmigaOS3.2CD/ADF/ModulesA500_3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/ModulesA1200_3.2.adf"
+origin = "AmigaOS3.2CD/ADF/ModulesA1200_3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/ModulesA3000_3.2.adf"
+origin = "AmigaOS3.2CD/ADF/ModulesA3000_3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+# ---- Classic Workbench floppies (Amiga Forever 10 Plus) ---------------------
+
+[[item]]
+dest = "adf/1.3/workbench.adf"
+origin = "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-134-workbench.adf"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "adf/1.3/extras.adf"
+origin = "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-134-extras.adf"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "adf/2.04/workbench.adf"
+origin = "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-204-workbench.adf"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "adf/3.1/workbench.adf"
+origin = "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-310-workbench.adf"
+licence = "Amiga Forever 10 Plus"
+
+# ---- Developer material -----------------------------------------------------
+
+[[item]]
+dest = "ndk/3.2"
+origin = "AmigaOS3.2CD/NDK3.2"
+licence = "AmigaOS 3.2 CD-ROM (NDK 3.2)"
+
+[[item]]
+dest = "docs/M68000PRM.pdf"
+origin = "Documentation/M68000PRM.pdf"
+licence = "Motorola reference manual, personal copy"
+
+[[item]]
+dest = "docs/68000UM.pdf"
+origin = "Documentation/68000UM.PDF"
+licence = "Motorola user manual, personal copy"
+
+[[item]]
+dest = "docs/A500-A2000-Technical-Reference-Manual.pdf"
+origin = "Documentation/Commodore_A500-A2000_Technical_Reference_Manual.pdf"
+licence = "Commodore manual, personal copy"
+
+[[item]]
+dest = "docs/A4000-A3000-Hardware-Developer-Notes.pdf"
+origin = "Documentation/Commodore_A4000-A3000_Hardware_Developer_Notes_v1.11_ocr.pdf"
+licence = "Commodore manual, personal copy"
+
+# ---- Reference configuration ------------------------------------------------
+# Kept to compare against; the environment generates its own configurations.
+
+[[item]]
+dest = "reference/stock-a3000.uae"
+origin = "Amiberry/Configurations/Stock A3000.uae"
+licence = "Stacey's own configuration"
