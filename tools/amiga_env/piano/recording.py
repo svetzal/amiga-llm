@@ -404,6 +404,7 @@ def _player_starts(rows: Sequence[dict]) -> list[dict]:
 
 
 STEPS = ("record", "master", "measure")
+GENERATED_DESCRIPTION = "youtube-description.generated.txt"
 FIRST_CHAPTER = "Boot and title screen"
 CAPTURE_PICTURE = (
     video.SCREEN_LEFT,
@@ -490,7 +491,9 @@ def _chapters(found: dict, template: Path, out: Path, fps: Fraction) -> dict:
     starts = [(p["gold_s"], video.chapter_label(p["title"])) for p in pieces]
     chapters = video.chapters(FIRST_CHAPTER, starts, float(length))
     text = video.description(template.read_text(), chapters)
-    (out / "youtube-description.txt").write_text(text)
+    # A draft only: the description that is uploaded is edited by hand in
+    # youtube-description.txt, which this never writes.
+    (out / GENERATED_DESCRIPTION).write_text(text)
     first_note = pieces[0]["player_first_note_s"] if pieces else None
     return {
         "lines": video.chapter_lines(chapters),
@@ -498,5 +501,5 @@ def _chapters(found: dict, template: Path, out: Path, fps: Fraction) -> dict:
         "from_the_first_note_s": [
             round(p["gold_s"] - first_note, 3) if first_note else None for p in pieces
         ],
-        "description": str(out / "youtube-description.txt"),
+        "description": str(out / GENERATED_DESCRIPTION),
     }
