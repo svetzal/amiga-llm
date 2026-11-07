@@ -3,6 +3,9 @@
 The download is checked against the release's SHA256SUMS before anything is
 unpacked. Each version gets its own directory; `current` is a symlink to the
 one in use, so an upgrade is reversible by pointing the link back.
+
+The release's libretro core (the same emulator as a library, see libretro.py)
+goes beside the app, checked the same way, on hosts that have one.
 """
 
 import hashlib
@@ -22,6 +25,7 @@ API = f"https://api.github.com/repos/{REPO}/releases"
 USER_AGENT = "amiga-llm-tools"
 # platform.machine() spelling -> the spelling in Amiberry's AppImage names
 LINUX_ARCHES = {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}
+CORE_GLOB = "amiberry-libretro-*"
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,19 @@ def asset_name(release: Release, system: str, machine: str) -> str:
     return name
 
 
+def core_asset_name(release: Release, system: str, machine: str) -> str:
+    """Pick the release's libretro core for this host. Pure, so it is testable."""
+    if system == "Darwin" and machine == "arm64":
+        name = "amiberry-libretro-macOS-arm64.dylib"
+    elif system == "Linux" and machine in LINUX_ARCHES:
+        name = f"amiberry-libretro-linux-{LINUX_ARCHES[machine]}.so"
+    else:
+        raise SystemExit(f"Amiberry has no libretro core for {system} {machine}")
+    if name not in release.assets:
+        raise SystemExit(f"Release {release.tag} has no asset named {name}")
+    return name
+
+
 def parse_sha256sums(text: str) -> dict[str, str]:
     sums = {}
     for line in text.splitlines():
@@ -81,6 +98,20 @@ def binary_path(version_dir: Path) -> Path:
     if images:
         return images[0]
     raise SystemExit(f"No Amiberry binary in {version_dir}")
+
+
+def core_path(version_dir: Path) -> Path:
+    cores = sorted(version_dir.glob(CORE_GLOB))
+    if not cores:
+        raise SystemExit(f"No libretro core in {version_dir}; run `amiga-env amiberry --force`")
+    return cores[0]
+
+
+def installed_core() -> Path:
+    current = amiberry_dir() / "current"
+    if not current.exists():
+        raise SystemExit("Amiberry is not installed; run `amiga-env amiberry`")
+    return core_path(current.resolve())
 
 
 def amiberry_dir() -> Path:
@@ -103,21 +134,17 @@ def install(tag: str | None = None, force: bool = False) -> Path:
     release = fetch_release(tag)
     base = amiberry_dir()
     target = base / release.version
+    sums = parse_sha256sums(_get(release.assets["SHA256SUMS"]).decode())
     if target.exists() and not force:
         _point_current(target)
+        _install_core(release, sums, target)
         print(f"Amiberry {release.version} already installed at {target}")
         return binary_path(target)
 
     name = asset_name(release, platform.system(), platform.machine())
-    sums = parse_sha256sums(_get(release.assets["SHA256SUMS"]).decode())
-    if name not in sums:
-        raise SystemExit(f"SHA256SUMS for {release.tag} does not list {name}")
-
     print(f"Downloading {name}")
-    payload = _get(release.assets[name])
+    payload = _download(release, sums, name)
     digest = hashlib.sha256(payload).hexdigest()
-    if digest != sums[name]:
-        raise SystemExit(f"Checksum mismatch for {name}: got {digest}, expected {sums[name]}")
 
     base.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".staging-", dir=base))
@@ -140,8 +167,36 @@ def install(tag: str | None = None, force: bool = False) -> Path:
         shutil.rmtree(staging, ignore_errors=True)
 
     _point_current(target)
+    _install_core(release, sums, target)
     print(f"Installed Amiberry {release.version} at {target}")
     return binary_path(target)
+
+
+def _download(release: Release, sums: dict[str, str], name: str) -> bytes:
+    """An asset's bytes, checked against SHA256SUMS."""
+    if name not in sums:
+        raise SystemExit(f"SHA256SUMS for {release.tag} does not list {name}")
+    payload = _get(release.assets[name])
+    digest = hashlib.sha256(payload).hexdigest()
+    if digest != sums[name]:
+        raise SystemExit(f"Checksum mismatch for {name}: got {digest}, expected {sums[name]}")
+    return payload
+
+
+def _install_core(release: Release, sums: dict[str, str], target: Path) -> None:
+    """Put the release's libretro core beside the app, if the host has one and it is missing."""
+    try:
+        name = core_asset_name(release, platform.system(), platform.machine())
+    except SystemExit as reason:
+        print(f"No libretro core installed: {reason}")
+        return
+    if (target / name).is_file():
+        return
+    print(f"Downloading {name}")
+    payload = _download(release, sums, name)
+    (target / name).write_bytes(payload)
+    with (target / "SHA256").open("a") as record:
+        record.write(f"{hashlib.sha256(payload).hexdigest()}  {name}\n")
 
 
 def _unpack_dmg(dmg: Path, dest: Path) -> None:

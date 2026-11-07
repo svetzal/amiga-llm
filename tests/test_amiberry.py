@@ -1,5 +1,5 @@
 import pytest
-from amiga_env.amiberry import Release, asset_name, parse_sha256sums
+from amiga_env.amiberry import Release, asset_name, core_asset_name, core_path, parse_sha256sums
 
 RELEASE = Release(
     tag="v8.5.0",
@@ -47,3 +47,44 @@ def test_sha256sums_accepts_text_and_binary_markers():
 def test_unsupported_host_is_an_error(system, machine):
     with pytest.raises(SystemExit, match="No Amiberry asset rule"):
         asset_name(RELEASE, system, machine)
+
+
+CORES = Release(
+    tag="v8.5.0",
+    assets={
+        name: f"https://example.invalid/{name}"
+        for name in [
+            "amiberry-libretro-macOS-arm64.dylib",
+            "amiberry-libretro-linux-x86_64.so",
+            "amiberry-libretro-linux-aarch64.so",
+        ]
+    },
+)
+
+
+@pytest.mark.parametrize(
+    ("system", "machine", "expected"),
+    [
+        ("Darwin", "arm64", "amiberry-libretro-macOS-arm64.dylib"),
+        ("Linux", "x86_64", "amiberry-libretro-linux-x86_64.so"),
+        ("Linux", "amd64", "amiberry-libretro-linux-x86_64.so"),
+        ("Linux", "aarch64", "amiberry-libretro-linux-aarch64.so"),
+    ],
+)
+def test_libretro_core_for_host(system, machine, expected):
+    assert core_asset_name(CORES, system, machine) == expected
+
+
+def test_no_libretro_core_for_an_intel_mac():
+    with pytest.raises(SystemExit, match="no libretro core"):
+        core_asset_name(CORES, "Darwin", "x86_64")
+
+
+def test_core_path_finds_the_core_beside_the_app(tmp_path):
+    (tmp_path / "amiberry-libretro-macOS-arm64.dylib").write_bytes(b"")
+    assert core_path(tmp_path) == tmp_path / "amiberry-libretro-macOS-arm64.dylib"
+
+
+def test_core_path_says_how_to_get_the_core(tmp_path):
+    with pytest.raises(SystemExit, match="amiga-env amiberry"):
+        core_path(tmp_path)
