@@ -142,13 +142,21 @@ player and Paula that writes a voice log, a WAV and a report to
 with every piece's score as a file under `scores/`, a title screen made on
 the host from `examples/piano/art/` (the song list drawn in, `title.ilbm`)
 and the full notices in `Credits`; `build/piano/piano-log.adf` holds the
-test build, which logs its voices. On the A500 a click on a title, or its
-key, plays it, with its line in gold and scopes on the floor; Esc or Q
-quits. `amiga-env piano-run examples/piano/piano.toml PIECE... --log` boots
-the test build headless on the A500, chooses each piece with a key press
-(or a click, `--click`), and compares each voice log with the model's;
-`--audio` records the player through Amiberry to
-`runs/exp004/emulator-screen.wav`. `amiga-env piano-survey
+test build, which logs its voices (`--out DIR` writes both elsewhere). On
+the A500 a click on a title, or its key, plays it, with its line in gold
+and scopes on the floor; Esc or Q quits. Left alone, it plays by itself:
+piece 1 after 15 s of quiet, and each next piece 15 s after the last ends,
+round the list (`rotate_s` in the recipe); Space stops the piece and holds
+the rotation until the next choice; F switches the A500's audio filter
+(the power LED shows it). `amiga-env piano-run
+examples/piano/piano.toml PIECE... --log` boots the test build headless on
+the A500, chooses each piece with a key press (or a click, `--click`), and
+compares each voice log with the model's; `--audio` records the player
+through Amiberry to `runs/exp004/emulator-screen.wav`, and `--realtime`
+runs it at normal speed and reports how long each choice took to sound.
+`amiga-env piano-rotation examples/piano/piano.toml` checks the rotation:
+it touches nothing until piece 1 starts, then clicks, wraps, presses Space
+and a key, and compares each piece's log. `amiga-env piano-survey
 examples/piano/piano.toml` measures every MAESTRO performance of 2 to 6
 minutes for four voices, for choosing pieces.
 

@@ -241,6 +241,43 @@ From EXP-004, the expressive piano, when the player gained its own screen
   was an address error ("Software error - task held" on 1.2). Put `even`
   after byte arrays.
 
+## Kickstart 1.2 findings from the piano's rotation (verified 2026-11-07, machine tier)
+
+From EXP-004, the expressive piano, when the player gained preloaded scores
+and a rotation that plays by itself (`examples/piano/player.s`), on the
+same Amiberry 8.5.0 A500 model with the floppy at normal speed
+(`GET_FLOPPY_SPEED` 100):
+
+- **Size a file with Examine, not Seek.** Loading ten score files (113,609
+  bytes) with `Open`, `Seek(fh, 0, OFFSET_END)`, `Seek` back, `Read` took
+  827 vertical blanks (13.8 s). With the size from `Lock(name,
+  ACCESS_READ)` (dos -84, `ACCESS_READ` -2), `Examine(lock, fib)` (-102;
+  `fib_Size` at offset 124 of a longword-aligned 260-byte
+  `FileInfoBlock`), `UnLock` (-90), then `Open` and one `Read`, the same
+  files took 520 (8.7 s). Inferred, not checked block by block: the old
+  filesystem's `Seek` to the end reads through the file.
+- **A vertical blank counter and alarm.** An `Interrupt` node (type
+  `NT_INTERRUPT`, priority 0) added with `AddIntServer(INTB_VERTB = 5,
+  node)` (exec -168, removed with `RemIntServer`, -174) is called every
+  frame. Its code increments a long, and when an alarm count is reached
+  calls `Signal(task, mask)` (-324) with a bit from `AllocSignal(-1)`
+  (-330); it ends with `moveq #0,d0` so the rest of the chain runs. The
+  task sleeps in `Wait(port bit | alarm bit)`. `ExecBase->VBlankFrequency`
+  (byte at offset 530) read 60 on the NTSC model. The rotation's gaps
+  measured 15.00 s of emulated time in every case.
+- **Remaking a screen's display is quick; writing to the CLI is not.**
+  `MakeScreen` took 1 to 2 frames and `RethinkDisplay` under one, so a new
+  user copper list shows 2 frames after the choice. Writing three lines
+  of results to the boot CLI's window (behind the custom screen), with the
+  scope band's restore, took 6 to 10 frames; formatting them with
+  `RawDoFmt` at once and writing them after the next piece's timer starts
+  cut a switch from 250 ms to 33 ms.
+- **Memory with every score loaded.** In the player, `MEMF_PUBLIC`
+  allocations for the scores came from slow RAM, leaving 327,912 bytes of
+  other memory and 87,272 of chip RAM free while a piece plays. In the test
+  build, the 362,400-byte voice log takes most of the slow RAM, and about
+  35 KB of the scores went to chip RAM (52,384 bytes of chip RAM free).
+
 ## Candidates
 
 | Candidate | What it is | Notes |

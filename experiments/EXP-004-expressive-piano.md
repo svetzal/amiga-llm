@@ -1095,3 +1095,182 @@ Open:
 - The scopes run at 20 frames a second. Drawing is about 60% of their
   work; fewer points (a narrower mix) or putting back a scope's bytes once
   instead of once a point would buy 30.
+
+### Stacey's trial of the disk: the lag, unattended play, the filter key (2026-11-07)
+
+Stacey played `build/piano/piano.adf` in an Amiberry window and reported:
+
+> There's considerable lag between clicking a title, and it turning gold
+> and starting playing.
+
+> after a period of 15s of inactivity, unless stopped, it plays the next
+> tune (starting from the first) - it would be nice if someone could put
+> in the disk and it would just play and rotate the music unattended.
+
+She also asked for a key to switch the A500's audio filter, and for two
+picture changes: the credits in a dimmer colour of their own, and a
+signature.
+
+#### The lag, measured (machine tier, normal speed)
+
+The player now stamps each step of a choice with its vertical blank count
+(`ST_CHOSEN_AT` to `ST_FIRST_NOTE_AT`, 1/60 s each), and `amiga-env
+piano-run ... --realtime` reports them. Both runs: the A500 profile at its
+own speed (no warp), floppy speed 100 (`GET_FLOPPY_SPEED`), choices by
+click, the first while nothing played and the others 8 s into the piece
+before. Times are milliseconds after the task took the click.
+
+| Piece (score bytes) | Before: line gold | Before: timer starts | Before: first note | After: line gold | After: timer starts | After: first note |
+| --- | --- | --- | --- | --- | --- | --- |
+| Nocturne Op. 9 No. 2 (9,689), nothing playing | 1,567 | 1,567 | 2,583 | 33 | 33 | 1,050 |
+| Schubert (17,093), a switch | 2,933 | 2,933 | 3,917 | 17 | 33 | 1,033 |
+| Debussy (3,031), a switch | 1,483 | 1,483 | 2,450 | 33 | 50 | 1,017 |
+| BWV 802 (6,047), a switch | 2,367 | 2,367 | 3,333 | 33 | 50 | 1,017 |
+
+Runs `runs/exp004/latency-before.json` (the old player with the stamps
+added) and `latency-final.json` (the disk below).
+
+Where the old player's time went:
+
+- **Reading the score from the floppy: 1.35 to 2.87 s**, longer for longer
+  scores. The old player loaded each score when it was chosen, then put the
+  line in gold. Stacey's hypothesis held.
+- **The gold line itself: 67 to 133 ms** after the load (`MakeScreen` 1 to 2
+  frames, `RethinkDisplay` under one, then a `WaitTOF`).
+- **Stopping the piece before: 117 to 150 ms**, most of it writing the
+  stopped piece's results to the boot CLI's window behind the screen.
+- **About 1 s from the timer to the first note, in every piece.** That is
+  the recordings' own lead-in: each score's first note is at 908 to 1,029
+  ms. It is in the MAESTRO data, not in the player, and it remains. Taking
+  it out is a change to the score format's input (trim the leading silence
+  in `score.py`), which changes every score and model log; I have not
+  made it. It is a decision for Stacey.
+
+What changed:
+
+- **Every score loaded at the start** (113,609 bytes, into slow RAM), so a
+  choice switches pointers. The line turns gold first, before anything else
+  is touched.
+- **File sizes from `Examine`.** The first preload, sizing each file with
+  `Seek` to its end, took 827 vertical blanks (13.8 s); with `Lock` and
+  `Examine` it takes 502 (8.4 s).
+- **A switch puts the next line in gold as it stops the old piece**, and the
+  stopped piece's results are formatted then but written to the CLI after
+  the next piece's timer starts. A click mid-piece went from 250 ms to the
+  timer to 33 to 50 ms.
+- **A bug found on the way:** `end_piece` kept the line to show in d2, which
+  `give_audio` uses, so for a moment after each piece Haydn's line (line 5)
+  went gold. Fixed.
+
+Startup: the screen now appears 787 vertical blanks (13.1 s) after the
+program starts, against 283 (4.7 s) before: the preload adds 8.4 s to the
+boot (the screen came about 37 s after the boot; now about 45 s).
+
+Memory while a piece plays, the player: 87,272 bytes of chip RAM free (as
+before: 87,296) and 326,960 of other memory (before: 425,176 to 439,240,
+with one score loaded). The test build's voice log is now 362,400 bytes
+(15,100 ticks, 251 s, was 400,000) to leave room for the scores; about 35
+KB of them go to chip RAM there (52,384 bytes of chip RAM free). Every
+log that fitted in 400,000 bytes still fits (the longest, Debussy's, is
+360,984). Mozart's and Beethoven's never fitted, and are now cut at 251 s,
+not 277 s.
+
+#### Playing unattended
+
+After the screen appears, `rotate_s` seconds (15, in the recipe; written
+into the player's `menu.i`) with no input start piece 1; that long after
+each piece ends, the next plays, the first after the last. A click or a
+piece's key plays that piece now, and the rotation goes on from it. Space
+stops the piece and holds the rotation until the next choice. Any other key
+press or click restarts the quiet. Esc and Q quit as before. The task waits
+in `Wait` on the window's port and an alarm signal sent by a vertical blank
+server; nothing spins (research/toolchain.md has the calls).
+
+`amiga-env piano-rotation examples/piano/piano.toml` checked it on the test
+build (`runs/exp004/emulator-rotation.json`, the final build):
+
+| Step | Warp | Found |
+| --- | --- | --- |
+| Boot, touch nothing | off | piece 1 chosen 15.00 s (emulated) after the screen appeared; the host saw it start 15.1 s (wall clock) after it saw the screen |
+| Nocturne to its end | on | voice log identical, 13,380 ticks |
+| The gap | on | BWV 846 started by the rotation 15.00 s after the nocturne ended, its line gold |
+| 20 s into BWV 846, click Debussy (line A) | off | BWV 846 stopped (its 1,309 ticks matched the model); Debussy's line gold in 33 ms, its timer at 50 ms; the rotation's next is piece 1 |
+| Debussy to its end | on | voice log identical, 15,041 ticks |
+| The wrap | on | piece 1 started by the rotation 15.00 s later |
+| 10 s in, Space | off | the nocturne stopped (627 ticks matched); no line gold; the rotation held |
+| 60 s of quiet | on | nothing started |
+| Key 3 | off | BWV 802 gold and its timer in 17 ms; the rotation's next is Scarlatti |
+| BWV 802 to its end, the gap | on | log identical, 7,918 ticks; Scarlatti started 15.00 s after |
+| Q | off | the boot CLI with the results |
+
+Warp changes none of these figures: the gaps and latencies are counted in
+the emulated machine's vertical blanks. I used warp only after piece 1 had
+started by itself, and turned it off for every click, key and log read. No
+piece was shortened.
+
+Screenshots looked at (`runs/exp004/emulator-rotation-*.png`): `quiet-01s`,
+`-08s` and `-14s` show the list with no gold line and no traces;
+`piece-1-by-itself` the nocturne's line gold with five scopes;
+`piece-2-by-rotation` Bach's; `clicked-last` Debussy's; `wrap-to-1` the
+nocturne's again; `space` and `held-60s` no gold line and an empty floor;
+`after-key` Scarlatti's; `end` the CLI.
+
+`piano-run` now follows each piece by its own start (the player's
+`ST_STARTS` and the piece number), so a piece the rotation starts by
+itself while the host is slow is never taken for the one it chose.
+
+#### The filter key
+
+F switches the A500's audio filter: the task flips CIA-A PRA (`$BFE001`)
+bit 1 with one `bchg` (bit clear: filter on, power LED bright; set: filter
+off, LED dim), nothing else, never in an interrupt. The player keeps the
+bit as it was at the start and puts it back when it quits. F is no longer
+a piece key (the piece keys are 1 to 9, then A to Z without F and Q, 33 in
+all). The screen does not show the state; the power LED does. A marker on
+the screen would need a copper change on rows of its own, and I left that
+out.
+
+| Check (machine tier) | Found |
+| --- | --- |
+| `READ_MEM $BFE001 1` at the start, after F, after F again | 252, 254, 252 (bit 1: 0, 1, 0) |
+| After three presses, then Q | 254, then 252: put back |
+| BWV 802 with F pressed 20 s in (test build, warp) | voice log identical, 7,918 ticks |
+| BWV 802 recorded in real time, F at 10.8 s and 21.3 s: energy at 5 to 12 kHz, as a share of 50 Hz to 12 kHz, 3 s before and after each press | -50.2 dB, then -34.9 dB with the filter off; -33.3 dB, then -52.4 dB with it on again |
+
+`runs/exp004/emulator-filter.wav` is that recording. Amiberry's socket does
+not know `sound_filter` as a `GET_CONFIG` key, but the 15 to 19 dB steps
+show that its A500 emulates the filter.
+
+#### The picture
+
+The two credit lines are now drawn in `$654`, one of the picture's own
+colours (register 9), not register 13, so the copper list that turns
+register 13 gold never touches them. `$333` was nearly invisible on the
+floor (`runs/exp004/credit-signature-options.png` compares them).
+"svetzal" is in the lower right corner in `$136` (register 7), the
+picture's lightest blue, its ink one pixel in from the right and bottom
+edges (columns 290 to 318, rows 192 to 198); `$223` was too faint. The
+scope band reaches row 196, so the mixed scope now ends at column 287 (108
+columns, was 132) rather than losing height; `screen.py` refuses a scope
+whose columns meet the signature's in the band. Host preview:
+`runs/exp004/title-preview.png`; on the emulator, the screenshots above.
+
+#### The disk
+
+`build/piano/piano-new.adf` is the player with all of this. It was written
+beside `piano.adf`, not over it, because Stacey's emulator had that one
+open.
+
+#### Where the hypotheses stand
+
+Hypothesis 3 holds through the preload, the rotation and the filter key:
+every complete log above is identical to the model's, and every cut-short
+one matches over the ticks it has. Hypotheses 1 and 2 are unchanged.
+
+Open:
+
+- The recordings' 1 s lead-in: trim it in the scores, or keep it? Stacey's
+  decision.
+- The preload adds 8.4 s to the boot. Loading the scores after the screen
+  appears, during the first quiet, would hide it, at the cost of a slow
+  first choice in those seconds.
