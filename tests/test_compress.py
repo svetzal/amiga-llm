@@ -4,7 +4,6 @@ import base64
 import random
 
 import pytest
-
 from amiga_env import compress
 
 # `compress -b 9` (macOS) of the text from text_1500() below. Its table fills

@@ -5,9 +5,9 @@ here, in a throwaway project."""
 import zipfile
 
 import pytest
-from amitools.tools import xdftool
 from amiga_env import adf, compress, session, system
 from amiga_env.recipe import parse, personal_paths
+from amitools.tools import xdftool
 
 
 @pytest.fixture
