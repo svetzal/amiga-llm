@@ -23,12 +23,12 @@ Reusable knowledge goes into the agent skills this repository publishes (see
 
 ## Target machines
 
-Each target is a profile in `tools/amiga_env/profile.py`, booted with
+Each target is a `[machines.NAME]` profile in `amiga.toml`, booted with
 `make a500` / `make a3000` or `amiga-env <machine> [DISK.adf]`. A profile
 starts from Amiberry's quick-start model and sets only what differs on the
 real machine. When a fact is read off a real machine, record it here with its
-source and date, update the profile and its test, and move it out of the
-"not yet read" table.
+source and date, update the profile and its test (`tests/test_profile.py`),
+and move it out of the "not yet read" table.
 
 ### A500: hardware programs and the performance contract
 
@@ -200,14 +200,21 @@ path outside the repository at run time.
 
 - Licensed media enters through `make media`, which copies the items listed in
   `media/manifest.toml` and records their checksums in
-  `media/manifest.lock.json`. To add media, add a manifest entry and rerun
-  `make media`. Never copy files into `media/` by hand.
+  `media/manifest.lock.json`. To add media, run `amiga-env media add` and
+  then `make media`. Never copy files into `media/` by hand.
+- Tracked files never hold a path on one person's disk. Each manifest item
+  names a source (`amiga_forever`, `amigaos32`, `collection`); where a source
+  is comes from its variable in `.env`, which git ignores. `.env.example`
+  lists every variable. Stacey's `.env` points into the OneDrive "Amiga
+  Retro" folder; that is read only by `make media`, and only for media not
+  yet copied.
 - Media is copyrighted and never committed. Only the manifest and its lock are
   tracked. The repository is public (`github.com/svetzal/amiga-llm`), so
-  `tests/test_public_repo.py` fails if git tracks anything else under
-  `media/`, a file with a media suffix (`.rom`, `.adf`, `.key` and so on), or
-  a file whose checksum matches locked media. Never weaken those tests to
-  make a commit pass.
+  `amiga-env guard` (`make guard`, and `tests/test_public_repo.py` in `make
+  test`) fails if git tracks `.env`, anything else under `media/`, a file
+  with a media suffix (`.rom`, `.adf`, `.key` and so on), or a file whose
+  checksum matches locked media. Never weaken those rules to make a commit
+  pass.
 - Amiberry comes from `make tools` and runs through `amiga-env run`, which
   gives it a private HOME under `runs/home/`. Never launch
   `/Applications/Amiberry.app` or the bundled binary directly for project
@@ -219,6 +226,17 @@ path outside the repository at run time.
 - Work directly on `main`. Small, scoped commits.
 - The Makefile is a thin index: one line per target that calls
   `amiga-env` or another tool. Logic goes in `tools/amiga_env/` with tests.
+- `amiga-env` is a public tool that other projects install
+  (`uv tool install git+https://github.com/svetzal/amiga-llm@vX.Y.Z`) and set
+  up with `amiga-env init`. Nothing in `tools/amiga_env/` may name Stacey's
+  machines, paths or media; those belong in `amiga.toml`,
+  `media/manifest.toml` and `.env`. It finds its project from `amiga.toml`,
+  never from where the package is installed.
+- What `amiga-env init` writes comes from `tools/amiga_env/templates/`.
+  `examples/hello/hello.s` is a link to the template, so there is one copy.
+- The command surface is a contract with the `amiga-dev` skills. Change it
+  only with a matching skill change, and release by bumping `version` in
+  `pyproject.toml` and pushing an annotated tag `vX.Y.Z`.
 - Before adding a script, check whether it is a subcommand of an existing
   one. coco-llm accumulated ten near-identical generator scripts.
 - Keep generated products (`build/`, `runs/`, `.tools/`) out of git.
