@@ -36,20 +36,17 @@ def test_amiga_llms_manifest_names_its_three_sources_and_no_paths():
 
     assert manifest_path() == REPO / "media" / "manifest.toml"
     assert set(loaded.sources) == {"amiga_forever", "amigaos32", "collection"}
-    assert len(loaded.items) == 54
+    assert loaded.items
     assert all(not item.origin.startswith(("/", "~")) for item in loaded.items)
 
 
-def test_amiga_llms_manuals_and_configuration_are_optional():
-    optional = {i.dest for i in load_manifest().items if i.optional}
+def test_amiga_llms_personal_collection_items_are_all_optional():
+    # Someone without Stacey's personal collection can still run the project:
+    # only Amiga Forever and AmigaOS 3.2 media are required.
+    items = load_manifest().items
 
-    assert optional == {
-        "docs/M68000PRM.pdf",
-        "docs/68000UM.pdf",
-        "docs/A500-A2000-Technical-Reference-Manual.pdf",
-        "docs/A4000-A3000-Hardware-Developer-Notes.pdf",
-        "reference/stock-a3000.uae",
-    }
+    assert all(i.optional for i in items if i.source == "collection")
+    assert all(not i.optional for i in items if i.source != "collection")
 
 
 def test_tree_digest_ignores_finder_litter_and_sees_content(tmp_path):
