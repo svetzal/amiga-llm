@@ -1,0 +1,11 @@
+; Compile, link and run hello.c with SAS/C on the a3000-dev machine:
+;   uv run amiga-env exec a3000-dev work/hello/test.amigados
+; The program's output is left in work/hello/output.txt for the host.
+; Which headers and linker library SAS/C will see first: the NDU 3.1
+; headers say "Includes Release 40.15", the ones SAS/C shipped say 40.13.
+Search INCLUDE:exec/types.h "Includes Release"
+CD Work:hello
+Delete >NIL: hello hello.o output.txt
+sc LINK hello.c
+hello >output.txt
+Type output.txt

@@ -1,0 +1,12 @@
+; Compile muihello.c with SAS/C against the NDU 3.1 and MUI includes, then
+; start it and leave its window open for the host's screenshot:
+;   uv run amiga-env exec a3000-dev work/muihello/test.amigados --screenshot runs/exp003/muihello.png
+; The program's own output is left in work/muihello/output.txt.
+CD Work:muihello
+Delete >NIL: muihello muihello.o output.txt
+sc LINK muihello.c
+Run >NIL: muihello >Work:muihello/output.txt
+; Give Workbench and the window time to draw before the host looks.
+Wait 6
+; Still running? (STATUS returns 5, failing the test, if it is not.)
+Status COMMAND muihello

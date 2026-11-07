@@ -36,8 +36,22 @@ def test_the_a3000_is_an_ntsc_a3000_on_3_2_with_8_mb_of_motherboard_fast_ram():
     assert _settings(args) == ["ntsc=true", "a3000mem_size=8"]
 
 
-def test_amiga_llm_defines_exactly_its_two_machines():
-    assert list(MACHINES) == ["a500", "a3000"]
+def test_the_a3000_dev_boots_its_built_system_as_dh0_and_work_as_dh1():
+    args = machine_args(MACHINES["a3000-dev"], media=MEDIA, root=Path("/project"))
+
+    assert _value(args, "--model") == "A3000"
+    assert _value(args, "-r") == "/project/media/rom/3.2/kick-a3000.rom"
+    assert "-0" not in args
+    assert _settings(args) == [
+        "ntsc=true",
+        "a3000mem_size=8",
+        "filesystem2=rw,DH0:System:/project/runs/systems/a3000-dev,0",
+        "filesystem2=rw,DH1:Work:/project/work,-128",
+    ]
+
+
+def test_amiga_llm_defines_its_three_machines():
+    assert list(MACHINES) == ["a500", "a3000", "a3000-dev"]
 
 
 @pytest.mark.parametrize("name", MACHINES)
@@ -71,6 +85,18 @@ class TestAmigaToml:
             "/project/media/rom/k.rom",
         ]
 
+    def test_volumes_without_a_system_start_at_dh0(self):
+        machines = parse_config(
+            '[machines.a]\nmodel = "A"\nkickstart = "k"\nvolumes = { Work = "w", Data = "d" }\n'
+        )
+
+        args = machine_args(machines["a"], media=MEDIA, root=Path("/p"))
+
+        assert _settings(args) == [
+            "filesystem2=rw,DH0:Work:/p/w,-128",
+            "filesystem2=rw,DH1:Data:/p/d,-128",
+        ]
+
     def test_no_machines_is_valid(self):
         assert parse_config("# nothing yet\n") == {}
 
@@ -87,6 +113,11 @@ class TestAmigaToml:
             ('[machines.a]\nmodel = "A500"\nkickstart = "k"\nsettings = ["ntsc"]\n', "key=value"),
             ('[machines.A5]\nmodel = "A500"\nkickstart = "k"\n', "lower case"),
             ('[machines.a]\nmodel = ""\nkickstart = "k"\n', "non-empty"),
+            ('[machines.a]\nmodel = "A"\nkickstart = "k"\nsystem = "A B"\n', "names a recipe"),
+            ('[machines.a]\nmodel = "A"\nkickstart = "k"\nvolumes = ["w"]\n', "table of Label"),
+            ('[machines.a]\nmodel = "A"\nkickstart = "k"\nvolumes = { "W:x" = "w" }\n', "volume"),
+            ('[machines.a]\nmodel = "A"\nkickstart = "k"\nvolumes = { System = "w" }\n', "volume"),
+            ('[machines.a]\nmodel = "A"\nkickstart = "k"\nvolumes = { W = "../w" }\n', "inside"),
             ("[machines\n", "not valid TOML"),
         ],
     )

@@ -31,3 +31,14 @@ kickstart = "rom/3.2/kick-a3000.rom"
 disk = "adf/3.2/Install3.2.adf"
 settings = ["ntsc=true", "a3000mem_size=8"]
 purpose = "boot the A3000 (Kickstart 3.2, Workbench 3.2): desktop applications"
+
+# The A3000 as a development machine: the system built from
+# systems/a3000-dev.toml boots as DH0: (System:), and the project's work/
+# folder is Work:. Build it with `make system`; boot it with `make a3000-dev`.
+[machines.a3000-dev]
+model = "A3000"
+kickstart = "rom/3.2/kick-a3000.rom"
+system = "a3000-dev"
+volumes = { Work = "work" }
+settings = ["ntsc=true", "a3000mem_size=8"]
+purpose = "boot the A3000 development system (3.2, SAS/C, NDU 3.1, MUI) with Work:"

@@ -1,0 +1,10 @@
+# Work: on the a3000-dev machine. Sources are tracked; what the Amiga
+# writes here (objects, programs, output, Amiberry's _UAEFSDB.___ records,
+# icons) is not.
+*
+!*/
+!.gitignore
+!README.md
+!*.c
+!*.h
+!*.amigados

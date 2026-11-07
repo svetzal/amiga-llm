@@ -4,7 +4,9 @@
 UV  ?= uv
 ENV := $(UV) run --quiet amiga-env
 
-.PHONY: help tools toolchain media media-verify doctor a500 a3000 hello guard test lint
+.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3000-dev system hello guard test lint
+
+SYSTEM ?= a3000-dev
 
 help:
 	@echo "make tools         install the latest Amiberry into .tools/"
@@ -14,6 +16,8 @@ help:
 	@echo "make doctor        report what is installed and what is missing"
 	@echo "make a500          boot the A500 to Workbench 1.2 (demos, games, hardware)"
 	@echo "make a3000         boot the A3000 to Workbench 3.2 (desktop applications)"
+	@echo "make system        build runs/systems/$(SYSTEM) from systems/$(SYSTEM).toml"
+	@echo "make a3000-dev     boot the A3000 development system (build it first)"
 	@echo "make hello         assemble examples/hello into a boot disk, build/hello.adf"
 	@echo "make guard         fail if git tracks licensed media or .env"
 	@echo "make test          lint and run the host-side tests"
@@ -38,6 +42,12 @@ a500:
 
 a3000:
 	$(ENV) a3000
+
+system:
+	$(ENV) system build $(SYSTEM)
+
+a3000-dev:
+	$(ENV) a3000-dev
 
 hello:
 	$(ENV) bootdisk examples/hello/hello.s

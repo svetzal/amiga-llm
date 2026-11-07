@@ -1,0 +1,168 @@
+# The A3000 development system (EXP-003, the A3000 dev machine): AmigaOS 3.2,
+# SAS/C 6.50, the Amiga Developer Update 3.1 (NDU 3.1) and MUI 3.8, built
+# into runs/systems/a3000-dev/ by `amiga-env system build a3000-dev` and
+# booted as DH0: by the a3000-dev machine in amiga.toml.
+#
+# Layers are applied in order. The SAS/C layer runs on the emulated machine
+# and takes minutes, so it comes straight after the OS: editing any later
+# layer restores the snapshot taken after it instead of installing again.
+
+description = "AmigaOS 3.2, SAS/C 6.50, NDU 3.1 and MUI 3.8 for the A3000"
+machine = "a3000"
+
+# ---- AmigaOS 3.2 -------------------------------------------------------------
+
+[[layer]]
+type = "unpack"
+media = "adf/3.2/Workbench3.2.adf"
+
+# The A3000's 3.2 Kickstart asks for these on the first boot from disk.
+[[layer]]
+type = "copy"
+media = "adf/3.2/ModulesA3000_3.2.adf"
+files = { "LIBS/icon.library" = "Libs/icon.library", "LIBS/workbench.library" = "Libs/workbench.library" }
+
+# CPU CHECKINSTALL in the startup-sequence wants the 68030 MMU libraries.
+[[layer]]
+type = "copy"
+media = "adf/3.2/MMULibs.adf"
+files = { "Libs/mmu.library" = "Libs/mmu.library", "Libs/680x0.library" = "Libs/680x0.library", "Libs/68030.library" = "Libs/68030.library", "Libs/memory.library" = "Libs/memory.library", "Libs/disassembler.library" = "Libs/disassembler.library" }
+
+# Prefs, Tools, L: (the startup-sequence assigns L: to the Extras disk when
+# SYS:L is missing), the ReAction classes and the fonts.
+[[layer]]
+type = "unpack"
+media = "adf/3.2/Extras3.2.adf"
+exclude = ["Disk.info"]
+
+[[layer]]
+type = "unpack"
+media = "adf/3.2/Classes3.2.adf"
+exclude = ["Disk.info"]
+
+[[layer]]
+type = "unpack"
+media = "adf/3.2/Fonts.adf"
+into = "Fonts"
+exclude = ["Disk.info"]
+
+# The startup-sequence assigns LOCALE: to SYS:Locale only when it exists,
+# and MUI's block in S:User-Startup adds to LOCALE:. English needs no
+# catalogs; the country files are what Locale prefs reads.
+[[layer]]
+type = "copy"
+media = "adf/3.2/Locale.adf"
+files = { "Countries" = "Locale/Countries" }
+
+# ---- SAS/C 6.50 ------------------------------------------------------------
+# SAS/C's disks hold its files in SAS's own compressed format, which only
+# its Amiga `decompress` program unpacks, so this layer runs on the machine.
+
+[[layer]]
+type = "amiga"
+name = "sasc"
+script = "systems/a3000-dev/install-sasc"
+disks = [
+  "dev/sasc-6.50/disk1.7z",
+  "dev/sasc-6.50/disk2.7z",
+  "dev/sasc-6.50/disk3.7z",
+  "dev/sasc-6.50/disk4.7z",
+  "dev/sasc-6.50/disk5.7z",
+]
+timeout = 1200
+
+# ---- The Amiga Developer Update 3.1 (NDU 3.1) ----------------------------------
+# Commodore's notes (Using_Includes on disk 3) say to use these includes and
+# linker libraries in place of the ones a compiler shipped with. They go in
+# their own tree; S:User-Startup puts them first in INCLUDE: and LIB:.
+
+[[layer]]
+type = "copy"
+media = "dev/ndu-3.1/disk3-includes-libs.7z"
+member = "include_h.lha"
+files = { "include" = "Developer/NDU3.1/Include" }
+
+[[layer]]
+type = "copy"
+media = "dev/ndu-3.1/disk3-includes-libs.7z"
+member = "include_i.lha"
+files = { "include" = "Developer/NDU3.1/Include" }
+
+[[layer]]
+type = "copy"
+media = "dev/ndu-3.1/disk3-includes-libs.7z"
+member = "fd.lha"
+files = { "fd" = "Developer/NDU3.1/FD" }
+
+[[layer]]
+type = "copy"
+media = "dev/ndu-3.1/disk3-includes-libs.7z"
+member = "linker_libs.lha"
+files = { "lib" = "Developer/NDU3.1/Lib" }
+
+[[layer]]
+type = "copy"
+media = "dev/ndu-3.1/disk1-autodocs.7z"
+member = "autodocs.lha"
+files = { "doc" = "Developer/NDU3.1/Autodocs" }
+
+# ---- MUI 3.8 -------------------------------------------------------------------
+# What MUI's Installer does: copy the MUI drawer to SYS:MUI, the keyfile to
+# S:, and add its block to S:User-Startup (below). The archive is plain LhA,
+# so this happens on the host.
+
+[[layer]]
+type = "unpack"
+media = "mui/mui38usr.lha"
+exclude = ["MUI/Install-MUI", "MUI/Install-MUI.info", "MUI/Installer433"]
+
+[[layer]]
+type = "copy"
+media = "mui/mui.key"
+files = { "mui.key" = "S/mui.key" }
+
+[[layer]]
+type = "copy"
+media = "mui/mui38dev.lha"
+files = { "MUI/Developer" = "Developer/MUI" }
+
+# ---- S:User-Startup ------------------------------------------------------------
+# amiga-env adds its own block at the end (see `amiga-env exec`).
+
+[[layer]]
+type = "file"
+path = "S/User-Startup"
+text = """
+; User-Startup for the a3000-dev system, written by systems/a3000-dev.toml.
+
+; SAS/C 6.50: the assigns and path its Installer adds.
+Assign SC: SYS:SC
+Path SC:c ADD
+
+; The 3.1 Developer Update and the MUI developer files are searched before
+; the includes and linker libraries SAS/C shipped with.
+Assign Developer: SYS:Developer
+Assign INCLUDE: Developer:NDU3.1/Include Developer:MUI/C/Include SC:include
+Assign LIB: Developer:NDU3.1/Lib SC:lib
+Assign FD: Developer:NDU3.1/FD
+
+;BEGIN MUI
+if exists "SYS:MUI"
+   assign MUI: "SYS:MUI"
+   if exists MUI:Libs
+      assign add LIBS: MUI:Libs
+   endif
+   if exists MUI:Locale
+      assign add LOCALE: MUI:Locale
+   endif
+   version >nil: exec.library 39
+   if not warn
+      if exists MUI:Docs
+         if exists HELP:dummy ; do not remove
+         endif                ; this entry!
+         assign add HELP: MUI:Docs
+      endif
+   endif
+endif
+;END MUI
+"""

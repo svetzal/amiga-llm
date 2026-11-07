@@ -1,0 +1,235 @@
+; Install SAS/C 6.50 into SYS:SC with no person present.
+;
+; SAS's Commodore Installer script (Install_SASC_6.50 on disk 1) stops at
+; its welcome dialog even with MINUSER NOVICE, so this script makes the same
+; calls itself. It is the script's hard-disk branch with these choices:
+;
+;   items      C compiler and headers, optimizers, assembler and headers,
+;              debugger, extra utilities, examples and source
+;   libraries  standard, IEEE math, 68881 math
+;   left out   C++, cross debugger, extras (CED, Enforcer and others), and
+;              the on-line help, which would put a 1993 amigaguide.library
+;              over the 3.2 one
+;
+; Every MakeDir and decompress call below is in the order the Installer
+; script makes it. The assigns and the path the Installer would add to
+; S:User-Startup are written by the recipe instead. The six disks are
+; mounted under their own volume names, so nothing asks for a disk swap.
+
+Stack 20000
+Copy SASC_6.50_Disk_1:decompress RAM:
+If NOT EXISTS "SYS:SC"
+  MakeDir "SYS:SC"
+EndIf
+RAM:decompress "SASC_6.50_Disk_1:Compiler_files" "SYS:SC"
+If NOT EXISTS "SYS:SC/c"
+  MakeDir "SYS:SC/c"
+EndIf
+RAM:decompress "SASC_6.50_Disk_1:Compiler/c_files" "SYS:SC/c"
+If NOT EXISTS "SYS:SC/libs"
+  MakeDir "SYS:SC/libs"
+EndIf
+RAM:decompress "SASC_6.50_Disk_1:Compiler/libs_files" "SYS:SC/libs"
+If NOT EXISTS "SYS:SC/env"
+  MakeDir "SYS:SC/env"
+EndIf
+If NOT EXISTS "env:sc"
+  MakeDir "env:sc"
+EndIf
+If NOT EXISTS "envarc:sc"
+  MakeDir "envarc:sc"
+EndIf
+RAM:decompress "SASC_6.50_Disk_1:Compiler/env_files" "SYS:SC/env"
+If NOT EXISTS "SYS:SC/icons"
+  MakeDir "SYS:SC/icons"
+EndIf
+RAM:decompress "SASC_6.50_Disk_1:Compiler/icons_files" "SYS:SC/icons"
+If NOT EXISTS "SYS:SC/starter_project"
+  MakeDir "SYS:SC/starter_project"
+EndIf
+RAM:decompress "SASC_6.50_Disk_1:Compiler/starter_project_files" "SYS:SC/starter_project"
+If NOT EXISTS "SYS:SC/include"
+  MakeDir "SYS:SC/include"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include_files" "SYS:SC/include"
+If NOT EXISTS "SYS:SC/include/clib"
+  MakeDir "SYS:SC/include/clib"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/clib_files" "SYS:SC/include/clib"
+If NOT EXISTS "SYS:SC/include/datatypes"
+  MakeDir "SYS:SC/include/datatypes"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/datatypes_files" "SYS:SC/include/datatypes"
+If NOT EXISTS "SYS:SC/include/devices"
+  MakeDir "SYS:SC/include/devices"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/devices_files" "SYS:SC/include/devices"
+If NOT EXISTS "SYS:SC/include/diskfont"
+  MakeDir "SYS:SC/include/diskfont"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/diskfont_files" "SYS:SC/include/diskfont"
+If NOT EXISTS "SYS:SC/include/dos"
+  MakeDir "SYS:SC/include/dos"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/dos_files" "SYS:SC/include/dos"
+If NOT EXISTS "SYS:SC/include/exec"
+  MakeDir "SYS:SC/include/exec"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/exec_files" "SYS:SC/include/exec"
+If NOT EXISTS "SYS:SC/include/gadgets"
+  MakeDir "SYS:SC/include/gadgets"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/gadgets_files" "SYS:SC/include/gadgets"
+If NOT EXISTS "SYS:SC/include/graphics"
+  MakeDir "SYS:SC/include/graphics"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/graphics_files" "SYS:SC/include/graphics"
+If NOT EXISTS "SYS:SC/include/hardware"
+  MakeDir "SYS:SC/include/hardware"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/hardware_files" "SYS:SC/include/hardware"
+If NOT EXISTS "SYS:SC/include/intuition"
+  MakeDir "SYS:SC/include/intuition"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/intuition_files" "SYS:SC/include/intuition"
+If NOT EXISTS "SYS:SC/include/libraries"
+  MakeDir "SYS:SC/include/libraries"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/libraries_files" "SYS:SC/include/libraries"
+If NOT EXISTS "SYS:SC/include/pragmas"
+  MakeDir "SYS:SC/include/pragmas"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/pragmas_files" "SYS:SC/include/pragmas"
+If NOT EXISTS "SYS:SC/include/prefs"
+  MakeDir "SYS:SC/include/prefs"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/prefs_files" "SYS:SC/include/prefs"
+If NOT EXISTS "SYS:SC/include/proto"
+  MakeDir "SYS:SC/include/proto"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/proto_files" "SYS:SC/include/proto"
+If NOT EXISTS "SYS:SC/include/resources"
+  MakeDir "SYS:SC/include/resources"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/resources_files" "SYS:SC/include/resources"
+If NOT EXISTS "SYS:SC/include/rexx"
+  MakeDir "SYS:SC/include/rexx"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/rexx_files" "SYS:SC/include/rexx"
+If NOT EXISTS "SYS:SC/include/sys"
+  MakeDir "SYS:SC/include/sys"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/sys_files" "SYS:SC/include/sys"
+If NOT EXISTS "SYS:SC/include/utility"
+  MakeDir "SYS:SC/include/utility"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/utility_files" "SYS:SC/include/utility"
+If NOT EXISTS "SYS:SC/include/workbench"
+  MakeDir "SYS:SC/include/workbench"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/include/workbench_files" "SYS:SC/include/workbench"
+If NOT EXISTS "SYS:SC/lib"
+  MakeDir "SYS:SC/lib"
+EndIf
+RAM:decompress "SASC_6.50_Disk_2:compiler/lib_files" "SYS:SC/lib"
+RAM:decompress "SASC_6.50_Disk_2:Compiler/lib/sc.lib_files" "SYS:SC/lib"
+RAM:decompress "SASC_6.50_Disk_2:Compiler/lib/scm.lib_files" "SYS:SC/lib"
+RAM:decompress "SASC_6.50_Disk_2:compiler/lib/scmieee.lib_files" "SYS:SC/lib"
+RAM:decompress "SASC_6.50_Disk_2:compiler/lib/scm881.lib_files" "SYS:SC/lib"
+RAM:decompress "SASC_6.50_Disk_3:Compiler/lib_files" "SYS:SC/lib"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/c_files" "SYS:SC/c"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/datatypes_files" "SYS:SC/include/datatypes"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/devices_files" "SYS:SC/include/devices"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/diskfont_files" "SYS:SC/include/diskfont"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/dos_files" "SYS:SC/include/dos"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/exec_files" "SYS:SC/include/exec"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/gadgets_files" "SYS:SC/include/gadgets"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/graphics_files" "SYS:SC/include/graphics"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/hardware_files" "SYS:SC/include/hardware"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/intuition_files" "SYS:SC/include/intuition"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/libraries_files" "SYS:SC/include/libraries"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/prefs_files" "SYS:SC/include/prefs"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/resources_files" "SYS:SC/include/resources"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/rexx_files" "SYS:SC/include/rexx"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/utility_files" "SYS:SC/include/utility"
+RAM:decompress "SASC_6.50_Disk_3:Assembler/include/workbench_files" "SYS:SC/include/workbench"
+RAM:decompress "SASC_6.50_Disk_4:Debugger/libs_files" "SYS:SC/libs"
+RAM:decompress "SASC_6.50_Disk_4:Debugger/c_files" "SYS:SC/c"
+RAM:decompress "SASC_6.50_Disk_4:optimizers/libs_files" "SYS:SC/libs"
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples_files" "SYS:SC"
+If NOT EXISTS "SYS:SC/examples"
+  MakeDir "SYS:SC/examples"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples_files" "SYS:SC/examples"
+If NOT EXISTS "SYS:SC/examples/avg"
+  MakeDir "SYS:SC/examples/avg"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/avg_files" "SYS:SC/examples/avg"
+If NOT EXISTS "SYS:SC/examples/cback"
+  MakeDir "SYS:SC/examples/cback"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/cback_files" "SYS:SC/examples/cback"
+If NOT EXISTS "SYS:SC/examples/cover"
+  MakeDir "SYS:SC/examples/cover"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/cover_files" "SYS:SC/examples/cover"
+If NOT EXISTS "SYS:SC/examples/cres"
+  MakeDir "SYS:SC/examples/cres"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/cres_files" "SYS:SC/examples/cres"
+If NOT EXISTS "SYS:SC/examples/cxxsharedlib"
+  MakeDir "SYS:SC/examples/cxxsharedlib"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/cxxsharedlib_files" "SYS:SC/examples/cxxsharedlib"
+If NOT EXISTS "SYS:SC/examples/example_device"
+  MakeDir "SYS:SC/examples/example_device"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/example_device_files" "SYS:SC/examples/example_device"
+If NOT EXISTS "SYS:SC/examples/multitask"
+  MakeDir "SYS:SC/examples/multitask"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/multitask_files" "SYS:SC/examples/multitask"
+If NOT EXISTS "SYS:SC/examples/catching_tasks"
+  MakeDir "SYS:SC/examples/catching_tasks"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/catching_tasks_files" "SYS:SC/examples/catching_tasks"
+If NOT EXISTS "SYS:SC/examples/nostartup"
+  MakeDir "SYS:SC/examples/nostartup"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/nostartup_files" "SYS:SC/examples/nostartup"
+If NOT EXISTS "SYS:SC/examples/nostartup/Example_1"
+  MakeDir "SYS:SC/examples/nostartup/Example_1"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/nostartup/Example_1_files" "SYS:SC/examples/nostartup/Example_1"
+If NOT EXISTS "SYS:SC/examples/nostartup/Example_2"
+  MakeDir "SYS:SC/examples/nostartup/Example_2"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/nostartup/Example_2_files" "SYS:SC/examples/nostartup/Example_2"
+If NOT EXISTS "SYS:SC/examples/nostartup/Example_3"
+  MakeDir "SYS:SC/examples/nostartup/Example_3"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/nostartup/Example_3_files" "SYS:SC/examples/nostartup/Example_3"
+If NOT EXISTS "SYS:SC/examples/reslib"
+  MakeDir "SYS:SC/examples/reslib"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/reslib_files" "SYS:SC/examples/reslib"
+If NOT EXISTS "SYS:SC/examples/samplelib"
+  MakeDir "SYS:SC/examples/samplelib"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/examples/samplelib_files" "SYS:SC/examples/samplelib"
+If NOT EXISTS "SYS:SC/source"
+  MakeDir "SYS:SC/source"
+EndIf
+RAM:decompress "SASC_6.50_Disk_4:Source_and_Examples/source_files" "SYS:SC/source"
+RAM:decompress "SASC_6.50_Disk_5:Extra_Utilities/c_files" "SYS:SC/c"
+If NOT EXISTS "SYS:SC/rexx"
+  MakeDir "SYS:SC/rexx"
+EndIf
+RAM:decompress "SASC_6.50_Disk_5:Extra_Utilities/rexx_files" "SYS:SC/rexx"
+Delete >NIL: RAM:decompress
+
+; Check the result: these fail the script, and so the build, if missing.
+Assign SC: SYS:SC
+Version SC:c/sc FULL
+Version SC:c/slink FULL
+List SC:lib/sc.lib SC:lib/amiga.lib SC:include/proto/exec.h LFORMAT "%n %l"
