@@ -139,6 +139,8 @@ This repository is a Claude Code plugin marketplace
 (`plugins/amiga-dev/`). Skills so far:
 
 - `amiberry`: install, isolate, boot, drive and observe Amiberry.
+- `amiga-setup`: set up a new project like this one with the `amiga-env`
+  tool: media from the user's own collection, machines, the build loop.
 
 Candidates to extract next, when their knowledge is verified: the 68000
 cross-toolchain and boot floppies for Kickstart 1.x, OS-version headers and

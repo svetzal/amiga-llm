@@ -15,8 +15,9 @@ records what that project showed needed changing.
 ## Agent skills
 
 This repository is also a Claude Code plugin marketplace. The `amiga-dev`
-plugin holds skills that work in any Amiga project, starting with `amiberry`:
-installing, isolating, booting, driving and observing the emulator.
+plugin holds skills that work in any Amiga project: `amiberry` (installing,
+isolating, booting, driving and observing the emulator) and `amiga-setup`
+(setting up a new project like this one from your own licensed media).
 
 ```text
 /plugin marketplace add svetzal/amiga-llm
