@@ -142,8 +142,9 @@ Verified commands:
 | `READ_MEM <addr> <width>` | `OK  <value>`, the value in decimal; width 4 reads a big-endian long. About 0.09 ms a call on an Apple silicon Mac, so 350 KB read a long at a time takes under 3 s |
 | `SET_WARP 1` | Runs as fast as the host can; a cycle-exact A500 did 223 s of emulated time in about 30 s |
 | `GET_CONFIG <key>` | `OK  <value>` for some keys (`sound_output`), `ERROR  Unknown option` for others (`sound_frequency`); `--dump-config` shows them all |
+| `SEND_KEY <code> <state>` | Presses (`1`) or releases (`0`) a key; the code is the Amiga raw key code in decimal (`64` is space, `2` is the 2 key, `49` is Z, `68` is Return). Send both states, a tenth of a second apart. Works with warp on (Amiberry 8.5.0, A500 on Kickstart 1.2, read by a program from a console in raw mode) |
 
-The list also has keyboard and mouse input (`SEND_KEY`, `SEND_MOUSE`),
+The list also has mouse input (`SEND_MOUSE`),
 `WRITE_MEM`, floppy changes (`INSERTFLOPPY`,
 `EJECT_FLOPPY`), save states, `FRAME_ADVANCE` and a debugger
 (`DEBUG_STEP`, `GET_CPU_REGS`, `DISASSEMBLE`, breakpoints). These are listed
