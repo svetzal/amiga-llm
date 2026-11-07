@@ -148,3 +148,12 @@ class TestAmigaToml:
             "kickstart": Path("rom/forever/amiga-os-120.rom"),
             "disk": Path("adf/1.2/workbench.adf"),
         }
+
+
+def test_an_exported_image_replaces_the_system_folder_and_the_volumes():
+    image = Path("/project/runs/export/a3000-dev.hdf")
+    args = machine_args(MACHINES["a3000-dev-060"], media=MEDIA, image=image)
+    settings = _settings(args)
+
+    assert "hardfile2=rw,DH0:/project/runs/export/a3000-dev.hdf,0,0,0,512,0,,uaehf0" in settings
+    assert not [s for s in settings if s.startswith("filesystem2=")]

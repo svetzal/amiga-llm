@@ -10,6 +10,7 @@ from . import (
     adf,
     amiberry,
     assemble,
+    export,
     guard,
     home,
     init,
@@ -109,6 +110,18 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     make.add_argument("name", metavar="NAME")
     make.add_argument("--force", action="store_true", help="rebuild every layer from nothing")
     act.add_parser("list", help="list the recipes and whether each is built")
+    out = act.add_parser(
+        "export", help="write a built system to an RDB hard-disk image for a real Amiga"
+    )
+    out.add_argument("name", metavar="NAME")
+    out.add_argument("image", type=Path, metavar="OUT.hdf")
+    out.add_argument(
+        "--include-personal",
+        action="store_true",
+        help="keep paths the recipe marks personal, such as a keyfile",
+    )
+    out.add_argument("--system-size", type=int, default=49, metavar="MIB", help="DH0; 49")
+    out.add_argument("--work-size", type=int, default=748, metavar="MIB", help="DH1 Work; 748")
 
     once = sub.add_parser(
         "exec", help="boot MACHINE with no window, run an AmigaDOS SCRIPT once, then quit"
@@ -117,6 +130,12 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     once.add_argument("script", type=Path, metavar="SCRIPT", help="AmigaDOS script on the host")
     once.add_argument("--timeout", type=float, default=300, help="seconds to wait; default 300")
     once.add_argument("--screenshot", type=Path, metavar="PNG", help="screenshot when it ends")
+    once.add_argument(
+        "--image",
+        type=Path,
+        metavar="HDF",
+        help="boot an exported image (`system export`) in place of the system folder",
+    )
 
     # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
@@ -156,6 +175,10 @@ COMMANDS = {
 def _system(args: argparse.Namespace) -> None:
     if args.system_command == "list":
         system.list_systems()
+    elif args.system_command == "export":
+        export.export(
+            args.name, args.image, args.include_personal, args.system_size, args.work_size
+        )
     else:
         system.build(args.name, args.force)
 
@@ -170,7 +193,7 @@ def _exec(args: argparse.Namespace) -> int:
     _ready(machine)
     exchange = project.runs_dir() / "exec" / args.machine
     outcome = session.run_script(
-        profile.machine_args(machine),
+        profile.machine_args(machine, image=args.image.resolve() if args.image else None),
         exchange,
         args.script.read_text(),
         args.timeout,

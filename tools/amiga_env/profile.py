@@ -66,15 +66,37 @@ def load_machines(path: Path | None = None, reserved: Iterable[str] = ()) -> dic
 
 
 def machine_args(
-    machine: Machine, disk: Path | None = None, media: Path | None = None, root: Path | None = None
+    machine: Machine,
+    disk: Path | None = None,
+    media: Path | None = None,
+    root: Path | None = None,
+    image: Path | None = None,
 ) -> list[str]:
     """Arguments that boot `machine` from `disk`, or from its own floppy if it names one,
-    with its system as DH0: and its volumes after it."""
+    with its system as DH0: and its volumes after it.
+
+    With `image`, an RDB hard-disk image (see export.py) replaces the system
+    and the volumes: its partitions bring their own DH0: and Work:.
+    """
     args = base_args(machine, media)
     floppy = disk or ((media or project.media_dir()) / machine.disk if machine.disk else None)
     if floppy is not None:
         args[4:4] = ["-0", str(floppy)]
+    if image is not None:
+        return [*args, "-s", hardfile_setting(image)]
     return args + session.volume_args(volumes(machine, root))
+
+
+def hardfile_setting(image: Path) -> str:
+    """The Amiberry setting that attaches an RDB image to UAE's hard-disk controller.
+
+    Zero sectors, surfaces and reserved blocks tell Amiberry to read the
+    geometry and partitions from the image's RDB; the device name is unused.
+    """
+    path = str(image)
+    if "," in path:
+        raise SystemExit(f"Amiberry cannot attach an image whose path has a comma: {path}")
+    return f"hardfile2=rw,DH0:{path},0,0,0,512,0,,uaehf0"
 
 
 def base_args(machine: Machine, media: Path | None = None) -> list[str]:
