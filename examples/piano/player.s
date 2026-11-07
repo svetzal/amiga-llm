@@ -20,8 +20,10 @@
 ;   piano            the screen: a 320x200 16-colour NTSC screen showing the
 ;                    title picture with the song list drawn in (screen.py).
 ;                    A click on a piece's line, or its key (1 to 9, then
-;                    A to Z without Q), plays it, or switches to it while
-;                    another plays. Esc or Q quits.
+;                    A to Z without F and Q), plays it, or switches to it
+;                    while another plays. Left alone, it plays the pieces
+;                    in turn (choose, below). Space stops; F switches the
+;                    audio filter (and the power LED); Esc or Q quits.
 ;   piano 3 1        plays pieces 3 and 1 (their keys), then ends; no screen
 ;
 ; The screen is an Intuition custom screen with a borderless backdrop
@@ -155,6 +157,7 @@ KEY_UP          equ $80             ; in a RAWKEY code
 KEY_ESC         equ $45
 KEY_Q           equ $10
 KEY_SPACE       equ $40
+KEY_F           equ $23
 
 custom          equ $dff000
 DMACON          equ $096
@@ -163,6 +166,8 @@ INTREQ          equ $09c
 AUD0LC          equ $0a0        ; then LEN +4, PER +6, VOL +8; channels $10 apart
 COLOR13         equ custom+$19a
 
+ciaapra         equ $bfe001         ; bit 1: the power LED and the audio filter, 0 = on
+LED_BIT         equ 1
 ciabtalo        equ $bfd400
 ciabtahi        equ $bfd500
 ciabcra         equ $bfde00
@@ -175,7 +180,7 @@ PAULA_PER_MS    equ TIMER_PERIOD*5
 VOICES          equ 4
 FADE_MS         equ 5           ; as player.FADE_MS
 LOG_BYTES       equ 362400      ; 15,100 ticks, 251 s: room for the scores beside it
-MAX_PIECES      equ 34          ; 1-9 and A-Z without Q
+MAX_PIECES      equ 33          ; 1-9 and A-Z without F and Q
 
 ; The screen and the scopes; screen.i (made with the picture) has the rows.
 SCREEN_WIDTH    equ 320
@@ -246,7 +251,8 @@ ST_NEXT         equ 176         ; the piece the rotation plays next, from 0
 ST_ROTATE_AT    equ 180         ; when it will, -1 when it waits for a choice
 ST_PRELOAD_FRAMES equ 184       ; vertical blanks loading every score at the start
 ST_SCORES_BYTES equ 188         ; their bytes
-ST_END          equ 192
+ST_FILTER_KEYS  equ 192         ; presses of F, each switching the audio filter
+ST_END          equ 196
 ST_PER_PIECE    equ ST_TOTAL_E  ; cleared before each piece, to ST_PLAYED
 
 ; A voice
@@ -319,6 +325,9 @@ start:
         dbf     d0,.clear
         move.l  #-1,STATUS+ST_HIGHLIGHT.w
         move.l  #'PIAN',STATUS+ST_MAGIC.w
+        move.b  ciaapra,d0              ; the filter as it was, for the end
+        and.b   #1<<LED_BIT,d0
+        move.b  d0,led_start
 
         lea     dosname(pc),a1
         moveq   #0,d0
@@ -375,7 +384,8 @@ no_memory:
         bsr     print
 failed: move.l  #-1,STATUS+ST_STATE.w
         bsr     close_display
-close:  bsr     free_scores
+close:  bsr     restore_filter
+        bsr     free_scores
         move.l  index_mem,d0
         beq.s   .log
         move.l  d0,a1
@@ -398,6 +408,16 @@ close:  bsr     free_scores
         jsr     _LVOCloseLibrary(a6)
 .out:   moveq   #0,d0
         rts
+
+; Put the filter back as it was when the program started.
+restore_filter:
+        move.b  ciaapra,d0
+        move.b  led_start,d1
+        eor.b   d1,d0
+        btst    #LED_BIT,d0
+        beq.s   .same
+        bchg    #LED_BIT,ciaapra
+.same:  rts
 
 ; The vertical blank count (ST_VBLANKS) and the alarm: a signal the
 ; vertical blank server sends the task when the count reaches alarm_at
@@ -1092,6 +1112,8 @@ next_choice:
         beq     .quit
         cmp.b   #KEY_SPACE,d3
         beq     .hold
+        cmp.b   #KEY_F,d3
+        beq     .filter
         lea     piece_keys,a0
         moveq   #0,d0
 .key:   cmp.l   pieces,d0
@@ -1136,6 +1158,10 @@ next_choice:
 .hold:  cmp.l   #-1,d4
         beq     .next
         moveq   #-2,d4
+        bra     .next
+.filter:                                ; the A500's audio filter, and the power
+        bchg    #LED_BIT,ciaapra        ; LED with it: only that bit, by the task
+        addq.l  #1,STATUS+ST_FILTER_KEYS.w
         bra     .next
 .quit:  moveq   #-1,d4
         bra     .next
@@ -2459,7 +2485,7 @@ intname_lib:    dc.b "intuition.library",0
 ciabname:       dc.b "ciab.resource",0
 index_name:     dc.b "scores/index",0
 picture_name:   dc.b "title.ilbm",0
-menu_keys:      dc.b "123456789ABCDEFGHIJKLMNOPRSTUVWXYZ"
+menu_keys:      dc.b "123456789ABCDEGHIJKLMNOPRSTUVWXYZ"
 banner:         dc.b "EXP-004, the expressive piano: %ld pieces.",10
                 dc.b "Samples: %ld bytes at $%lx in chip RAM,",10
                 dc.b "%s.",10,0
@@ -2600,7 +2626,7 @@ alarm_on:       ds.w 1
 rotate_frames:  ds.l 1                  ; ROTATE_S in vertical blanks
 clock_on:       ds.w 1                  ; 1 while the vertical blank server is in
 alarm_bit:      ds.b 1
-                ds.b 1
+led_start:      ds.b 1                  ; ciaapra's LED bit when the program started
                 cnop 0,4
 fib:            ds.b 260                ; a FileInfoBlock, longword aligned
 textbuf:        ds.b 512

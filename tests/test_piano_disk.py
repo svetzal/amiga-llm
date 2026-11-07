@@ -19,7 +19,11 @@ class TestMenu:
 
     def test_q_is_left_for_quit(self):
         assert "Q" not in disk.MENU_KEYS
-        assert disk.MENU_KEYS[24:26] == "PR"
+        assert disk.MENU_KEYS[23:25] == "PR"
+
+    def test_f_is_left_for_the_filter(self):
+        assert "F" not in disk.MENU_KEYS
+        assert disk.MENU_KEYS[12:15] == "DEG"
 
     def test_each_score_is_numbered_in_menu_order_in_the_scores_folder(self):
         entries = disk.menu([("nocturne", "Chopin: N"), ("bwv846", "Bach: P")])
@@ -27,8 +31,8 @@ class TestMenu:
         assert [e.path for e in entries] == ["scores/01-nocturne.score", "scores/02-bwv846.score"]
 
     def test_more_pieces_than_keys_are_refused(self):
-        with pytest.raises(SystemExit, match="34 keys"):
-            disk.menu([(f"p{n}", "T") for n in range(35)])
+        with pytest.raises(SystemExit, match="33 keys"):
+            disk.menu([(f"p{n}", "T") for n in range(34)])
 
     @pytest.mark.parametrize("title", ["", "Chopin: Nocturne\nOp. 9", "Frédéric"])
     def test_a_title_is_one_line_of_ascii(self, title):
@@ -93,6 +97,9 @@ class TestMenuInclude:
     def test_q_is_left_for_quit(self):
         assert disk.RAW_KEYS["Q"] == 0x10
         assert "Q" not in disk.MENU_KEYS
+
+    def test_f_has_its_raw_code_for_the_filter_key(self):
+        assert disk.RAW_KEYS["F"] == 0x23
 
 
 class TestCredits:

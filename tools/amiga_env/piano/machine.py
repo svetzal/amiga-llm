@@ -82,6 +82,7 @@ STATUS_FIELDS = (
     "rotate_at",
     "preload_frames",
     "scores_bytes",
+    "filter_keys",
 )
 # Window fields (struct Window): the pointer's position in the window.
 WINDOW_MOUSE_Y, WINDOW_MOUSE_X = 12, 14
@@ -147,6 +148,7 @@ class Status(NamedTuple):
     rotate_at: int  # when, 0xFFFFFFFF while it waits for a choice
     preload_frames: int  # vertical blanks loading every score at the start
     scores_bytes: int
+    filter_keys: int  # presses of F, each switching the A500's audio filter
 
 
 def parse_status(longs: Sequence[int]) -> Status:
@@ -280,7 +282,7 @@ def raw_key(key: str) -> int:
 
 def compare_logs(model: bytes, machine: bytes) -> dict:
     """Whether the machine's log is the model's; `same_ticks` compares the ticks both have
-    (the player's log holds 277 s, so a longer piece's is the model's first 277 s)."""
+    (the test build's log holds 251 s, so a longer piece's is the model's first 251 s)."""
     ticks = len(machine) // m68k.LOG_BYTES_PER_TICK
     difference = m68k.first_difference(model, machine)
     return {

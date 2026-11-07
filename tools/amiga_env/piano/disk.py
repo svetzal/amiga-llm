@@ -17,8 +17,8 @@ by rebuilding the disk:
     build/piano/piano.adf          the player
     build/piano/piano-log.adf      the test build
 
-Pieces take keys 1 to 9, then the letters without Q (MENU_KEYS); Q and Esc
-quit. The player gets Amiga raw key codes, so `menu.i` gives it each
+Pieces take keys 1 to 9, then the letters without F and Q (MENU_KEYS); Q
+and Esc quit, F switches the A500's audio filter, Space stops. The player gets Amiga raw key codes, so `menu.i` gives it each
 piece's code (RAW_KEYS), and the recipe's `rotate_s`: the seconds of quiet
 after which the player plays the next piece by itself.
 """
@@ -39,7 +39,7 @@ LABEL = "Piano"
 INDEX = "scores/index"
 PICTURE = "title.ilbm"
 CREDITS = "Credits"
-MENU_KEYS = "123456789ABCDEFGHIJKLMNOPRSTUVWXYZ"
+MENU_KEYS = "123456789ABCDEGHIJKLMNOPRSTUVWXYZ"  # not F (the filter) or Q (quit)
 OFS_DATA_BYTES = 488  # of each 512-byte block of an OFS file
 CREDITS_WIDTH = 60  # characters a line: the 1.2 boot CLI window wraps after 61
 # Amiga raw key codes (the A500 keyboard's matrix). Each row of letters and
