@@ -12,6 +12,14 @@ A rebuild applies only what changed: an unchanged recipe does nothing, new
 layers at the end are added to the tree, and any other change starts again
 from the latest snapshot still on the recipe's chain, or from nothing. Disks
 and archives are opened once into runs/systems/.cache/, keyed by checksum.
+
+Amiga attributes (protection bits, date, comment) live in FS-UAE `.uaem`
+sidecar files beside each host file: `NAME.uaem` holds one line,
+`hsparwed YYYY-MM-DD HH:MM:SS.TT comment`, in the Amiga's local time.
+Amiberry reads and writes them, and amitools' xdftool unpacks a disk to them
+and packs an image from them, so a file keeps its disk's attributes from
+the floppy to the emulator and on to an exported image. Every copy here
+takes a file's sidecar with it, under the file's new name.
 """
 
 import json
@@ -23,12 +31,15 @@ from pathlib import Path
 
 from amitools.tools import xdftool
 
-from . import media, profile, project, recipe, session
-from .recipe import Amiga, Copy, File, Layer, MediaRef, Recipe, Unpack
+from . import compress, media, profile, project, recipe, session
+from .recipe import Amiga, Copy, Dirs, File, Layer, MediaRef, Recipe, Unpack
 
 SYSTEMS = "systems"
-FSDB = "_UAEFSDB.___"  # Amiberry's per-folder record of Amiga file attributes
+SIDECAR = ".uaem"  # FS-UAE's attribute file, which Amiberry and amitools share
+FSDB = "_UAEFSDB.___"  # WinUAE's per-folder attribute record
 IGNORED = {FSDB, ".DS_Store"}
+# Bump when what the cache holds for a disk or archive changes.
+CACHE_FORMAT = 2
 
 
 def recipes_dir() -> Path:
@@ -61,7 +72,7 @@ def build_dir(name: str) -> Path:
 
 
 def cache_dir() -> Path:
-    return project.runs_dir() / "systems" / ".cache"
+    return project.runs_dir() / "systems" / ".cache" / f"v{CACHE_FORMAT}"
 
 
 def built_layers(name: str) -> list[str]:
@@ -139,18 +150,25 @@ def write_tree_listing(tree: Path, out: Path) -> int:
 
 def _apply(layer: Layer, rec: Recipe, tree: Path, state: Path) -> None:
     match layer:
-        case Unpack(source=source, into=into, exclude=exclude):
+        case Unpack(source=source, into=into, exclude=exclude, decompress=unz):
             opened, _ = open_ref(source)
             dest = _resolve(tree, into, create=True)
             dest.mkdir(parents=True, exist_ok=True)
-            merge(opened, dest, {e.lower() for e in exclude})
-        case Copy(source=source, files=files):
+            merge(opened, dest, _lower(exclude), decompress=unz)
+        case Copy(source=source, files=files, exclude=exclude, decompress=unz):
             opened, _ = open_ref(source)
             for src, dst in files:
-                _copy_path(_existing(opened, src, source.media), tree, dst)
-        case File(path=path, text=text):
+                found = _existing(opened, src, source.media)
+                _copy_path(found, src, tree, dst, _lower(exclude), unz)
+        case Dirs(paths=paths):
+            for path in paths:
+                _resolve(tree, path, create=True).mkdir(exist_ok=True)
+        case File(path=path, text=text, append=append):
             target = _resolve(tree, path, create=True)
-            target.write_text(text)
+            before = target.read_text() if append and target.exists() else ""
+            if before and not before.endswith("\n"):
+                before += "\n"
+            target.write_text(before + text)
         case Amiga():
             _run_amiga(layer, rec, tree, state)
 
@@ -234,9 +252,10 @@ def _is_adf(path: Path) -> bool:
 
 
 def _unpack_adf(adf: Path, slot: Path) -> str:
+    """Unpack with a `.uaem` sidecar for every file and drawer."""
     out = slot / "unpacked"
     out.mkdir()
-    if xdftool.main([str(adf), "unpack", str(out)]) != 0:
+    if xdftool.main([str(adf), "unpack", str(out), "fsuae"]) != 0:
         raise SystemExit(f"xdftool could not unpack {adf}")
     disks = [p for p in out.iterdir() if p.is_dir()]
     if len(disks) != 1:
@@ -282,28 +301,71 @@ def missing_members(listed: list[str], tree: Path) -> list[str]:
 # ---- copying into the tree -----------------------------------------------------
 
 
-def merge(source: Path, dest: Path, exclude: set[str], prefix: str = "") -> None:
+def merge(
+    source: Path, dest: Path, exclude: set[str], prefix: str = "", decompress: bool = False
+) -> None:
     """Copy a folder's contents into dest, matching names as AmigaDOS does
-    (ignoring case), so `LIBS` from one disk lands in `Libs` from another."""
+    (ignoring case), so `LIBS` from one disk lands in `Libs` from another.
+
+    `exclude` holds lower-case paths relative to where `prefix` starts. With
+    `decompress`, NAME.Z arrives as NAME, decompressed, as the 3.2
+    Installer's UNCOMPRESS procedure writes it.
+    """
     for entry in sorted(source.iterdir()):
         rel = f"{prefix}{entry.name}"
-        if entry.name in IGNORED or rel.lower() in exclude:
+        if entry.name in IGNORED or is_sidecar(entry.name) or rel.lower() in exclude:
             continue
-        target = _child(dest, entry.name)
         if entry.is_dir():
+            target = _child(dest, entry.name)
             target.mkdir(exist_ok=True)
-            merge(entry, target, exclude, f"{rel}/")
+            copy_sidecar(entry, target)
+            merge(entry, target, exclude, f"{rel}/", decompress)
         else:
-            shutil.copyfile(entry, target)
+            install_file(entry, dest, entry.name, decompress)
 
 
-def _copy_path(source: Path, tree: Path, dst: str) -> None:
+def install_file(source: Path, folder: Path, name: str, decompress: bool = False) -> Path:
+    """Copy one file and its attributes into folder as name; see merge()."""
+    data = source.read_bytes()
+    if decompress and compress.is_compressed(data):
+        name, data = compress.uncompressed_name(name) or name, compress.uncompress(data)
+    target = _child(folder, name)
+    target.write_bytes(data)
+    copy_sidecar(source, target)
+    return target
+
+
+def is_sidecar(name: str) -> bool:
+    return name.lower().endswith(SIDECAR)
+
+
+def sidecar(path: Path) -> Path:
+    return path.with_name(path.name + SIDECAR)
+
+
+def copy_sidecar(source: Path, target: Path) -> None:
+    """Give target the attributes of source, or the defaults if it has none."""
+    found, wanted = sidecar(source), sidecar(target)
+    if found.is_file():
+        shutil.copyfile(found, wanted)
+    elif wanted.exists():
+        wanted.unlink()
+
+
+def _copy_path(
+    source: Path, src: str, tree: Path, dst: str, exclude: set[str], decompress: bool
+) -> None:
     target = _resolve(tree, dst, create=True)
     if source.is_dir():
         target.mkdir(exist_ok=True)
-        merge(source, target, set())
+        copy_sidecar(source, target)
+        merge(source, target, exclude, f"{src}/".lower(), decompress)
     else:
-        shutil.copyfile(source, target)
+        install_file(source, target.parent, target.name, decompress)
+
+
+def _lower(paths: tuple[str, ...]) -> set[str]:
+    return {p.lower() for p in paths}
 
 
 def _resolve(tree: Path, rel: str, create: bool = False) -> Path:

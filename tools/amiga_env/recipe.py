@@ -12,16 +12,25 @@ system tree (the directory that boots as DH0:):
     media = "adf/3.2/Workbench3.2.adf"
     into = ""                  # path in the system; "" is its root (default)
     exclude = ["Disk.info"]    # paths in the disk to leave out, optional
+    decompress = false         # unpack NAME.Z files as NAME, optional
 
     [[layer]]                  # named files or drawers from a disk or archive
     type = "copy"
-    media = "adf/3.2/ModulesA3000_3.2.adf"
-    files = { "LIBS/icon.library" = "Libs/icon.library" }
+    media = "adf/3.2/Install3.2.adf"
+    files = { "Libs/icon.library" = "Libs/icon.library" }
+    exclude = []               # paths in the disk to leave out, optional
+    decompress = false         # as for unpack, optional
+    personal = false           # true: export leaves these out, optional
+
+    [[layer]]                  # empty drawers, as the Installer's makedir
+    type = "dirs"
+    paths = ["Expansion", "Libs/MMU"]
 
     [[layer]]                  # a text file, written with LF line endings
     type = "file"
     path = "S/User-Startup"
     text = "Assign SC: SYS:SC\\n"
+    append = false             # true: add to the end of the file, optional
 
     [[layer]]                  # an AmigaDOS script run once on the machine
     type = "amiga"
@@ -33,8 +42,9 @@ system tree (the directory that boots as DH0:):
 `media` is a path under media/: an ADF, an archive (.lha, .lzh, .7z, .zip),
 an archive that holds exactly one ADF, or any other file, which opens as a
 folder holding just that file. `member` names a disk or archive inside it,
-which is opened the same way. Everything here is pure: parsing,
-checking, fingerprints and the rebuild plan. system.py does the work.
+which is opened the same way. Files keep the Amiga attributes their disk
+gave them (see system.py). Everything here is pure: parsing, checking,
+fingerprints and the rebuild plan. system.py does the work.
 """
 
 import hashlib
@@ -49,7 +59,7 @@ NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 TOP_KEYS = {"description", "machine", "layer"}
 DEFAULT_TIMEOUT = 600
 # Bump when the meaning of a layer changes, so every system is rebuilt.
-FORMAT = 1
+FORMAT = 2
 ARCHIVE_SUFFIXES = (".lha", ".lzh", ".7z", ".zip")
 CONTAINER_SUFFIXES = (".adf", *ARCHIVE_SUFFIXES)
 
@@ -65,18 +75,28 @@ class Unpack:
     source: MediaRef
     into: str
     exclude: tuple[str, ...]
+    decompress: bool = False
 
 
 @dataclass(frozen=True)
 class Copy:
     source: MediaRef
     files: tuple[tuple[str, str], ...]
+    exclude: tuple[str, ...] = ()
+    decompress: bool = False
+    personal: bool = False
+
+
+@dataclass(frozen=True)
+class Dirs:
+    paths: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class File:
     path: str
     text: str
+    append: bool = False
 
 
 @dataclass(frozen=True)
@@ -87,7 +107,7 @@ class Amiga:
     timeout: int
 
 
-Layer = Unpack | Copy | File | Amiga
+Layer = Unpack | Copy | Dirs | File | Amiga
 
 
 @dataclass(frozen=True)
@@ -138,6 +158,17 @@ def parse(name: str, text: str) -> Recipe:
     )
 
 
+def personal_paths(rec: Recipe) -> tuple[str, ...]:
+    """Paths in the system that hold something personal, such as a keyfile,
+    which an exported image leaves out unless asked."""
+    return tuple(
+        dst
+        for layer in rec.layers
+        if isinstance(layer, Copy) and layer.personal
+        for _, dst in layer.files
+    )
+
+
 def media_refs(layer: Layer) -> tuple[MediaRef, ...]:
     """The media a layer reads."""
     match layer:
@@ -155,8 +186,10 @@ def describe(layer: Layer) -> str:
             return f"unpack {_ref(s)} into {into or 'the root'}"
         case Copy(source=s, files=files):
             return f"copy {len(files)} path(s) from {_ref(s)}"
-        case File(path=path):
-            return f"file   {path}"
+        case Dirs(paths=paths):
+            return f"dirs   {len(paths)} drawer(s)"
+        case File(path=path, append=append):
+            return f"file   {path}{' (append)' if append else ''}"
         case Amiga(name=name, script=script):
             return f"amiga  {name} ({script})"
     raise TypeError(layer)
@@ -218,26 +251,25 @@ def _layer(table: object, where: str) -> Layer:
     if not isinstance(table, dict):
         raise SystemExit(f"{where} must be a table")
     kind = table.get("type")
-    builders = {"unpack": _unpack, "copy": _copy, "file": _file, "amiga": _amiga}
+    builders = {"unpack": _unpack, "copy": _copy, "dirs": _dirs, "file": _file, "amiga": _amiga}
     if kind not in builders:
         raise SystemExit(f"{where}: type is one of {', '.join(builders)}, not {kind!r}")
     return builders[kind](table, f"{where} ({kind})")
 
 
 def _unpack(table: dict, where: str) -> Unpack:
-    _no_unknown_keys(table, {"type", "media", "member", "into", "exclude"}, where)
-    exclude = table.get("exclude", [])
-    if not isinstance(exclude, list):
-        raise SystemExit(f"{where}: exclude is a list of paths in the disk or archive")
+    _no_unknown_keys(table, {"type", "media", "member", "into", "exclude", "decompress"}, where)
     return Unpack(
         source=_media_ref(table, where),
         into=system_path(table.get("into", ""), f"{where} into", allow_root=True),
-        exclude=tuple(system_path(e, f"{where} exclude") for e in exclude),
+        exclude=_paths(table, "exclude", where),
+        decompress=_flag(table, "decompress", where),
     )
 
 
 def _copy(table: dict, where: str) -> Copy:
-    _no_unknown_keys(table, {"type", "media", "member", "files"}, where)
+    allowed = {"type", "media", "member", "files", "exclude", "decompress", "personal"}
+    _no_unknown_keys(table, allowed, where)
     files = table.get("files")
     if not isinstance(files, dict) or not files:
         raise SystemExit(f'{where}: files is a table of "path in media" = "path in system"')
@@ -247,17 +279,46 @@ def _copy(table: dict, where: str) -> Copy:
             (system_path(src, f"{where} files"), system_path(dst, f"{where} files"))
             for src, dst in files.items()
         ),
+        exclude=_paths(table, "exclude", where),
+        decompress=_flag(table, "decompress", where),
+        personal=_flag(table, "personal", where),
     )
 
 
+def _dirs(table: dict, where: str) -> Dirs:
+    _no_unknown_keys(table, {"type", "paths"}, where)
+    paths = _paths(table, "paths", where)
+    if not paths:
+        raise SystemExit(f"{where}: paths lists the drawers to make")
+    return Dirs(paths=paths)
+
+
 def _file(table: dict, where: str) -> File:
-    _no_unknown_keys(table, {"type", "path", "text"}, where)
+    _no_unknown_keys(table, {"type", "path", "text", "append"}, where)
     text = table.get("text")
     if not isinstance(text, str):
         raise SystemExit(f"{where}: text is the file's contents")
     if "\r" in text:
         raise SystemExit(f"{where}: text must use LF line endings")
-    return File(path=system_path(table.get("path"), f"{where} path"), text=text)
+    return File(
+        path=system_path(table.get("path"), f"{where} path"),
+        text=text,
+        append=_flag(table, "append", where),
+    )
+
+
+def _paths(table: dict, key: str, where: str) -> tuple[str, ...]:
+    value = table.get(key, [])
+    if not isinstance(value, list):
+        raise SystemExit(f"{where}: {key} is a list of paths")
+    return tuple(system_path(v, f"{where} {key}") for v in value)
+
+
+def _flag(table: dict, key: str, where: str) -> bool:
+    value = table.get(key, False)
+    if not isinstance(value, bool):
+        raise SystemExit(f"{where}: {key} is true or false")
+    return value
 
 
 def _amiga(table: dict, where: str) -> Amiga:

@@ -5,7 +5,9 @@ here, in a throwaway project."""
 import zipfile
 
 import pytest
-from amiga_env import adf, session, system
+from amitools.tools import xdftool
+from amiga_env import adf, compress, session, system
+from amiga_env.recipe import parse, personal_paths
 
 
 @pytest.fixture
@@ -110,7 +112,8 @@ class TestBuild:
         system.build("t", force=True)
 
         assert system.tree_listing(system.tree_dir("t")) == first
-        assert len(first) == 4
+        files = [line for line in first if not line.endswith(system.SIDECAR)]
+        assert len(files) == 4
 
     def test_list_reports_whether_each_recipe_is_built(self, project, capsys):
         _recipe(project, BASE)
@@ -127,6 +130,113 @@ class TestBuild:
 
         with pytest.raises(SystemExit, match="recipes: t"):
             system.load("nope")
+
+
+# "aaa" as compress writes it: the code for a, then 257 (aa), in 9 bits.
+AAA_Z = compress.MAGIC + bytes([compress.BLOCK_MODE | 9]) + (97 | 257 << 9).to_bytes(3, "little")
+
+
+def _sidecar(path):
+    return (path.parent / (path.name + system.SIDECAR)).read_text()
+
+
+class TestAttributes:
+    def test_a_file_keeps_the_protection_bits_and_date_of_its_disk(self, project):
+        image = str(project / "media" / "adf" / "wb.adf")
+        xdftool.main(
+            [image, "protect", "hello", "srwd", "+", "time", "hello", "13.04.2021 03:43:13"]
+        )
+        _recipe(project, BASE)
+
+        tree = system.build("t")
+
+        assert _sidecar(tree / "hello").startswith("-s--rw-d 2021-04-13 03:43:13.00")
+
+    def test_a_copied_file_takes_its_attributes_under_its_new_name(self, project):
+        xdftool.main([str(project / "media" / "adf" / "wb.adf"), "protect", "hello", "prwed"])
+        _recipe(
+            project,
+            '[[layer]]\ntype = "copy"\nmedia = "adf/wb.adf"\nfiles = { "hello" = "C/Greet" }\n',
+        )
+
+        tree = system.build("t")
+
+        assert _sidecar(tree / "C" / "Greet").startswith("--p-rwed ")
+
+    def test_a_file_from_an_archive_replaces_attributes_as_well_as_content(self, tmp_path):
+        source, dest = tmp_path / "archive", tmp_path / "tree"
+        source.mkdir()
+        dest.mkdir()
+        (source / "Startup").write_text("new")
+        (dest / "Startup").write_text("old")
+        (dest / "Startup.uaem").write_text("-s--rwed 2021-04-13 03:43:13.00\n")
+
+        system.merge(source, dest, set())
+
+        assert sorted(p.name for p in dest.iterdir()) == ["Startup"]
+
+    def test_sidecars_are_not_files_in_their_own_right(self, tmp_path):
+        source, dest = tmp_path / "disk", tmp_path / "tree"
+        source.mkdir()
+        dest.mkdir()
+        (source / "Disk.info").write_text("icon")
+        (source / "Disk.info.uaem").write_text("----rw-d 2021-04-13 03:43:13.00\n")
+
+        system.merge(source, dest, {"disk.info"})
+
+        assert list(dest.iterdir()) == []
+
+
+class TestLayerOptions:
+    def test_decompress_writes_name_z_as_name_as_the_installer_does(self, tmp_path):
+        source, dest = tmp_path / "disk", tmp_path / "tree"
+        source.mkdir()
+        dest.mkdir()
+        (source / "Workbench.guide.Z").write_bytes(AAA_Z)
+        (source / "Workbench.guide.Z.uaem").write_text("----rw-d 2021-04-13 03:44:03.46\n")
+
+        system.merge(source, dest, set(), decompress=True)
+
+        assert (dest / "Workbench.guide").read_bytes() == b"aaa"
+        assert _sidecar(dest / "Workbench.guide").startswith("----rw-d 2021-04-13 03:44:03.46")
+        assert not (dest / "Workbench.guide.Z").exists()
+
+    def test_copy_leaves_out_excluded_paths_named_from_the_disk_root(self, project):
+        _recipe(
+            project,
+            '[[layer]]\ntype = "copy"\nmedia = "dev.zip"\n'
+            'files = { "Dev" = "Developer" }\nexclude = ["Dev/lib/amiga.lib"]\n',
+        )
+
+        tree = system.build("t")
+
+        assert (tree / "Developer" / "include" / "exec" / "types.h").is_file()
+        assert not (tree / "Developer" / "lib" / "amiga.lib").exists()
+
+    def test_dirs_makes_empty_drawers(self, project):
+        _recipe(project, BASE + '[[layer]]\ntype = "dirs"\npaths = ["Libs/MMU", "Expansion"]\n')
+
+        tree = system.build("t")
+
+        assert (tree / "Libs" / "MMU").is_dir()
+        assert (tree / "Expansion").is_dir()
+
+    def test_append_adds_to_the_file_a_disk_put_there(self, project):
+        appended = STARTUP.replace("s/user-startup", "s/startup-sequence")
+        _recipe(project, BASE + appended.replace('type = "file"', 'type = "file"\nappend = true'))
+
+        tree = system.build("t")
+
+        assert (tree / "s" / "startup-sequence").read_text() == "hello\nAssign SC: SYS:SC\n"
+
+    def test_personal_layers_name_the_paths_an_export_leaves_out(self):
+        rec = parse(
+            "t",
+            '[[layer]]\ntype = "copy"\nmedia = "mui/mui.key"\n'
+            'files = { "mui.key" = "S/mui.key" }\npersonal = true\n',
+        )
+
+        assert personal_paths(rec) == ("S/mui.key",)
 
 
 class TestOpeningMedia:
