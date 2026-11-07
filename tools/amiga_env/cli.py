@@ -1,6 +1,7 @@
 """amiga-env: set up, check and run an Amiga development environment in this project."""
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -141,6 +142,20 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         "piano", help="build a Paula piano from RECIPE.toml: samples, scores, voice logs, WAVs"
     )
     piano.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    disks = sub.add_parser(
+        "piano-disk", help="assemble the recipe's 68000 player onto a boot floppy per piece"
+    )
+    disks.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    check = sub.add_parser(
+        "piano-run",
+        help="run a piece's 68000 player on the A500 headless; compare its log, record audio",
+    )
+    check.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    check.add_argument("piece", metavar="PIECE", help="a piece name from the recipe")
+    check.add_argument("--machine", default="a500", help="a machine from amiga.toml; a500")
+    mode = check.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--log", action="store_true", help="the test build: compare the voice log")
+    mode.add_argument("--audio", action="store_true", help="the player, in real time, to a WAV")
 
     # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
@@ -175,6 +190,8 @@ COMMANDS = {
     "system": lambda args: _system(args),
     "exec": lambda args: _exec(args),
     "piano": lambda args: _piano(args.recipe),
+    "piano-disk": lambda args: _piano_disk(args.recipe),
+    "piano-run": lambda args: _piano_run(args),
 }
 
 
@@ -225,6 +242,41 @@ def _piano(recipe: Path) -> None:
             f"{name:<16} {piece['bytes']} score bytes, {piece['steals_per_minute']} steals/min, "
             f"stolen volume median {piece['stolen_volume_median']}"
         )
+
+
+def _piano_disk(recipe: Path) -> None:
+    from .piano import build, disk
+
+    disk.build_disks(build.load_recipe(recipe))
+
+
+def _piano_run(args: argparse.Namespace) -> int:
+    from .piano import build, disk, machine
+
+    recipe = build.load_recipe(args.recipe)
+    if args.piece not in {p.name for p in recipe.pieces}:
+        raise SystemExit(f"no piece {args.piece} in {args.recipe}")
+    machines = profile.load_machines(reserved=command_names())
+    player, test = disk.disk_names(args.piece)
+    out = project.root() / recipe.out
+    name = f"emulator-{args.piece}" + ("-log" if args.log else "")
+    found = machine.run_piece(
+        machines[args.machine],
+        project.build_dir() / "piano" / (test if args.log else player),
+        out / "m68k" / f"{args.piece}.log",
+        out,
+        name,
+        log=args.log,
+        audio=args.audio,
+    )
+    cpu = found["cpu"]
+    print(f"{name}: {cpu['frames']} frames, player {cpu['percent_of_cpu']}% of the CPU")
+    print(f"samples in chip RAM at {found['samples_in_chip']['address']}")
+    if args.log:
+        print(f"voice log: {json.dumps(found['log'])}")
+        return 0 if found["log"]["identical"] else 1
+    print(f"audio: {found.get('wav')}")
+    return 0
 
 
 def _ready(machine: profile.Machine) -> None:

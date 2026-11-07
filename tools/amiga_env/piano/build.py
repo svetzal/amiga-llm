@@ -2,7 +2,8 @@
 
 A recipe (TOML) names an SFZ piano and MIDI performances under media/, the
 sample choices (see samples.SampleSpec) and the chip RAM budget. Everything
-goes to the recipe's `out` folder under the project.
+goes to the recipe's `out` folder under the project; the 68000 player's
+data (see m68k.py) goes to its `m68k` folder.
 """
 
 import csv
@@ -13,7 +14,7 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 from .. import project
-from . import clips, paula, player, samples, score, sfz
+from . import clips, m68k, paula, player, samples, score, sfz
 
 # Bytes the player's tables take in chip or fast RAM, per key and per sample.
 KEY_TABLE_BYTES = 8  # sample index, level, period, held and release factors
@@ -37,6 +38,7 @@ class Recipe:
     program_bytes: int  # an estimate until the 68000 player exists
     velocity_exponent: float
     layer_velocity: int | None  # None: the median velocity of all the pieces
+    player: str = ""  # the 68000 player's source, under the project
 
 
 def load_recipe(path: Path) -> Recipe:
@@ -54,6 +56,7 @@ def load_recipe(path: Path) -> Recipe:
         program_bytes=data["program_bytes"],
         velocity_exponent=data.get("velocity_exponent", 1.5),
         layer_velocity=data.get("layer_velocity"),
+        player=data.get("player", ""),
     )
 
 
@@ -86,12 +89,20 @@ def build(recipe_path: Path) -> dict:
     table = player.velocity_table(recipe.velocity_exponent)
 
     _write_samples(out, made)
+    data = out / "m68k"
+    data.mkdir(exist_ok=True)
+    (data / "keys.bin").write_bytes(m68k.key_table(sounds))
+    (data / "samples.tab").write_bytes(m68k.sample_table(made))
+    (data / "velocity.bin").write_bytes(m68k.velocity_bytes(table))
+    (data / "samples.bin").write_bytes(b"".join(s.data for s in made))
     pieces = {}
     for piece in recipe.pieces:
         perf = performances[piece.name]
         stream = score.encode(perf.events)
         (out / f"{piece.name}.score").write_bytes(stream)
+        (data / f"{piece.name}.score").write_bytes(stream)
         result = player.play(perf.events, sounds, table)
+        (data / f"{piece.name}.log").write_bytes(m68k.log_bytes(result.log))
         _write_log(out / f"{piece.name}.voices.csv", result.log)
         frames = paula.render(result.writes, made, result.end_ms)
         paula.write_wav(out / f"{piece.name}.wav", frames)

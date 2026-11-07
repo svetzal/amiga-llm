@@ -4,6 +4,7 @@
 
 sfz = "salamander/SalamanderGrandPianoV3_44.1khz16bit/SalamanderGrandPianoV3.sfz"
 out = "runs/exp004"
+player = "examples/piano/player.s"   # the 68000 player (`amiga-env piano-disk`)
 
 # Chip RAM for the samples, the larger score, the player's tables and the
 # program, out of the A500's 512 KB; the rest is left to the system.
