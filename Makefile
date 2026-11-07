@@ -20,7 +20,7 @@ help:
 	@echo "make a3000-dev     boot the A3000 development system (build it first)"
 	@echo "make hello         assemble examples/hello into a boot disk, build/hello.adf"
 	@echo "make piano         build EXP-004's Paula piano and render its pieces to runs/exp004"
-	@echo "make piano-disk    assemble EXP-004's 68000 player onto build/piano/<piece>.adf"
+	@echo "make piano-disk    put EXP-004's 68000 player and its pieces on build/piano/piano.adf"
 	@echo "make guard         fail if git tracks licensed media or .env"
 	@echo "make test          lint and run the host-side tests"
 

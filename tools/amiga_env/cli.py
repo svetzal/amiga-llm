@@ -155,11 +155,21 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     survey.add_argument("--max-s", type=float, default=360, help="longest, seconds; 360")
     check = sub.add_parser(
         "piano-run",
-        help="run a piece's 68000 player on the A500 headless; compare its log, record audio",
+        help="boot the piano floppy headless and play pieces from its menu; "
+        "compare their logs, record audio",
     )
     check.add_argument("recipe", type=Path, metavar="RECIPE.toml")
-    check.add_argument("piece", metavar="PIECE", help="a piece name from the recipe")
+    check.add_argument(
+        "pieces", nargs="+", metavar="PIECE", help="piece names from the recipe, played in order"
+    )
     check.add_argument("--machine", default="a500", help="a machine from amiga.toml; a500")
+    check.add_argument(
+        "--stop-after-s",
+        type=float,
+        metavar="S",
+        help="press Return S seconds into each piece, as a listener stopping it would",
+    )
+    check.add_argument("--name", help="what the run's files are called; emulator-menu[-log]")
     mode = check.add_mutually_exclusive_group(required=True)
     mode.add_argument("--log", action="store_true", help="the test build: compare the voice log")
     mode.add_argument("--audio", action="store_true", help="the player, in real time, to a WAV")
@@ -274,29 +284,40 @@ def _piano_run(args: argparse.Namespace) -> int:
     from .piano import build, disk, machine
 
     recipe = build.load_recipe(args.recipe)
-    if args.piece not in {p.name for p in recipe.pieces}:
-        raise SystemExit(f"no piece {args.piece} in {args.recipe}")
+    keys = {p.name: key for p, key in zip(recipe.pieces, disk.MENU_KEYS)}
+    unknown = [name for name in args.pieces if name not in keys]
+    if unknown:
+        raise SystemExit(f"no piece {unknown[0]} in {args.recipe}")
     machines = profile.load_machines(reserved=command_names())
-    player, test = disk.disk_names(args.piece)
     out = project.root() / recipe.out
-    name = f"emulator-{args.piece}" + ("-log" if args.log else "")
-    found = machine.run_piece(
+    player, test = disk.DISK_NAMES
+    name = args.name or ("emulator-menu-log" if args.log else "emulator-menu")
+    stop_ms = round(args.stop_after_s * 1000) if args.stop_after_s is not None else None
+    found = machine.run_menu(
         machines[args.machine],
         project.build_dir() / "piano" / (test if args.log else player),
-        out / "m68k" / f"{args.piece}.log",
+        [machine.Choice(n, keys[n], out / "m68k" / f"{n}.log") for n in args.pieces],
         out,
         name,
         log=args.log,
         audio=args.audio,
+        stop_after_ms=stop_ms,
     )
-    cpu = found["cpu"]
-    print(f"{name}: {cpu['frames']} frames, player {cpu['percent_of_cpu']}% of the CPU")
     print(f"samples in chip RAM at {found['samples_in_chip']['address']}")
-    if args.log:
-        print(f"voice log: {json.dumps(found['log'])}")
-        return 0 if found["log"]["identical"] else 1
-    print(f"audio: {found.get('wav')}")
-    return 0
+    matched = True
+    for piece, result in found["pieces"].items():
+        cpu, free = result["cpu"], result["memory_free_while_playing"]
+        stopped = ", stopped by a key" if result["stopped_by_key"] else ""
+        print(
+            f"{piece} (key {result['key']}): {cpu['frames']} frames{stopped}, player "
+            f"{cpu['percent_of_cpu']}% of the CPU; free {free['chip']} chip, {free['other']} other"
+        )
+        if args.log:
+            print(f"  voice log: {json.dumps(result['log'])}")
+            matched &= result["log"]["same_ticks"]
+    if args.audio:
+        print(f"audio: {found.get('wav')}")
+    return 0 if matched and found["ended"] else 1
 
 
 def _ready(machine: profile.Machine) -> None:

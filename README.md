@@ -138,12 +138,16 @@ Paula piano on the host: 8-bit samples with loops from the Salamander SFZ,
 an event stream from each MAESTRO performance, and a model of the 68000
 player and Paula that writes a voice log, a WAV and a report to
 `runs/exp004/`. `make piano-disk` assembles the 68000 player
-(`examples/piano/player.s`) onto a boot floppy per piece,
-`build/piano/<piece>.adf`, and a test build that logs its voices,
-`build/piano/<piece>-log.adf`. `amiga-env piano-run
-examples/piano/piano.toml PIECE --log` runs the test build headless on the
-A500 and compares its voice log with the model's; `--audio` records the
-player through Amiberry to `runs/exp004/emulator-PIECE.wav`.
+(`examples/piano/player.s`) onto one boot floppy, `build/piano/piano.adf`,
+with every piece's score as a file under `scores/` and a menu to choose
+from; `build/piano/piano-log.adf` holds the test build, which logs its
+voices. `amiga-env piano-run examples/piano/piano.toml PIECE... --log`
+boots the test build headless on the A500, chooses each piece from the
+menu with key presses, and compares each voice log with the model's;
+`--audio` records the player through Amiberry to
+`runs/exp004/emulator-menu.wav`. `amiga-env piano-survey
+examples/piano/piano.toml` measures every MAESTRO performance of 2 to 6
+minutes for four voices, for choosing pieces.
 
 `amiga-env run` and the machine commands set `HOME` to `runs/home/` so
 Amiberry's settings, ROM path, save states and screenshots stay inside the

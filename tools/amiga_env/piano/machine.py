@@ -1,16 +1,18 @@
 """Run the 68000 piano player on the emulated A500 and check it against the model.
 
-One run boots a piece's floppy (see disk.py) on a machine from amiga.toml
-with no window, and watches the status block the player keeps at $100
-through Amiberry's control socket (READ_MEM). With the test build it reads
-the voice log back the same way and compares it byte for byte with the
-model's (`<out>/m68k/<piece>.log`). With `audio`, Amiberry runs at the
-emulated machine's own speed and SDL's disk audio driver writes what
-Amiberry plays (16-bit stereo at 44.1 kHz), which becomes a WAV; without
-it the run goes as fast as the host allows (warp).
+One run boots the piano floppy (see disk.py) on a machine from amiga.toml
+with no window and uses its menu as a person would: it presses a piece's
+key (Amiberry's SEND_KEY, with Amiga raw key codes), waits for the piece to
+end, and so on, then presses Q. It watches the status block the player
+keeps at $100 through Amiberry's control socket (READ_MEM). With the test
+build it reads each piece's voice log back the same way and compares it
+byte for byte with the model's (`<out>/m68k/<piece>.log`). With `audio`,
+Amiberry runs at the emulated machine's own speed and SDL's disk audio
+driver writes what Amiberry plays (16-bit stereo at 44.1 kHz), which
+becomes a WAV; without it the run goes as fast as the host allows (warp).
 
-Everything a run finds goes to `<out>/emulator-<piece>[-log].json`, with
-screenshots and the WAV beside it.
+Everything a run finds goes to `<out>/<name>.json`, with screenshots and
+the WAV beside it.
 """
 
 import json
@@ -42,8 +44,30 @@ STATUS_FIELDS = (
     "max_ms_e",
     "piece",
     "entry_e",
+    "played",
+    "stopped",
+    "pieces",
+    "score",
+    "score_bytes",
+    "chip_free",
+    "other_free",
+    "key",
+    "keys",
 )
-PLAYING, DONE, FAILED = 1, 2, 0xFFFFFFFF
+PLAYING, ENDED, MENU, FAILED = 1, 2, 3, 0xFFFFFFFF
+# Amiga raw key codes (the A500 keyboard's matrix), which SEND_KEY takes.
+# Each row of letters and digits runs on from its first code.
+RAW_KEYS = {
+    key: first + offset
+    for row, first in (
+        ("1234567890", 0x01),
+        ("QWERTYUIOP", 0x10),
+        ("ASDFGHJKL", 0x20),
+        ("ZXCVBNM", 0x31),
+    )
+    for offset, key in enumerate(row)
+}
+RETURN_KEY = 0x44
 E_CLOCK_HZ = 715_909  # NTSC
 TIMER_PERIOD = 716  # E-clock ticks between the player's interrupts
 AUDIO_RATE = 44_100
@@ -68,6 +92,15 @@ class Status(NamedTuple):
     max_ms_e: int
     piece: int
     entry_e: int
+    played: int
+    stopped: int
+    pieces: int
+    score: int
+    score_bytes: int
+    chip_free: int
+    other_free: int
+    key: int
+    keys: int
 
 
 def parse_status(longs: Sequence[int]) -> Status:
@@ -95,13 +128,24 @@ def cpu_report(status: Status) -> dict:
     }
 
 
+def raw_key(key: str) -> int:
+    """The Amiga raw key code of a menu key."""
+    try:
+        return RAW_KEYS[key.upper()]
+    except KeyError:
+        raise SystemExit(f"no raw key code for {key!r}") from None
+
+
 def compare_logs(model: bytes, machine: bytes) -> dict:
+    """Whether the machine's log is the model's; `same_ticks` compares the ticks both have
+    (the player's log holds 277 s, so a longer piece's is the model's first 277 s)."""
     ticks = len(machine) // m68k.LOG_BYTES_PER_TICK
     difference = m68k.first_difference(model, machine)
     return {
         "model_ticks": len(model) // m68k.LOG_BYTES_PER_TICK,
         "machine_ticks": ticks,
         "identical": model == machine,
+        "same_ticks": difference is None,
         "first_difference": difference._asdict() if difference else None,
     }
 
@@ -171,6 +215,14 @@ class Amiga:
             raise SystemExit(f"READ_MEM {address:#x} failed: {' '.join(reply)}")
         return int(reply[1])
 
+    def press(self, code: int) -> None:
+        """Press and release a key, by its Amiga raw key code."""
+        for state in ("1", "0"):
+            reply = self.send("SEND_KEY", str(code), state)
+            if reply[0] != "OK":
+                raise SystemExit(f"SEND_KEY {code:#x} failed: {' '.join(reply)}")
+            time.sleep(0.1)
+
     def screenshot(self, path: Path) -> None:
         reply = self.send("SCREENSHOT", str(path.resolve()))
         if reply[0] != "OK":
@@ -180,17 +232,26 @@ class Amiga:
         self._emulator.stop()
 
 
-def run_piece(
+class Choice(NamedTuple):
+    """A piece to choose from the menu."""
+
+    name: str
+    key: str  # its menu key
+    model_log: Path  # the model's voice log in the player's layout
+
+
+def run_menu(
     machine: profile.Machine,
     floppy: Path,
-    model_log: Path,
+    choices: Sequence[Choice],
     out: Path,
     name: str,
     log: bool,
     audio: bool,
-    timeout: float = 600.0,
+    stop_after_ms: int | None = None,
+    timeout: float = 900.0,
 ) -> dict:
-    """Boot `floppy`, wait for the player to finish, and record what it did."""
+    """Boot `floppy`, choose each piece from the menu in turn, then quit; record each."""
     out.mkdir(parents=True, exist_ok=True)
     raw = out / f"{name}.raw"
     env = {"SDL_AUDIODRIVER": "dummy"}
@@ -204,27 +265,30 @@ def run_piece(
         out / f"{name}.amiberry.log",
         env,
     )
-    found: dict = {"floppy": str(floppy), "audio": audio, "warp": not audio}
+    found: dict = {"floppy": str(floppy), "audio": audio, "warp": not audio, "pieces": {}}
     try:
         amiga.connect(floppy.resolve())
         if not audio:
             amiga.send("SET_WARP", "1")
-        status = _wait(amiga, out / f"{name}-playing.png", timeout)
-        amiga.screenshot(out / f"{name}-done.png")
-        if audio:
-            time.sleep(AUDIO_TAIL_S)
-        found["status"] = status._asdict()
-        if status.state == FAILED:
-            raise SystemExit(f"the player failed; see {out / f'{name}-done.png'}")
-        found["cpu"] = cpu_report(status)
+        status = _wait_for(amiga, lambda s: s.state in (MENU, ENDED, FAILED), timeout)
+        if status.state != MENU:
+            raise SystemExit(f"the player did not reach its menu: {status}")
+        amiga.screenshot(out / f"{name}-menu.png")
+        found["menu_pieces"] = status.pieces
         found["samples_in_chip"] = {
             "address": hex(status.samples),
             "how": "copied with AllocMem" if status.copied else "LoadSeg's chip hunk",
         }
-        if log:
-            machine_log = read_block(amiga.read_long, status.log_base, status.log_bytes)
-            (out / f"{name}.log").write_bytes(machine_log)
-            found["log"] = compare_logs(model_log.read_bytes(), machine_log)
+        for number, choice in enumerate(choices, 1):
+            found["pieces"][choice.name] = _play(
+                amiga, choice, number, out / f"{name}-{choice.name}", log, stop_after_ms, timeout
+            )
+        amiga.press(raw_key("Q"))
+        status = _wait_for(amiga, lambda s: s.state in (ENDED, FAILED), 60)
+        amiga.screenshot(out / f"{name}-end.png")
+        found["ended"] = status.state == ENDED
+        if audio:
+            time.sleep(AUDIO_TAIL_S)
     finally:
         amiga.stop()
     if audio and raw.exists():
@@ -237,15 +301,56 @@ def run_piece(
     return found
 
 
-def _wait(amiga: Amiga, playing_shot: Path, timeout: float) -> Status:
-    started, shot = time.monotonic(), False
+def _play(
+    amiga: Amiga,
+    choice: Choice,
+    number: int,
+    stem: Path,
+    log: bool,
+    stop_after_ms: int | None,
+    timeout: float,
+) -> dict:
+    """Press a piece's key, watch it play, and record it when the menu is back."""
+    amiga.press(raw_key(choice.key))
+    status = _wait_for(amiga, lambda s: s.state in (PLAYING, FAILED) or s.played >= number, 120)
+    shot = Path(f"{stem}-playing.png")
+    while status.played < number:
+        if status.state == FAILED:
+            raise SystemExit(f"the player failed during {choice.name}")
+        if status.ms > 5000 and not shot.exists():
+            amiga.screenshot(shot)
+        if stop_after_ms is not None and status.ms >= stop_after_ms:
+            amiga.press(RETURN_KEY)
+            stop_after_ms = None
+        status = _wait_for(amiga, lambda s: True, timeout)
+    status = _wait_for(amiga, lambda s: s.state in (MENU, ENDED, FAILED), 60)
+    amiga.screenshot(Path(f"{stem}-done.png"))
+    found = {
+        "key": choice.key,
+        "status": status._asdict(),
+        "stopped_by_key": bool(status.stopped),
+        "cpu": cpu_report(status),
+        "memory_free_while_playing": {"chip": status.chip_free, "other": status.other_free},
+        "score": {"address": hex(status.score), "bytes": status.score_bytes},
+    }
+    if log:
+        machine_log = read_block(amiga.read_long, status.log_base, status.log_bytes)
+        Path(f"{stem}.log").write_bytes(machine_log)
+        found["log"] = compare_logs(choice.model_log.read_bytes(), machine_log)
+    return found
+
+
+def _wait_for(amiga: Amiga, ready: Callable[[Status], bool], timeout: float) -> Status:
+    """Poll the status block once a second until `ready` says so."""
+    started = time.monotonic()
     while True:
         time.sleep(1.0)
-        status = parse_status([amiga.read_long(STATUS + 4 * i) for i in range(13)])
-        if status.magic == MAGIC and status.state == PLAYING and not shot and status.ms > 5000:
-            amiga.screenshot(playing_shot)
-            shot = True
-        if status.magic == MAGIC and status.state in (DONE, FAILED):
+        status = read_status(amiga)
+        if status.magic == MAGIC and ready(status):
             return status
         if time.monotonic() - started > timeout:
-            raise SystemExit(f"the player did not finish within {timeout:g} s")
+            raise SystemExit(f"the player did not get there within {timeout:g} s: {status}")
+
+
+def read_status(amiga: Amiga) -> Status:
+    return parse_status([amiga.read_long(STATUS + 4 * i) for i in range(len(STATUS_FIELDS))])

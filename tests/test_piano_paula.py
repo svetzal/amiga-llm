@@ -134,8 +134,10 @@ class TestBuildHelpers:
 
         recipe = build.load_recipe(REPO / "examples" / "piano" / "piano.toml")
 
-        assert [p.name for p in recipe.pieces] == ["nocturne-op9-2", "bwv846"]
+        assert [p.name for p in recipe.pieces][:2] == ["nocturne-op9-2", "bwv846"]
+        assert len(recipe.pieces) == 10
         assert recipe.spec.spacing == 3
+        assert recipe.layer_velocity == 64  # adding a piece must not change the samples
 
 
 def _made(root, keys, decay_db):

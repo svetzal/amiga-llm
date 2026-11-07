@@ -12,9 +12,9 @@ def status(**fields):
 
 class TestStatus:
     def test_the_status_block_is_read_in_order(self):
-        found = machine.parse_status(list(range(13)))
+        found = machine.parse_status(list(range(len(machine.STATUS_FIELDS))))
 
-        assert (found.magic, found.state, found.entry_e) == (0, 1, 12)
+        assert (found.magic, found.state, found.entry_e, found.keys) == (0, 1, 12, 21)
 
     def test_cpu_shares_are_of_the_e_clock_ticks_played(self):
         # 1000 ms of 716 ticks; 71,600 ticks used is 10%; dispatch 35,800 is 5%.
@@ -44,6 +44,7 @@ def test_logs_compare_with_the_first_difference():
 
     assert machine.compare_logs(model, model)["identical"]
     found = machine.compare_logs(model, other)
+    assert not found["same_ticks"]
     assert found["first_difference"] == {
         "tick": 0,
         "voice": 3,
@@ -67,11 +68,27 @@ def test_disk_audio_becomes_a_stereo_wav(tmp_path):
         )
 
 
-class TestDisks:
-    def test_each_piece_has_a_player_floppy_and_a_test_floppy(self):
-        assert disk.disk_names("bwv846") == ("bwv846.adf", "bwv846-log.adf")
-        assert disk.startup("bwv846") == ["piano bwv846"]
+def test_a_log_cut_short_matches_over_the_ticks_it_has():
+    rows = [LogRow(t, 0, v, v, v, 300, 10, 10) for t in range(3) for v in range(4)]
+    model = m68k.log_bytes(rows)
 
+    found = machine.compare_logs(model, model[: 2 * m68k.LOG_BYTES_PER_TICK])
+
+    assert (found["identical"], found["same_ticks"], found["machine_ticks"]) == (False, True, 2)
+
+
+class TestKeys:
+    def test_menu_keys_are_amiga_raw_key_codes(self):
+        assert [machine.raw_key(k) for k in "19AQZ"] == [0x01, 0x09, 0x20, 0x10, 0x31]
+
+    def test_lower_case_presses_the_same_key(self):
+        assert machine.raw_key("a") == machine.raw_key("A")
+
+    def test_every_menu_key_has_a_code(self):
+        assert all(machine.raw_key(k) for k in disk.MENU_KEYS)
+
+
+class TestDisks:
     def test_ofs_blocks_count_headers_and_extension_blocks(self):
         assert disk.ofs_blocks(488) == 2
         assert disk.ofs_blocks(72 * 488) == 73

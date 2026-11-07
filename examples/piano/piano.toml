@@ -30,6 +30,9 @@ attack_treble_s = 0.4
 loop_s = 0.1
 fade_s = 0.01
 
+# The pieces, in menu order (keys 1 to 9, then letters). Their menu titles are
+# MAESTRO's composer and title for the MIDI file. Chosen with
+# `amiga-env piano-survey`; see EXP-004, "More pieces".
 [[piece]]
 name = "nocturne-op9-2"
 midi = "maestro/maestro-v3.0.0/2011/MIDI-Unprocessed_06_R3_2011_MID--AUDIO_R3-D3_05_Track05_wav.midi"
@@ -37,3 +40,35 @@ midi = "maestro/maestro-v3.0.0/2011/MIDI-Unprocessed_06_R3_2011_MID--AUDIO_R3-D3
 [[piece]]
 name = "bwv846"
 midi = "maestro/maestro-v3.0.0/2014/MIDI-UNPROCESSED_16-18_R1_2014_MID--AUDIO_16_R1_2014_wav--1.midi"
+
+[[piece]]
+name = "bwv802"
+midi = "maestro/maestro-v3.0.0/2009/MIDI-Unprocessed_06_R1_2009_03-07_ORIG_MID--AUDIO_06_R1_2009_06_R1_2009_03_WAV.midi"
+
+[[piece]]
+name = "scarlatti-k145"
+midi = "maestro/maestro-v3.0.0/2014/MIDI-UNPROCESSED_19-21_R3_2014_MID--AUDIO_21_R3_2014_wav--2.midi"
+
+[[piece]]
+name = "haydn-hob16-23"
+midi = "maestro/maestro-v3.0.0/2015/MIDI-Unprocessed_R1_D1-1-8_mid--AUDIO-from_mp3_02_R1_2015_wav--2.midi"
+
+[[piece]]
+name = "mozart-k333"
+midi = "maestro/maestro-v3.0.0/2017/MIDI-Unprocessed_052_PIANO052_MID--AUDIO-split_07-06-17_Piano-e_3-03_wav--3.midi"
+
+[[piece]]
+name = "beethoven-op31-3"
+midi = "maestro/maestro-v3.0.0/2008/MIDI-Unprocessed_09_R1_2008_01-05_ORIG_MID--AUDIO_09_R1_2008_wav--2.midi"
+
+[[piece]]
+name = "schubert-d962"
+midi = "maestro/maestro-v3.0.0/2009/MIDI-Unprocessed_21_R2_2009_01_ORIG_MID--AUDIO_21_R2_2009_21_R2_2009_03_WAV.midi"
+
+[[piece]]
+name = "nocturne-cs-minor"
+midi = "maestro/maestro-v3.0.0/2014/MIDI-UNPROCESSED_04-05_R1_2014_MID--AUDIO_05_R1_2014_wav--6.midi"
+
+[[piece]]
+name = "debussy-neige"
+midi = "maestro/maestro-v3.0.0/2018/MIDI-Unprocessed_Recital16_MID--AUDIO_16_R1_2018_wav--3.midi"

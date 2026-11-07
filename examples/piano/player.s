@@ -1,7 +1,7 @@
 ; player.s: EXP-004's piano player for the baseline A500.
 ;
-; A 68000 on Kickstart 1.2 with OCS: plays a recorded piano performance
-; (a score byte stream) through Paula's four voices with 8-bit samples,
+; A 68000 on Kickstart 1.2 with OCS: plays recorded piano performances
+; (score byte streams) through Paula's four voices with 8-bit samples,
 ; exactly as the host model in tools/amiga_env/piano/player.py does, so
 ; that the two voice logs can be compared byte for byte.
 ;
@@ -10,20 +10,33 @@
 ; folder on the include path. `-DLOG=1` makes the test build, which also
 ; writes the voice log (see m68k.py for its layout).
 ;
-; Usage from a CLI or the startup-sequence:
-;   piano            the Nocturne, Op. 9 No. 2
-;   piano bach       BWV 846
+; The program holds the samples (in chip RAM) and the tables. The pieces
+; are files on the disk: scores/index has one line a piece, in menu order,
+; the score's file name, a space and the title; each score is loaded with
+; dos.library when it is chosen, played, and freed. Paths are relative to
+; the current directory, which is the disk's root when the disk boots.
 ;
-; How it runs. The program stays inside the operating system: it Forbid()s
-; task switching, takes CIA-B timer A through ciab.resource as a 1 kHz
-; interrupt, takes the four audio interrupt vectors with SetIntVector, and
-; drives Paula directly. Every millisecond the CIA interrupt steps the
-; fades, reads the score's events for that millisecond, and on a frame tick
-; (tick k at k * 1000 // 60 ms) decays every voice. Each note starts Paula
-; on the whole sample; the channel's audio interrupt, which Paula raises
-; once it has taken the start and length, writes the loop's start and
-; length so that Paula goes round the loop when the sample ends. When the
-; piece is over it gives everything back, Permit()s, and prints what it
+; Usage from a CLI or the startup-sequence:
+;   piano            the menu: a numbered list in the CLI window; a key
+;                    chooses a piece (1 to 9, then letters, Q quits), and
+;                    a key during a piece stops it
+;   piano 3 1        plays pieces 3 and 1 (the menu's keys), then ends
+;
+; The menu reads single key presses: it opens the CLI's window ("*") and
+; puts its console handler in raw mode with an ACTION_SCREEN_MODE packet
+; (Kickstart 1.2 has no SetMode), and back to cooked mode at the end.
+; Input() is not used, because in the startup-sequence it is the script.
+;
+; How a piece plays. The program takes CIA-B timer A through ciab.resource
+; as a 1 kHz interrupt and the four audio interrupt vectors with
+; SetIntVector, and drives Paula directly. Every millisecond the CIA
+; interrupt steps the fades, reads the score's events for that millisecond,
+; and on a frame tick (tick k at k * 1000 // 60 ms) decays every voice. Each
+; note starts Paula on the whole sample; the channel's audio interrupt,
+; which Paula raises once it has taken the start and length, writes the
+; loop's start and length so that Paula goes round the loop when the sample
+; ends. The task itself only waits: for a key (WaitForChar) or for the end.
+; When the piece is over it gives everything back and prints what it
 ; measured.
 ;
 ; Status for the host, at the unused 68000 vectors from $100 (see STATUS).
@@ -33,20 +46,29 @@ LOG     equ     0
         endif
 
 ; exec.library (V33), from the NDK's exec_lib.fd
-_LVODisable         equ -120
-_LVOEnable          equ -126
-_LVOForbid          equ -132
-_LVOPermit          equ -138
+_LVOFreeMem         equ -210
+_LVOAvailMem        equ -216
+_LVOFindTask        equ -294
+_LVOSetSignal       equ -306
 _LVOSetIntVector    equ -162
 _LVOAllocMem        equ -198
+_LVOPutMsg          equ -366
+_LVOGetMsg          equ -372
+_LVOWaitPort        equ -384
 _LVOCloseLibrary    equ -414
 _LVOOpenResource    equ -498
 _LVORawDoFmt        equ -522
 _LVOTypeOfMem       equ -534
 _LVOOpenLibrary     equ -552
-; dos.library
+; dos.library (V33), from dos_lib.fd
+_LVOOpen            equ -30
+_LVOClose           equ -36
+_LVORead            equ -42
 _LVOWrite           equ -48
 _LVOOutput          equ -60
+_LVOSeek            equ -66
+_LVODelay           equ -198
+_LVOWaitForChar     equ -204
 ; ciab.resource (cia_lib.fd)
 _LVOAddICRVector    equ -6
 _LVORemICRVector    equ -12
@@ -56,8 +78,28 @@ ExecBase        equ 4
 MEMF_PUBLIC     equ 1
 MEMF_CHIP       equ 2
 NT_INTERRUPT    equ 2
+NT_MESSAGE      equ 5
 INTB_AUD0       equ 7
 CIAICRB_TA      equ 0
+SIGBREAKF_CTRL_C equ $1000
+
+MODE_OLDFILE    equ 1005
+OFFSET_BEGINNING equ -1
+OFFSET_END      equ 1
+ACTION_SCREEN_MODE equ 994      ; dp_Arg1 -1 raw, 0 cooked
+pr_MsgPort      equ $5c         ; in struct Process
+fh_Type         equ 8           ; in struct FileHandle: the handler's port
+LN_TYPE         equ 8
+LN_NAME         equ 10
+MN_REPLYPORT    equ 14
+MN_LENGTH       equ 18
+MESSAGE_SIZE    equ 20
+dp_Link         equ 0
+dp_Port         equ 4
+dp_Type         equ 8
+dp_Res1         equ 12
+dp_Arg1         equ 20
+DOSPACKET_SIZE  equ 48
 
 custom          equ $dff000
 DMACON          equ $096
@@ -75,11 +117,13 @@ TIMER_PERIOD    equ TIMER_LATCH+1
 VOICES          equ 4
 FADE_MS         equ 5           ; as player.FADE_MS
 LOG_BYTES       equ 400000      ; 16,666 ticks, 277 s
+MAX_PIECES      equ 34          ; 1-9 and A-Z without Q
+WAIT_US         equ 20000       ; how long one WaitForChar waits for a key
 
 ; Status block, read by the host through the emulator's memory.
 STATUS          equ $100
 ST_MAGIC        equ 0           ; 'PIAN'
-ST_STATE        equ 4           ; 0 starting, 1 playing, 2 done, -1 failed
+ST_STATE        equ 4           ; 0 starting, 1 playing, 2 ended, 3 menu, -1 failed
 ST_LOGBASE      equ 8
 ST_LOGBYTES     equ 12
 ST_SAMPLES      equ 16          ; where the samples are in chip RAM
@@ -89,9 +133,19 @@ ST_MS           equ 28          ; milliseconds played
 ST_MAX_FRAME_E  equ 32          ; most E-clock ticks in one frame (16 or 17 ms)
 ST_FRAMES       equ 36
 ST_MAX_MS_E     equ 40          ; most in one millisecond's interrupt
-ST_PIECE        equ 44          ; 0 nocturne, 1 BWV 846
+ST_PIECE        equ 44          ; the piece playing or last played, from 0 in menu order
 ST_ENTRY_E      equ 48          ; E-clock ticks from the timer running out to the handler
-ST_END          equ 52
+ST_PLAYED       equ 52          ; pieces played to their end or stopped
+ST_STOPPED      equ 56          ; 1 when the last piece was stopped by a key
+ST_PIECES       equ 60          ; pieces in the index
+ST_SCORE        equ 64          ; where the score is
+ST_SCORE_BYTES  equ 68
+ST_CHIP_FREE    equ 72          ; AvailMem while the score is loaded: chip RAM
+ST_OTHER_FREE   equ 76          ; and all other memory
+ST_KEY          equ 80          ; the last key read: its character, or what Read returned
+ST_KEYS         equ 84          ; keys read
+ST_END          equ 88
+ST_PER_PIECE    equ ST_TOTAL_E  ; cleared before each piece, to ST_PLAYED
 
 ; A voice
 V_KEY           equ 0           ; 0-87, -1 when silent
@@ -128,8 +182,12 @@ IS_SIZE         equ 22
         section code,code
 
 start:
-        move.l  a0,a2                   ; the argument line
-        move.l  d0,d2
+        lea     bss_start,a1            ; every variable starts at 0
+        move.w  #(bss_end-bss_start)/2-1,d1
+.zero:  clr.w   (a1)+
+        dbf     d1,.zero
+        move.l  a0,args
+        move.l  d0,args_len
         move.l  ExecBase.w,a6
         lea     STATUS+ST_STATE.w,a0
         moveq   #(ST_END-ST_STATE)/4-1,d0
@@ -137,7 +195,6 @@ start:
         dbf     d0,.clear
         move.l  #'PIAN',STATUS+ST_MAGIC.w
 
-        bsr     choose_piece
         lea     dosname(pc),a1
         moveq   #0,d0
         jsr     _LVOOpenLibrary(a6)
@@ -153,15 +210,15 @@ start:
         jsr     _LVOAllocMem(a6)
         tst.l   d0
         beq     no_memory
-        move.l  d0,log_ptr
         move.l  d0,STATUS+ST_LOGBASE.w
-        add.l   #LOG_BYTES,d0
-        move.l  d0,log_end
         endif
-        bsr     voices_silent
+        bsr     read_index
+        tst.l   d0
+        beq     failed
+
         lea     banner(pc),a0
-        lea     banner_args,a1
-        move.l  piece_name,(a1)
+        lea     fmt_args,a1
+        move.l  pieces,(a1)
         move.l  #samples_end-samples,4(a1)
         move.l  samples_base,8(a1)
         lea     loaded(pc),a2
@@ -171,20 +228,384 @@ start:
 .how:   move.l  a2,12(a1)
         bsr     print
 
-        jsr     _LVOForbid(a6)
+        bsr     next_argument
+        bmi.s   .menu
+        bsr     play_arguments
+        bra.s   .ended
+.menu:  bsr     menu
+.ended: move.l  #2,STATUS+ST_STATE.w
+        bra.s   close
+
+no_memory:
+        lea     memory_text(pc),a0
+        bsr     print
+failed: move.l  #-1,STATUS+ST_STATE.w
+close:  move.l  index_mem,d0
+        beq.s   .log
+        move.l  d0,a1
+        move.l  index_bytes,d0
+        addq.l  #1,d0
+        jsr     _LVOFreeMem(a6)
+.log:
+        if      LOG
+        move.l  STATUS+ST_LOGBASE.w,d0
+        beq.s   .dos
+        move.l  d0,a1
+        move.l  #LOG_BYTES,d0
+        jsr     _LVOFreeMem(a6)
+.dos:
+        endif
+        move.l  dosbase,d0
+        beq.s   .out
+        move.l  d0,a1
+        jsr     _LVOCloseLibrary(a6)
+.out:   moveq   #0,d0
+        rts
+
+; ---------------------------------------------------------------------------
+; The pieces: the index, the menu, the arguments.
+; ---------------------------------------------------------------------------
+
+; Load scores/index and split it into pieces: d0 is 0 when it cannot.
+; Each line is a file name, a space and a title; the names and titles are
+; ended with 0 in place, and their addresses go to files and titles.
+read_index:
+        lea     index_name(pc),a0
+        bsr     load_file
+        tst.l   d0
+        bne.s   .parse
+        lea     no_index_text(pc),a0
+        bsr     print
+        moveq   #0,d0
+        rts
+.parse: move.l  d0,index_mem
+        move.l  d1,index_bytes
+        move.l  d0,a0
+        lea     files,a1
+        lea     titles,a2
+        moveq   #0,d1                   ; pieces
+.line:  tst.b   (a0)
+        beq.s   .done
+        cmp.b   #10,(a0)
+        bne.s   .entry
+        addq.l  #1,a0                   ; an empty line
+        bra.s   .line
+.entry: cmp.w   #MAX_PIECES,d1
+        beq.s   .done
+        move.l  a0,(a1)+                ; the file
+.name:  move.b  (a0)+,d0
+        beq.s   .short
+        cmp.b   #10,d0
+        beq.s   .short
+        cmp.b   #' ',d0
+        bne.s   .name
+        clr.b   -1(a0)
+        move.l  a0,(a2)+                ; the title
+.title: move.b  (a0)+,d0
+        beq.s   .last
+        cmp.b   #10,d0
+        bne.s   .title
+        clr.b   -1(a0)
+        addq.w  #1,d1
+        bra.s   .line
+.last:  subq.l  #1,a0
+        addq.w  #1,d1
+        bra.s   .done
+.short: subq.l  #4,a1                   ; a line with no title is left out
+        tst.b   -1(a0)
+        bne.s   .line
+        subq.l  #1,a0
+.done:  move.l  d1,pieces
+        move.l  d1,STATUS+ST_PIECES.w
+        moveq   #1,d0
+        rts
+
+; The menu: list the pieces, read a key, play the piece, until Q.
+menu:
+        lea     console_name(pc),a0
+        move.l  a0,d1
+        move.l  #MODE_OLDFILE,d2
+        move.l  dosbase,a6
+        jsr     _LVOOpen(a6)
+        move.l  ExecBase.w,a6
+        move.l  d0,console
+        bne.s   .open
+        lea     no_console_text(pc),a0
+        bra     print
+.open:  moveq   #-1,d0
+        bsr     console_mode
+.list:  bsr     print_menu
+        move.l  #3,STATUS+ST_STATE.w
+.key:   bsr     read_key
+        bmi.s   .quit                   ; the window is gone
+        cmp.b   #'Q',d0
+        beq.s   .quit
+        bsr     piece_for_key
+        bmi.s   .key
+        bsr     play_piece
+        bra.s   .list
+.quit:  lea     bye_text(pc),a0
+        bsr     print
+        moveq   #0,d0
+        bsr     console_mode
+        move.l  console,d1
+        move.l  dosbase,a6
+        jsr     _LVOClose(a6)
+        move.l  ExecBase.w,a6
+        rts
+
+print_menu:
+        movem.l d2-d3/a2-a3,-(sp)
+        lea     menu_keys(pc),a2
+        lea     titles,a3
+        move.l  pieces,d2
+        bra.s   .next
+.line:  lea     fmt_args,a1
+        lea     keystr,a0
+        move.b  (a2)+,(a0)
+        move.l  a0,(a1)
+        move.l  (a3)+,4(a1)
+        lea     menu_line(pc),a0
+        bsr     print
+.next:  dbf     d2,.line
+        lea     menu_tail(pc),a0
+        bsr     print
+        movem.l (sp)+,d2-d3/a2-a3
+        rts
+
+; d0: the piece for the key in d0 (from 0), negative when there is none.
+piece_for_key:
+        cmp.b   #'a',d0
+        bcs.s   .upper
+        cmp.b   #'z',d0
+        bhi.s   .upper
+        sub.b   #'a'-'A',d0
+.upper: lea     menu_keys(pc),a0
+        moveq   #0,d1
+.find:  cmp.l   pieces,d1
+        beq.s   .none
+        cmp.b   (a0)+,d0
+        beq.s   .found
+        addq.l  #1,d1
+        bra.s   .find
+.found: move.l  d1,d0
+        rts
+.none:  moveq   #-1,d0
+        rts
+
+; d0: the next key from the window, upper case for letters; negative when
+; the window cannot be read.
+read_key:
+        movem.l d2-d3/a6,-(sp)
+        move.l  dosbase,a6
+        move.l  console,d1
+        move.l  #keybuf,d2
+        moveq   #1,d3
+        jsr     _LVORead(a6)
+        movem.l (sp)+,d2-d3/a6
+        addq.l  #1,STATUS+ST_KEYS.w
+        move.l  d0,STATUS+ST_KEY.w
+        cmp.l   #1,d0
+        bne.s   .none
+        moveq   #0,d0
+        move.b  keybuf,d0
+        move.l  d0,STATUS+ST_KEY.w
+        cmp.b   #'a',d0
+        bcs.s   .out
+        cmp.b   #'z',d0
+        bhi.s   .out
+        sub.b   #'a'-'A',d0
+.out:   tst.l   d0                      ; the caller tests the sign
+        rts
+.none:  moveq   #-1,d0
+        rts
+
+; Put the window's console handler in raw mode (d0 = -1) or cooked mode
+; (d0 = 0) with an ACTION_SCREEN_MODE packet, sent from this process's
+; message port and waited for there.
+console_mode:
+        movem.l d2/a2-a3,-(sp)
+        move.l  d0,d2
+        move.l  console,d0
+        lsl.l   #2,d0                   ; a BPTR
+        move.l  d0,a0
+        move.l  fh_Type(a0),d0
+        beq.s   .out                    ; no handler (NIL:)
+        move.l  d0,a3
+        sub.l   a1,a1
+        jsr     _LVOFindTask(a6)
+        move.l  d0,a2
+        lea     pr_MsgPort(a2),a2
+        lea     packet,a1
+        lea     MESSAGE_SIZE(a1),a0
+        move.b  #NT_MESSAGE,LN_TYPE(a1)
+        move.l  a0,LN_NAME(a1)
+        move.l  a2,MN_REPLYPORT(a1)
+        move.w  #DOSPACKET_SIZE,MN_LENGTH(a1)
+        move.l  a1,dp_Link(a0)
+        move.l  a2,dp_Port(a0)
+        move.l  #ACTION_SCREEN_MODE,dp_Type(a0)
+        move.l  d2,dp_Arg1(a0)
+        move.l  a3,a0
+        jsr     _LVOPutMsg(a6)
+        move.l  a2,a0
+        jsr     _LVOWaitPort(a6)
+        move.l  a2,a0
+        jsr     _LVOGetMsg(a6)
+.out:   movem.l (sp)+,d2/a2-a3
+        rts
+
+; The pieces named in the arguments, one menu key each, in order.
+play_arguments:
+.next:  bsr     next_argument
+        bmi.s   .out
+        bsr     piece_for_key
+        bmi.s   .next
+        bsr     play_piece
+        bra.s   .next
+.out:   rts
+
+; d0: the next non-space character of the argument line, upper case for
+; letters, negative at its end.
+next_argument:
+        move.l  args,a0
+.skip:  subq.l  #1,args_len
+        bmi.s   .end
+        move.b  (a0)+,d0
+        cmp.b   #' ',d0
+        bls.s   .skip                   ; spaces, tabs and the line end
+        move.l  a0,args
+        and.l   #$ff,d0
+        cmp.b   #'a',d0
+        bcs.s   .out
+        cmp.b   #'z',d0
+        bhi.s   .out
+        sub.b   #'a'-'A',d0
+.out:   tst.l   d0
+        rts
+.end:   move.l  a0,args
+        moveq   #-1,d0
+        rts
+
+; ---------------------------------------------------------------------------
+; One piece: load its score, play it, free it, say what it measured.
+; ---------------------------------------------------------------------------
+
+; Play piece d0 (from 0).
+play_piece:
+        movem.l d2-d7/a2-a5,-(sp)
+        move.l  d0,d6
+        move.l  d0,d7
+        lsl.l   #2,d7
+        lea     fmt_args,a1
+        lea     titles,a0
+        move.l  0(a0,d7.l),(a1)
+        lea     loading_text(pc),a0
+        bsr     print
+        lea     files,a0
+        move.l  0(a0,d7.l),a0
+        bsr     load_file
+        tst.l   d0
+        bne.s   .loaded
+        lea     no_score_text(pc),a0
+        bsr     print
+        bra     .out
+.loaded:
+        move.l  d0,score_mem
+        move.l  d1,score_bytes
+        bsr     reset_piece
+        move.l  d6,STATUS+ST_PIECE.w
+        move.l  score_mem,score_ptr
+        move.l  score_mem,STATUS+ST_SCORE.w
+        move.l  score_bytes,STATUS+ST_SCORE_BYTES.w
+        moveq   #MEMF_CHIP,d1
+        jsr     _LVOAvailMem(a6)
+        move.l  d0,STATUS+ST_CHIP_FREE.w
+        moveq   #0,d1
+        jsr     _LVOAvailMem(a6)
+        sub.l   STATUS+ST_CHIP_FREE.w,d0
+        move.l  d0,STATUS+ST_OTHER_FREE.w
+        lea     fmt_args,a1
+        move.l  score_bytes,(a1)
+        move.l  score_mem,4(a1)
+        move.l  STATUS+ST_CHIP_FREE.w,8(a1)
+        move.l  STATUS+ST_OTHER_FREE.w,12(a1)
+        lea     playing_text(pc),a0
+        bsr     print
+        lea     stop_hint(pc),a0
+        tst.l   console
+        bne.s   .hint
+        lea     play_hint(pc),a0
+.hint:  bsr     print
         bsr     take_audio
         bsr     take_timer
         tst.l   d0
         bne.s   .busy
         move.l  #1,STATUS+ST_STATE.w
-.play:  tst.w   finished                ; the interrupts do the work
-        beq.s   .play
+        bsr     wait_for_end
         bsr     give_timer
 .busy:  bsr     give_audio
-        jsr     _LVOPermit(a6)
 
+        move.l  score_mem,a1
+        move.l  score_bytes,d0
+        addq.l  #1,d0
+        jsr     _LVOFreeMem(a6)
+        addq.l  #1,STATUS+ST_PLAYED.w
+        bsr     print_results
+.out:   movem.l (sp)+,d2-d7/a2-a5
+        rts
+
+; Wait for the interrupts to finish the piece, or for a key in the window,
+; or for CTRL-C. The task sleeps in WaitForChar or Delay meanwhile.
+wait_for_end:
+.wait:  tst.w   finished
+        bne.s   .out
+        moveq   #0,d0
+        moveq   #0,d1
+        jsr     _LVOSetSignal(a6)
+        and.l   #SIGBREAKF_CTRL_C,d0
+        bne.s   .stop
+        move.l  dosbase,a6
+        move.l  console,d1
+        beq.s   .delay
+        move.l  #WAIT_US,d2
+        jsr     _LVOWaitForChar(a6)
+        move.l  ExecBase.w,a6
+        tst.l   d0
+        beq.s   .wait
+        bsr     read_key                ; take the key that stopped it
+.stop:  move.l  #1,STATUS+ST_STOPPED.w
+        rts
+.delay: moveq   #1,d1                   ; 1/50 s
+        jsr     _LVODelay(a6)
+        move.l  ExecBase.w,a6
+        bra.s   .wait
+.out:   rts
+
+; Everything a piece starts from: silent voices, time 0, the score's start,
+; the log's start, and the status's measurements cleared.
+reset_piece:
+        lea     piece_state,a0
+        move.w  #(piece_state_end-piece_state)/2-1,d0
+.clear: clr.w   (a0)+
+        dbf     d0,.clear
+        lea     STATUS+ST_PER_PIECE.w,a0
+        moveq   #(ST_PLAYED-ST_PER_PIECE)/4-1,d0
+.stat:  clr.l   (a0)+
+        dbf     d0,.stat
+        clr.l   STATUS+ST_STOPPED.w
+        clr.l   STATUS+ST_LOGBYTES.w
+        if      LOG
+        move.l  STATUS+ST_LOGBASE.w,d0
+        move.l  d0,log_ptr
+        add.l   #LOG_BYTES,d0
+        move.l  d0,log_end
+        endif
+        bra     voices_silent
+
+print_results:
         lea     STATUS.w,a0
-        lea     result_args,a1
+        lea     fmt_args,a1
         move.l  ST_FRAMES(a0),d1
         move.l  d1,(a1)
         move.l  ST_TOTAL_E(a0),d0
@@ -199,49 +620,79 @@ start:
         tst.w   timer_busy
         beq.s   .say
         lea     busy_text(pc),a0
-.say:   bsr     print
+        bra.s   .print
+.say:   tst.l   STATUS+ST_STOPPED.w
+        beq.s   .print
+        lea     stopped(pc),a0
+.print: bsr     print
         if      LOG
         lea     log_text(pc),a0
-        lea     result_args,a1
+        lea     fmt_args,a1
         move.l  STATUS+ST_LOGBYTES.w,(a1)
         move.l  STATUS+ST_LOGBASE.w,4(a1)
         bsr     print
         endif
-        move.l  #2,STATUS+ST_STATE.w
-        bra.s   close
-
-no_memory:
-        lea     memory_text(pc),a0
-        bsr     print
-failed: move.l  #-1,STATUS+ST_STATE.w
-close:  move.l  dosbase,d0
-        beq.s   .out
-        move.l  d0,a1
-        jsr     _LVOCloseLibrary(a6)
-.out:   moveq   #0,d0
         rts
 
-; Choose the piece from the argument line (a2, length d2): a first word
-; starting with b or B is BWV 846.
-choose_piece:
-        lea     score_nocturne,a0
-        lea     name_nocturne(pc),a1
+; Load the file named a0 (a C string) into new public memory, with a 0
+; after it. d0: the memory, or 0 when the file or the memory is missing;
+; d1: the file's size. Free it with FreeMem(d0, d1 + 1).
+load_file:
+        movem.l d2-d5/a2,-(sp)
+        move.l  dosbase,a6
+        move.l  a0,d1
+        move.l  #MODE_OLDFILE,d2
+        jsr     _LVOOpen(a6)
+        move.l  d0,d4
+        beq.s   .fail
+        move.l  d4,d1
+        moveq   #0,d2
+        moveq   #OFFSET_END,d3
+        jsr     _LVOSeek(a6)
+        move.l  d4,d1
+        moveq   #0,d2
+        moveq   #OFFSET_BEGINNING,d3
+        jsr     _LVOSeek(a6)            ; returns where it was: the end
+        move.l  d0,d5
+        ble.s   .close
+        move.l  ExecBase.w,a6
+        move.l  d5,d0
+        addq.l  #1,d0
+        move.l  #MEMF_PUBLIC|$10000,d1  ; cleared, so the 0 after it is there
+        jsr     _LVOAllocMem(a6)
+        move.l  dosbase,a6
+        move.l  d0,a2
+        tst.l   d0
+        beq.s   .close
+        move.l  d4,d1
+        move.l  a2,d2
+        move.l  d5,d3
+        jsr     _LVORead(a6)
+        cmp.l   d5,d0
+        beq.s   .read
+        move.l  ExecBase.w,a6           ; a short read: give the memory back
+        move.l  a2,a1
+        move.l  d5,d0
+        addq.l  #1,d0
+        jsr     _LVOFreeMem(a6)
+        move.l  dosbase,a6
+        bra.s   .close
+.read:  move.l  d4,d1
+        jsr     _LVOClose(a6)
+        move.l  a2,d0
+        move.l  d5,d1
+        bra.s   .out
+.close: move.l  d4,d1
+        jsr     _LVOClose(a6)
+.fail:  moveq   #0,d0
         moveq   #0,d1
-.skip:  subq.l  #1,d2
-        bmi.s   .done
-        move.b  (a2)+,d0
-        cmp.b   #' ',d0
-        beq.s   .skip
-        or.b    #$20,d0
-        cmp.b   #'b',d0
-        bne.s   .done
-        lea     score_bwv846,a0
-        lea     name_bwv846(pc),a1
-        moveq   #1,d1
-.done:  move.l  a0,score_ptr
-        move.l  a1,piece_name
-        move.l  d1,STATUS+ST_PIECE.w
+.out:   move.l  ExecBase.w,a6
+        movem.l (sp)+,d2-d5/a2
         rts
+
+; ---------------------------------------------------------------------------
+; Samples, Paula, the timer, the CLI.
+; ---------------------------------------------------------------------------
 
 ; Find the samples in chip RAM. LoadSeg was asked for chip memory for their
 ; hunk; if it put them elsewhere, copy them into chip RAM from AllocMem.
@@ -326,6 +777,7 @@ give_audio:
 
 ; Take CIA-B timer A and start it as a 1 kHz interrupt. d0: 0 on success.
 take_timer:
+        clr.w   timer_busy
         lea     ciabname(pc),a1
         jsr     _LVOOpenResource(a6)
         move.l  d0,ciabbase
@@ -815,23 +1267,37 @@ aud_handler:
         add.l   d1,frame_e
         rts
 
-name_nocturne:  dc.b "Chopin, Nocturne Op. 9 No. 2 (MAESTRO 2011)",0
-name_bwv846:    dc.b "Bach, Prelude and Fugue in C major, BWV 846 (MAESTRO 2014)",0
+
 dosname:        dc.b "dos.library",0
 ciabname:       dc.b "ciab.resource",0
-banner:         dc.b "EXP-004, the expressive piano.",10
-                dc.b "%s",10
+console_name:   dc.b "*",0
+index_name:     dc.b "scores/index",0
+menu_keys:      dc.b "123456789ABCDEFGHIJKLMNOPRSTUVWXYZ"
+banner:         dc.b "EXP-004, the expressive piano: %ld pieces.",10
                 dc.b "Samples: %ld bytes at $%lx in chip RAM,",10
-                dc.b "%s.",10
-                dc.b "Playing...",10,0
+                dc.b "%s.",10,0
 loaded:         dc.b "where LoadSeg put them",0
 copied:         dc.b "copied there from elsewhere",0
-results:        dc.b "Done: %ld frames (1/60 s).",10
-                dc.b "Player time per frame in E-clock ticks",10
-                dc.b "(11932 a frame): average %ld, worst %ld.",10
-                dc.b "Worst millisecond: %ld ticks of 716.",10,0
+menu_line:      dc.b " %s  %s",10,0
+menu_tail:      dc.b " Q  Quit",10
+                dc.b "Press a key: ",0
+loading_text:   dc.b 10,"%s",10,0
+playing_text:   dc.b "Score: %ld bytes at $%lx.",10
+                dc.b "Free memory: %ld bytes chip, %ld other.",10,0
+stop_hint:      dc.b "Playing; press any key to stop.",10,0
+play_hint:      dc.b "Playing.",10,0
+results:        dc.b "Done: %ld frames (1/60 s). Player time a frame",10
+                dc.b "in E-clock ticks (11932 a frame): average %ld,",10
+                dc.b "worst %ld. Worst millisecond: %ld ticks of 716.",10,0
+stopped:        dc.b "Stopped after %ld frames. Player time a frame",10
+                dc.b "in E-clock ticks (11932 a frame): average %ld,",10
+                dc.b "worst %ld. Worst millisecond: %ld ticks of 716.",10,0
 busy_text:      dc.b "CIA-B timer A is in use; nothing played.",10,0
 memory_text:    dc.b "Not enough memory.",10,0
+no_index_text:  dc.b "Cannot read scores/index: run piano from the disk's root.",10,0
+no_score_text:  dc.b "Cannot load that score.",10,0
+no_console_text: dc.b "Cannot open the CLI window (*) for the menu.",10,0
+bye_text:       dc.b 10,"Bye.",10,0
         if      LOG
 log_text:       dc.b "Voice log: %ld bytes at $%lx.",10,0
         endif
@@ -852,8 +1318,6 @@ audints:
 keys:           incbin "keys.bin"
 sampletab:      incbin "samples.tab"
 velocity:       incbin "velocity.bin"
-score_nocturne: incbin "nocturne-op9-2.score"
-score_bwv846:   incbin "bwv846.score"
         even
 
         section samples,data_c
@@ -863,27 +1327,42 @@ samples_end:
 
         section state,bss
 
+bss_start:
+packet:         ds.b MESSAGE_SIZE+DOSPACKET_SIZE    ; first: longword aligned
+piece_state:                            ; cleared before each piece
 voices:         ds.b V_SIZE*VOICES
 loops:          ds.b 8*VOICES           ; loop start (long) and length (word) per channel
-old_audio:      ds.l VOICES
 now:            ds.l 1
 next_tick:      ds.l 1
 score_time:     ds.l 1
-score_ptr:      ds.l 1
 frame_e:        ds.l 1
-samples_base:   ds.l 1
-dosbase:        ds.l 1
-ciabbase:       ds.l 1
-piece_name:     ds.l 1
-log_ptr:        ds.l 1
-log_end:        ds.l 1
-banner_args:    ds.l 4
-result_args:    ds.l 4
 tick_rem:       ds.w 1
 serial:         ds.w 1
 pedal:          ds.w 1
 score_done:     ds.w 1
 finished:       ds.w 1
 fading:         ds.w 1                  ; voices waiting for a fade
+piece_state_end:
+score_ptr:      ds.l 1
+old_audio:      ds.l VOICES
+samples_base:   ds.l 1
+dosbase:        ds.l 1
+ciabbase:       ds.l 1
+console:        ds.l 1                  ; the CLI window, for the menu; 0 without it
+args:           ds.l 1
+args_len:       ds.l 1
+pieces:         ds.l 1
+files:          ds.l MAX_PIECES
+titles:         ds.l MAX_PIECES
+index_mem:      ds.l 1
+index_bytes:    ds.l 1
+score_mem:      ds.l 1
+score_bytes:    ds.l 1
+log_ptr:        ds.l 1
+log_end:        ds.l 1
+fmt_args:       ds.l 4
 timer_busy:     ds.w 1
+keybuf:         ds.b 2
+keystr:         ds.b 2
 textbuf:        ds.b 512
+bss_end:
