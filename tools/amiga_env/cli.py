@@ -146,6 +146,13 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         "piano-disk", help="assemble the recipe's 68000 player onto a boot floppy per piece"
     )
     disks.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    survey = sub.add_parser(
+        "piano-survey",
+        help="measure every MAESTRO performance of a length for the recipe's four voices",
+    )
+    survey.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    survey.add_argument("--min-s", type=float, default=120, help="shortest, seconds; 120")
+    survey.add_argument("--max-s", type=float, default=360, help="longest, seconds; 360")
     check = sub.add_parser(
         "piano-run",
         help="run a piece's 68000 player on the A500 headless; compare its log, record audio",
@@ -191,6 +198,7 @@ COMMANDS = {
     "exec": lambda args: _exec(args),
     "piano": lambda args: _piano(args.recipe),
     "piano-disk": lambda args: _piano_disk(args.recipe),
+    "piano-survey": lambda args: _piano_survey(args),
     "piano-run": lambda args: _piano_run(args),
 }
 
@@ -248,6 +256,18 @@ def _piano_disk(recipe: Path) -> None:
     from .piano import build, disk
 
     disk.build_disks(build.load_recipe(recipe))
+
+
+def _piano_survey(args: argparse.Namespace) -> None:
+    from .piano import build
+
+    rows = build.survey(args.recipe, args.min_s, args.max_s)
+    print(f"survey    {len(rows)} performances; fewest audible cuts a minute first:")
+    for row in rows[:20]:
+        print(
+            f"{row['cut_audible_per_minute']:6.1f}/min  ringing {row['ringing_p95']:>2}  "
+            f"{row['length_s']:5.0f} s  {row['composer']}: {row['title']} ({row['year']})"
+        )
 
 
 def _piano_run(args: argparse.Namespace) -> int:

@@ -5,6 +5,7 @@
 sfz = "salamander/SalamanderGrandPianoV3_44.1khz16bit/SalamanderGrandPianoV3.sfz"
 out = "runs/exp004"
 player = "examples/piano/player.s"   # the 68000 player (`amiga-env piano-disk`)
+catalogue = "maestro/maestro-v3.0.0/maestro-v3.0.0.csv"  # titles, and `amiga-env piano-survey`
 
 # Chip RAM for the samples, the larger score, the player's tables and the
 # program, out of the A500's 512 KB; the rest is left to the system.
@@ -13,6 +14,11 @@ program_bytes = 8192    # an estimate until the 68000 player exists
 
 # Paula volume = 64 * (velocity / 127) ** velocity_exponent, at least 1.
 velocity_exponent = 1.5
+
+# The Salamander velocity layer every key plays. 64 is the median velocity of
+# the first two pieces; it is fixed so that adding a piece does not change the
+# samples.
+layer_velocity = 64
 
 [samples]
 spacing = 3

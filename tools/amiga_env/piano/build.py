@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .. import project
 from . import clips, m68k, paula, player, samples, score, sfz
+from . import survey as survey_mod
 
 # Bytes the player's tables take in chip or fast RAM, per key and per sample.
 KEY_TABLE_BYTES = 8  # sample index, level, period, held and release factors
@@ -39,6 +40,7 @@ class Recipe:
     velocity_exponent: float
     layer_velocity: int | None  # None: the median velocity of all the pieces
     player: str = ""  # the 68000 player's source, under the project
+    catalogue: str = ""  # MAESTRO's CSV under media/, for titles and surveys
 
 
 def load_recipe(path: Path) -> Recipe:
@@ -57,6 +59,7 @@ def load_recipe(path: Path) -> Recipe:
         velocity_exponent=data.get("velocity_exponent", 1.5),
         layer_velocity=data.get("layer_velocity"),
         player=data.get("player", ""),
+        catalogue=data.get("catalogue", ""),
     )
 
 
@@ -71,21 +74,7 @@ def build(recipe_path: Path) -> dict:
     }
     every_velocity = [v for perf in performances.values() for v in perf.velocities]
     velocity = recipe.layer_velocity or round(statistics.median(every_velocity))
-
-    sfz_path = media / recipe.sfz
-    regions = sfz.parse(sfz_path.read_text(), lambda name: (sfz_path.parent / name).read_text())
-    layer = samples.choose_layer(regions, velocity)
-    by_root = samples.layer_regions(regions, layer)
-    roots = samples.choose_roots(list(by_root), recipe.spec.spacing)
-    mapping = samples.key_map(roots)
-    prepared = []
-    for root in roots:
-        region = by_root[root]
-        rate, recording = samples.read_wav(sfz_path.parent / region.sample)
-        keys = [k for k, r in mapping.items() if r == root]
-        prepared.append(samples.prepare(region, recording, rate, keys, recipe.spec))
-    made = samples.finish(prepared, recipe.spec)
-    sounds = key_sounds(made, mapping, regions, layer)
+    made, sounds, layer = instrument(recipe, velocity)
     table = player.velocity_table(recipe.velocity_exponent)
 
     _write_samples(out, made)
@@ -124,6 +113,26 @@ def build(recipe_path: Path) -> dict:
     }
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
+
+
+def instrument(
+    recipe: Recipe, velocity: int
+) -> tuple[list[samples.PaulaSample], list[player.KeySound | None], tuple[int, int]]:
+    """The Paula samples, what each key plays, and the SFZ velocity layer they come from."""
+    sfz_path = project.media_dir() / recipe.sfz
+    regions = sfz.parse(sfz_path.read_text(), lambda name: (sfz_path.parent / name).read_text())
+    layer = samples.choose_layer(regions, velocity)
+    by_root = samples.layer_regions(regions, layer)
+    roots = samples.choose_roots(list(by_root), recipe.spec.spacing)
+    mapping = samples.key_map(roots)
+    prepared = []
+    for root in roots:
+        region = by_root[root]
+        rate, recording = samples.read_wav(sfz_path.parent / region.sample)
+        keys = [k for k, r in mapping.items() if r == root]
+        prepared.append(samples.prepare(region, recording, rate, keys, recipe.spec))
+    made = samples.finish(prepared, recipe.spec)
+    return made, key_sounds(made, mapping, regions, layer), layer
 
 
 def key_sounds(
@@ -244,3 +253,34 @@ def _write_log(path: Path, log: list[player.LogRow]) -> None:
             writer.writerow(
                 [row.tick, row.ms, row.voice, key, row.sample, row.period, row.volume, row.out]
             )
+
+
+def survey(recipe_path: Path, min_s: float, max_s: float) -> list[dict]:
+    """Measure every MAESTRO performance of `min_s` to `max_s` seconds with this piano.
+
+    Writes `<out>/survey.json` and `<out>/survey.csv`, fewest audible cuts first.
+    """
+    recipe = load_recipe(recipe_path)
+    if recipe.layer_velocity is None:
+        raise SystemExit(f"{recipe_path}: a survey needs a fixed layer_velocity")
+    if not recipe.catalogue:
+        raise SystemExit(f"{recipe_path}: a survey needs the MAESTRO catalogue (catalogue)")
+    media = project.media_dir()
+    catalogue = media / recipe.catalogue
+    entries = [e for e in survey_mod.read_catalogue(catalogue) if min_s <= e.duration_s <= max_s]
+    _, sounds, _ = instrument(recipe, recipe.layer_velocity)
+    table = player.velocity_table(recipe.velocity_exponent)
+    rows = survey_mod.measure_catalogue(
+        entries,
+        lambda midi: score.performance(score.read_midi(catalogue.parent / midi)).events,
+        sounds,
+        table,
+    )
+    out = project.root() / recipe.out
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "survey.json").write_text(json.dumps(rows, indent=2) + "\n")
+    with (out / "survey.csv").open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else [])
+        writer.writeheader()
+        writer.writerows(rows)
+    return rows
