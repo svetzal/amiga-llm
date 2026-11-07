@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import amiberry, home, media, profile, toolchain
+from . import adf, amiberry, assemble, home, media, profile, toolchain
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,6 +34,26 @@ def main(argv: list[str] | None = None) -> int:
     build = sub.add_parser("toolchain", help="build the pinned vasm and vlink into .tools/")
     build.add_argument("--force", action="store_true", help="rebuild even if present")
 
+    asm = sub.add_parser("asm", help="assemble 68000 source into a Kickstart 1.2 executable")
+    asm.add_argument("source", type=Path)
+    asm.add_argument("-o", "--output", type=Path, help="default: build/<source name>")
+
+    disk = sub.add_parser("adf", help="write a bootable Kickstart 1.2 floppy holding FILEs")
+    disk.add_argument("image", type=Path, metavar="OUT.adf")
+    disk.add_argument("files", type=Path, nargs="+", metavar="FILE")
+    disk.add_argument(
+        "--startup",
+        action="append",
+        metavar="COMMAND",
+        help="a line of s/startup-sequence; repeat for more lines",
+    )
+    disk.add_argument("--label", help="volume name; default is the image name")
+
+    boot = sub.add_parser(
+        "bootdisk", help="assemble SOURCE.s and write build/<name>.adf that runs it at boot"
+    )
+    boot.add_argument("source", type=Path, metavar="SOURCE.s")
+
     # Listed for --help only; `run` is dispatched above, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
     sub.add_parser(
@@ -55,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
         return _doctor()
     elif args.command == "toolchain":
         toolchain.install_all(args.force)
+    elif args.command == "asm":
+        assemble.assemble(args.source, args.output or assemble.outputs(args.source)[0])
+    elif args.command == "adf":
+        adf.make_adf(args.image, args.files, args.startup, args.label)
+    elif args.command == "bootdisk":
+        assemble.bootdisk(args.source)
     return 0
 
 

@@ -6,6 +6,9 @@ requires-python = ">=3.12"
 name = "amiga-llm"
 version = "0.1.0"
 source = { editable = "." }
+dependencies = [
+    { name = "amitools" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -14,12 +17,19 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "amitools", specifier = "==0.9.0" }]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=8,<10" },
     { name = "ruff", specifier = ">=0.12,<1" },
 ]
+
+[[package]]
+name = "amitools"
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0c/16/a53249d97fa7a74d4604135515ae70ae9dd04454ea2b6d16864a33e4d7bb/amitools-0.9.0.tar.gz", hash = "sha256:6172074deaf2702b6b5bb03abca22ce3edf665fed3d69e8fdf1d0045059e5a78", size = 3802839, upload-time = "2026-11-05T19:26:06.891Z" }
 
 [[package]]
 name = "colorama"

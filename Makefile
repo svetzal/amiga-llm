@@ -4,7 +4,7 @@
 UV  ?= uv
 ENV := $(UV) run --quiet amiga-env
 
-.PHONY: help tools toolchain media media-verify doctor a500 test lint
+.PHONY: help tools toolchain media media-verify doctor a500 hello test lint
 
 help:
 	@echo "make tools         install the latest Amiberry into .tools/"
@@ -13,6 +13,7 @@ help:
 	@echo "make media-verify  check media/ against manifest.lock.json"
 	@echo "make doctor        report what is installed and what is missing"
 	@echo "make a500          boot the baseline A500 to Workbench 1.2"
+	@echo "make hello         assemble examples/hello into a boot disk, build/hello.adf"
 	@echo "make test          lint and run the host-side tests"
 
 tools:
@@ -32,6 +33,9 @@ doctor:
 
 a500:
 	$(ENV) a500
+
+hello:
+	$(ENV) bootdisk examples/hello/hello.s
 
 lint:
 	$(UV) run --quiet ruff format --check tools tests

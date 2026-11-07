@@ -3,7 +3,9 @@ name = "amiga-llm"
 version = "0.1.0"
 description = "Environment and tooling for agentic language-model experiments on the Commodore Amiga"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "amitools==0.9.0",
+]
 
 [project.scripts]
 amiga-env = "amiga_env.cli:main"
