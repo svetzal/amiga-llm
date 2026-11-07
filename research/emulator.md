@@ -69,6 +69,30 @@ From `amiberry --help` (v8.5.0):
 | `--dump-paths` | print every resolved path and exit |
 | `--log` | log to the console |
 
+## Booting the baseline A500 (verified 2026-11-07 on macOS)
+
+`amiga-env a500` runs Amiberry's A500 quick-start model with Kickstart 1.2,
+Workbench 1.2 in drive 0, and `ntsc=true`. `--dump-config` shows a 68000,
+OCS, 512 KB chip plus 512 KB slow RAM, and cycle-exact emulation. It reached
+the Workbench 1.2 screen showing "890424 free memory". The Amiga Forever ROM
+is encrypted; Amiberry decrypts it with `rom.key` from the same directory.
+
+## Control socket (verified 2026-11-07 on macOS)
+
+A running Amiberry listens on `/tmp/amiberry.sock`. A command is one line of
+tab-separated fields; the reply starts with `OK` or an error.
+
+- `GET_STATUS` returned `OK  Paused=false  Config=...  Floppy0=...`.
+- `SCREENSHOT<TAB><path>` wrote a PNG of the emulated display to that path.
+  macOS `screencapture` failed in the same session ("could not create image
+  from display"), so this is the route for screenshots.
+
+The binary also names `READ`, `AMEM`, `SEND_MOUSE`, `KEYB`, `INSERTFLOPPY`,
+`EJECT_FLOPPY`, `RESET`, `SAVESTATE`, `LOADSTATE`, `QUICKSAVE` and the
+`AKS_QUIT` action. Their arguments are not yet tried. The socket path is
+fixed under `/tmp`, outside the project, and one socket per host means one
+emulator at a time unless it can be moved; check both before relying on it.
+
 ## Hypotheses to test
 
 These are the questions the first experiments answer. None is established.
@@ -79,7 +103,8 @@ These are the questions the first experiments answer. None is established.
 - The emulated serial port can be bridged to a TCP socket on the host, giving
   a text console the agent can read and write.
 - Amiberry can produce screenshots on demand without the window-finding and
-  retry logic coco-llm needed for XRoar.
+  retry logic coco-llm needed for XRoar. (One screenshot taken; see "Control
+  socket". Repeatability is still EXP-002's question.)
 - The release also ships a libretro core
   (`amiberry-libretro-macOS-arm64.dylib`). A small libretro host could step
   frames, inject keys and read the frame buffer directly. That would make

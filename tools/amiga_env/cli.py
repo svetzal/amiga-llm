@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import amiberry, home, media
+from . import amiberry, home, media, profile
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -13,6 +13,8 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["run"]:
         # Everything after `run` belongs to Amiberry, including its own flags.
         return home.run(argv[1:])
+    if argv[:1] == ["a500"]:
+        return home.run(a500_command(argv[1:]))
 
     parser = argparse.ArgumentParser(prog="amiga-env", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -31,6 +33,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # Listed for --help only; `run` is dispatched above, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
+    sub.add_parser(
+        "a500",
+        help="boot the baseline A500 on Workbench 1.2, or on DISK.adf; "
+        "further arguments go to Amiberry",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "amiberry":
@@ -44,6 +51,13 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "doctor":
         return _doctor()
     return 0
+
+
+def a500_command(rest: list[str]) -> list[str]:
+    """Amiberry arguments for `amiga-env a500 [DISK.adf] [amiberry options]`."""
+    if rest and not rest[0].startswith("-"):
+        return profile.a500_args(Path(rest[0]).resolve()) + rest[1:]
+    return profile.a500_args() + rest
 
 
 def _doctor() -> int:

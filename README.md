@@ -46,6 +46,13 @@ Run Amiberry for this project with:
 uv run amiga-env run [amiberry options]
 ```
 
+To boot the baseline A500 (Kickstart 1.2, Workbench 1.2, NTSC) in a window:
+
+```sh
+make a500
+uv run amiga-env a500 build/hello.adf -G   # boot another disk, no GUI
+```
+
 That sets `HOME` to `runs/home/` so Amiberry's settings, ROM path, save
 states and screenshots stay inside the project. See
 [`research/emulator.md`](research/emulator.md).
