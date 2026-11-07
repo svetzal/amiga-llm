@@ -179,6 +179,42 @@
     "licence": "Motorola reference manual, personal copy",
     "optional": true
   },
+  "mui/README.txt": {
+    "kind": "file",
+    "sha256": "4509143817f1123642b8e767ecf673acd1289b95fd04122ac44a3e33b44c534e",
+    "size": 1416,
+    "source": "collection",
+    "origin": "MUI/README.txt",
+    "licence": "Provenance note",
+    "optional": true
+  },
+  "mui/mui.key": {
+    "kind": "file",
+    "sha256": "4218ae77127cbae397810ec165f6ef09374eff860fb74695011fd4924504e30f",
+    "size": 5696,
+    "source": "collection",
+    "origin": "MUI/mui.key",
+    "licence": "MUI 3.8 registration, Stacey Vetzal 2024-09-13 (stand-in key lent by Stefan Stuntz; do not distribute)",
+    "optional": true
+  },
+  "mui/mui38dev.lha": {
+    "kind": "file",
+    "sha256": "8d28b0262fa6f43a9a8e114da368a9309256bbc2f99fa1c23d8e4c105d565722",
+    "size": 327102,
+    "source": "collection",
+    "origin": "MUI/mui38dev.lha",
+    "licence": "MUI 3.8 developer archive, Aminet dev/mui",
+    "optional": true
+  },
+  "mui/mui38usr.lha": {
+    "kind": "file",
+    "sha256": "f3acb2fe98f74c025daf10ae7df92d08abe787332124963771e2c21a869cca5b",
+    "size": 1033392,
+    "source": "collection",
+    "origin": "MUI/mui38usr.lha",
+    "licence": "MUI 3.8 user archive, Aminet util/libs",
+    "optional": true
+  },
   "ndk/3.2": {
     "kind": "tree",
     "sha256": "e7e03d598e8019fe47633632c3f60d83acf7c0b225948e97812b54c55f9f5c03",

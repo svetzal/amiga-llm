@@ -378,3 +378,31 @@ source = "collection"
 origin = "Amiberry/Configurations/Stock A3000.uae"
 licence = "Stacey's own configuration"
 optional = true
+
+[[item]]
+dest = "mui/mui.key"
+source = "collection"
+origin = "MUI/mui.key"
+licence = "MUI 3.8 registration, Stacey Vetzal 2024-09-13 (stand-in key lent by Stefan Stuntz; do not distribute)"
+optional = true
+
+[[item]]
+dest = "mui/mui38usr.lha"
+source = "collection"
+origin = "MUI/mui38usr.lha"
+licence = "MUI 3.8 user archive, Aminet util/libs"
+optional = true
+
+[[item]]
+dest = "mui/mui38dev.lha"
+source = "collection"
+origin = "MUI/mui38dev.lha"
+licence = "MUI 3.8 developer archive, Aminet dev/mui"
+optional = true
+
+[[item]]
+dest = "mui/README.txt"
+source = "collection"
+origin = "MUI/README.txt"
+licence = "Provenance note"
+optional = true
