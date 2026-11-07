@@ -7,8 +7,9 @@ what that project showed needed changing
 ([`research/coco-llm-retrospective.md`](research/coco-llm-retrospective.md)).
 
 Status: skeleton. Amiberry installs and runs isolated from the host's own
-settings, and licensed media migrates into the project. Nothing has booted
-yet; that is EXP-001, the headless boot.
+settings, licensed media migrates into the project, and a 68000 program
+assembled on the Mac boots on the emulated A500 from a floppy built here.
+EXP-001, the headless boot, is still to be run as an experiment.
 
 ## Repository map
 
@@ -20,7 +21,8 @@ yet; that is EXP-001, the headless boot.
 - `experiments/`: hypotheses, procedures, measurements and conclusions.
 - `research/`: durable findings: the emulator, the toolchain, the
   retrospective.
-- `.tools/` (ignored): downloaded tools, starting with Amiberry.
+- `examples/`: small programs for the Amiga, each a known-good boot test.
+- `.tools/` (ignored): downloaded and built tools: Amiberry, vasm, vlink.
 - `runs/` (ignored): emulator state, including Amiberry's private home.
 
 ## Getting started
@@ -30,6 +32,7 @@ for the build host and not yet run.
 
 ```sh
 make tools         # download the latest Amiberry and check its SHA-256
+make toolchain     # build the pinned vasm and vlink into .tools/ (needs cc, make)
 make media         # copy licensed media in from the origin collection, once
 make doctor        # Amiberry version, isolated paths, media checksums
 make test          # lint and host tests
@@ -50,8 +53,20 @@ To boot the baseline A500 (Kickstart 1.2, Workbench 1.2, NTSC) in a window:
 
 ```sh
 make a500
-uv run amiga-env a500 build/hello.adf -G   # boot another disk, no GUI
 ```
+
+To write a program in 68000 assembly and boot it:
+
+```sh
+make hello                                 # assemble examples/hello/hello.s into build/hello.adf
+uv run amiga-env a500 build/hello.adf -G   # boot it, no GUI
+```
+
+`uv run amiga-env bootdisk prog.s` does the same for any one-file program:
+it writes `build/prog` and a bootable `build/prog.adf` whose
+startup-sequence runs it. `amiga-env asm` and `amiga-env adf` are the two
+halves. The disk is OFS with the Kickstart 1.x bootblock. See
+[`research/toolchain.md`](research/toolchain.md).
 
 That sets `HOME` to `runs/home/` so Amiberry's settings, ROM path, save
 states and screenshots stay inside the project. See

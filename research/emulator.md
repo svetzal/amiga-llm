@@ -87,9 +87,21 @@ tab-separated fields; the reply starts with `OK` or an error.
   macOS `screencapture` failed in the same session ("could not create image
   from display"), so this is the route for screenshots.
 
+- `QUIT` replied `OK`; the emulator then exited and removed the socket file
+  (verified 2026-11-07 while booting `build/hello.adf`). The log under the
+  private home shows `IPC: Received QUIT`. This is how a scripted run ends,
+  rather than killing the process.
+
+`GET_STATUS` names the disk in `Floppy0`, which is how a script can tell
+which emulator answered when another may be running.
+
 The binary also names `READ`, `AMEM`, `SEND_MOUSE`, `KEYB`, `INSERTFLOPPY`,
 `EJECT_FLOPPY`, `RESET`, `SAVESTATE`, `LOADSTATE`, `QUICKSAVE` and the
-`AKS_QUIT` action. Their arguments are not yet tried. The socket path is
+`AKS_QUIT` action. Their arguments are not yet tried.
+
+Amiberry rewrites its own argument strings after parsing: `ps` showed
+`-s ntsc true` and no `-G` for a run started with `-s ntsc=true -G`. Use
+`GET_STATUS`, not `ps`, to see what a running emulator has loaded. The socket path is
 fixed under `/tmp`, outside the project, and one socket per host means one
 emulator at a time unless it can be moved; check both before relying on it.
 
