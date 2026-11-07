@@ -414,10 +414,9 @@ CAPTURE_PICTURE = (
 
 
 def masters(out: Path) -> list[video.Master]:
-    return [
-        video.Master(3840, 2160, 2880, out / "piano-playthrough-4k.mp4"),
-        video.Master(1920, 1080, 1440, out / "piano-playthrough-1080p.mp4"),
-    ]
+    """The YouTube master: 4K, the 4:3 picture in black bars. YouTube makes the
+    smaller sizes itself."""
+    return [video.Master(3840, 2160, 2880, out / "piano-playthrough-4k.mp4")]
 
 
 def layout_of(spec, lines: int) -> video.ListLayout:

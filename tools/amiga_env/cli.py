@@ -208,8 +208,8 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
 
     film = sub.add_parser(
         "piano-video",
-        help="record the piano floppy playing by itself, frame by frame, and make YouTube "
-        "masters, chapters and a description in runs/video",
+        help="record the piano floppy playing by itself, frame by frame, and make a 4K YouTube "
+        "master, chapters and a description in runs/video",
     )
     film.add_argument("recipe", type=Path, metavar="RECIPE.toml")
     film.add_argument("--machine", default="a500", help="a machine from amiga.toml; a500")

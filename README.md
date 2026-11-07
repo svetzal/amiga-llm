@@ -161,8 +161,8 @@ examples/piano/piano.toml` measures every MAESTRO performance of 2 to 6
 minutes for four voices, for choosing pieces. `amiga-env piano-video
 examples/piano/piano.toml` records the disk playing by itself, from the
 boot to 5 s after its tenth piece, through Amiberry's libretro core (every
-emulated frame and every sample, in `runs/video/`), makes 4K and 1080p
-YouTube masters, reads where each piece's line turns gold from the 4K
+emulated frame and every sample, in `runs/video/`), makes a 4K YouTube
+master, reads where each piece's line turns gold from the 4K
 master's own frames, and writes `youtube-description.txt` with the
 chapters from `examples/piano/video-description.txt`. `--seconds S` stops
 early, for a test; `--steps master,measure` redoes the later steps.
