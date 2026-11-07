@@ -11,7 +11,7 @@ an agent can boot a machine, run a program, see the screen and stop the
 machine.
 
 Facts here were verified with Amiberry 8.5.0 (2026-10-27) on macOS unless
-marked otherwise. Check `amiberry --help` and the socket's `HELP` reply when
+marked otherwise (mouse input and the copper state on 2026-11-07). Check `amiberry --help` and the socket's `HELP` reply when
 the version differs.
 
 ## Install a pinned release
@@ -143,11 +143,21 @@ Verified commands:
 | `SET_WARP 1` | Runs as fast as the host can; a cycle-exact A500 did 223 s of emulated time in about 30 s |
 | `GET_CONFIG <key>` | `OK  <value>` for some keys (`sound_output`), `ERROR  Unknown option` for others (`sound_frequency`); `--dump-config` shows them all |
 | `SEND_KEY <code> <state>` | Presses (`1`) or releases (`0`) a key; the code is the Amiga raw key code in decimal (`64` is space, `2` is the 2 key, `49` is Z, `68` is Return). Send both states, a tenth of a second apart. Works with warp on (Amiberry 8.5.0, A500 on Kickstart 1.2, read by a program from a console in raw mode) |
+| `READ_MEM <addr> 2` | `OK  <value>`, a big-endian word (verified for words in a program's own structures) |
+| `SEND_MOUSE <dx> <dy> <buttons>` | Moves the Amiga's mouse by counts, not pixels: on an A500 with Kickstart 1.2 and `GET_MOUSE_SPEED` 100, 50 counts moved Intuition's pointer 12 lowres pixels. `buttons` 1 presses the left button, 0 releases it; Intuition delivered `MOUSEBUTTONS` `SELECTDOWN` at the pointer. Works with warp on. To hit a point, read where the pointer is (a program's window keeps it in `wd_MouseX` and `wd_MouseY`, offsets 14 and 12) and move again until it is there |
+| `SEND_MOUSE_ABS <x> <y> <buttons>` | `ERROR  Absolute mouse input rejected (check coordinates, focus, and active tablet_mode)` with the A500 model's defaults; not pursued |
+| `GET_COPPER_STATE` | `OK  COP1LC=00000420  COP2LC=0006C810  enabled=1`; read the list at `COP2LC` with `READ_MEM` (WAIT when the first word is odd) to check what a program's copper list does |
+| `GET_CPU_REGS` | `OK  D0=...  A7=...  PC=...  SR=...  USP=...  ISP=...` in hex. Sampled a few times, with the program's load address known (have it write `lea start(pc)` somewhere the host reads), the PC says where a program is stuck |
 
-The list also has mouse input (`SEND_MOUSE`),
-`WRITE_MEM`, floppy changes (`INSERTFLOPPY`,
+`SCREENSHOT` captures one emulated frame as the beam drew it: a program that
+draws while the beam passes shows half-drawn graphics in some screenshots,
+which makes many screenshots a cheap check for flicker. With the default
+window an NTSC A500's 320x200 lowres screen is at (60, 48) in the 752x486
+PNG, each pixel 2x2 (Amiberry 8.5.0, macOS).
+
+The list also has `WRITE_MEM`, floppy changes (`INSERTFLOPPY`,
 `EJECT_FLOPPY`), save states, `FRAME_ADVANCE` and a debugger
-(`DEBUG_STEP`, `GET_CPU_REGS`, `DISASSEMBLE`, breakpoints). These are listed
+(`DEBUG_STEP`, `DISASSEMBLE`, breakpoints). These are listed
 by Amiberry but not yet verified here. Avoid `CHOOSE_MEDIA`: it opens a
 system file dialog and blocks the socket until a person answers it.
 

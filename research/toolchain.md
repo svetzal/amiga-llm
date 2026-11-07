@@ -182,6 +182,65 @@ Amiberry 8.5.0 A500 model:
   text wrapped after 61 characters (screenshot). Lines the player prints
   are kept to 60.
 
+## Kickstart 1.2 findings from the piano's screen (verified 2026-11-07, machine tier)
+
+From EXP-004, the expressive piano, when the player gained its own screen
+(`examples/piano/player.s`), on the same Amiberry 8.5.0 A500 model:
+
+- **A custom screen with a backdrop window.** `OpenScreen` with a
+  `NewScreen` of 320x200, depth 4, view modes 0 and type `CUSTOMSCREEN |
+  SCREENQUIET` ($010F), then `OpenWindow` with a full-screen `NewWindow`
+  whose flags are `BACKDROP | BORDERLESS | ACTIVATE | RMBTRAP |
+  SIMPLE_REFRESH | NOCAREREFRESH` and IDCMP `MOUSEBUTTONS | RAWKEY`, then
+  `ShowTitle(screen, FALSE)`. Nothing of Intuition's showed over the
+  picture. Intuition clears the planes when it opens the screen, so the
+  picture is copied into `sc_BitMap.bm_Planes[]` after `OpenWindow`.
+  Intuition allocates the planes in chip RAM: free chip RAM fell by
+  32,200 bytes when the screen opened (32,000 of them planes). `LoadRGB4` on the
+  screen's viewport sets the 16 colours.
+- **RAWKEY and MOUSEBUTTONS.** A key arrives as its raw code in `im_Code`
+  (bit 7 set when it goes up); Esc is `$45`, Q `$10`. A left press is
+  `im_Code` `SELECTDOWN` (`$68`) with `im_MouseX` and `im_MouseY` in
+  screen pixels, since the window is at 0,0. The window's own `wd_MouseX`
+  (offset 14) and `wd_MouseY` (12) follow the pointer while it moves,
+  which lets the host steer the pointer (see the amiberry skill).
+- **A user copper list works on 1.2.** `UCopperListInit` (graphics -594),
+  `CWait` (-378), `CMove` (-372) and `CBump` (-366) exist in V33. The
+  player allocates a `UCopList` (12 bytes, `MEMF_PUBLIC | MEMF_CLEAR`),
+  initialises it for 5 instructions, and builds WAIT line, MOVE `COLOR13`
+  (`$DFF19A`), WAIT line + 9, MOVE `COLOR13`, and CEND (`CWait(10000,
+  255)`). It sets `vp_UCopIns` (offset 20 of the viewport, the screen's
+  offset 44) under `Forbid`, then calls Intuition's `MakeScreen` and
+  `RethinkDisplay`. Verified in two ways: the copper list read back from
+  `COP2LC` (Amiberry's `GET_COPPER_STATE` and `READ_MEM`) held `WAIT 74,0`,
+  `MOVE $19A=$B95`, `WAIT 83,0`, `MOVE $19A=$EDB` for a line at row 30
+  (the display starts at line 44), and the screenshots show that line in
+  gold. To replace or remove the list, the player swaps the pointer
+  (`NULL` for none), remakes the display, waits one `WaitTOF`, then
+  `FreeCopList(ucl_FirstCopList)` and `FreeMem` of the `UCopList`. It
+  leaves no list on the viewport when it closes the screen, so
+  `CloseScreen`'s own `FreeVPortCopLists` has nothing of ours to free.
+- **vasm's operator precedence is not C's.** `#SCOPE_ROWS<<6|ROW_BYTES/2`
+  assembled to the wrong `BLTSIZE` (vasm 2.0f, mot syntax), and a blit
+  that size wrote over the screen, the copper lists and the status block at
+  `$100`. `45<<6|40/2` gave `$05B4`, not `$0B54`; `E>0&E<3` with `E` 0 gave
+  -1, not 0. Parenthesise every expression that mixes operators.
+- **Graphics that do not flicker, without double buffering.** A program
+  that draws over a displayed screen tears when the beam passes the area
+  while it draws. The piano's scopes are drawn in units (one scope each)
+  that never share a byte of a row, and no unit starts while the beam is on
+  the band or within 64 lines above it; the beam's line is `VPOSR` bit 0
+  and `VHPOSR` bits 15 to 8 (`move.l $DFF004,d0`, shift right 8, mask
+  `$1FF`), and the band's first line is the view's `v_DyOffset` (12) plus
+  the viewport's `vp_DyOffset` (30) plus its row (44 + 152 here, from
+  `GfxBase` `gb_ActiView`, 34). Restoring the whole band and plotting after
+  `WaitTOF` showed half-drawn scopes in 7 of 20 screenshots; the units, 0
+  of 30.
+- **Keep bss words even.** A `ds.b` of odd size in the middle of the bss
+  put every following long at an odd address; the first `move.l` to one
+  was an address error ("Software error - task held" on 1.2). Put `even`
+  after byte arrays.
+
 ## Candidates
 
 | Candidate | What it is | Notes |
