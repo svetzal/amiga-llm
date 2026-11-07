@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from amiga_env.adf import startup_sequence, xdftool_args
+from amiga_env.adf import folders, startup_sequence, xdftool_args
 from amiga_env.assemble import outputs, vasm_args
 
 
@@ -92,3 +92,24 @@ def test_include_folders_and_defines_come_before_the_output():
     args = vasm_args(Path("/t/vasmm68k_mot"), Path("p.s"), Path("b/p"), [Path("data")], {"LOG": 1})
 
     assert args[-5:] == ["-Idata", "-DLOG=1", "-o", "b/p", "p.s"]
+
+
+def test_a_file_can_go_to_a_path_in_a_folder_made_before_it():
+    files = [Path("/b/piano"), (Path("/r/one.score"), "scores/01-one.score")]
+
+    _, steps = _steps(xdftool_args(Path("o.adf"), files, "v"))
+
+    assert steps.index(["makedir", "scores"]) < steps.index(
+        ["write", "/r/one.score", "scores/01-one.score"]
+    )
+    assert ["write", "/b/piano", "piano"] in steps
+
+
+def test_each_folder_is_made_once_and_parents_first():
+    assert folders(["a/b/x", "a/y", "a/b/z", "top"]) == ["a", "a/b"]
+
+
+@pytest.mark.parametrize("path", ["scores/" + "x" * 31, "scores//x", "a:b/x"])
+def test_every_part_of_a_disk_path_must_suit_ofs(path):
+    with pytest.raises(SystemExit):
+        xdftool_args(Path("o.adf"), [(Path("/r/x"), path)], "v")

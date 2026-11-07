@@ -7,6 +7,7 @@ Workbench 1.2 disk (see research/toolchain.md).
 """
 
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
 from amitools.tools import xdftool
@@ -18,11 +19,42 @@ MAX_NAME = 30  # OFS file and volume names
 SEPARATOR = "+"  # xdftool's command separator
 
 
+# A file for the disk: a host file, which goes in the root under its own name,
+# or a host file and its path on the disk ("scores/01-x.score").
+DiskFile = Path | tuple[Path, str]
+
+
 def amiga_name(path: Path) -> str:
     """The name a host file takes in the root of the disk."""
     name = path.name
     _check_name(name, f"file name {name!r}")
     return name
+
+
+def disk_path(file: DiskFile) -> str:
+    """Where a file goes on the disk; each part of a path must be a valid OFS name."""
+    if isinstance(file, Path):
+        return amiga_name(file)
+    _, path = file
+    for part in path.split("/"):
+        _check_name(part, f"name {part!r} in {path!r}")
+    return path
+
+
+def host_path(file: DiskFile) -> Path:
+    return file if isinstance(file, Path) else file[0]
+
+
+def folders(paths: Sequence[str]) -> list[str]:
+    """The folders the disk needs for these paths, each after its parent."""
+    needed: list[str] = []
+    for path in paths:
+        parts = path.split("/")[:-1]
+        for depth in range(1, len(parts) + 1):
+            folder = "/".join(parts[:depth])
+            if folder not in needed:
+                needed.append(folder)
+    return needed
 
 
 def check_label(label: str) -> str:
@@ -39,10 +71,10 @@ def startup_sequence(commands: list[str]) -> str:
 
 
 def xdftool_args(
-    image: Path, files: list[Path], label: str, startup_file: Path | None = None
+    image: Path, files: Sequence[DiskFile], label: str, startup_file: Path | None = None
 ) -> list[str]:
     """xdftool arguments that build the whole disk in one pass."""
-    names = [amiga_name(f) for f in files]
+    names = [disk_path(f) for f in files]
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:
         raise SystemExit(f"two files would share the name {duplicates[0]} on the disk")
@@ -50,7 +82,8 @@ def xdftool_args(
         ["create", f"size={DD_SIZE}"],
         ["format", check_label(label), "ofs"],
         ["boot", "install", BOOT_CODE],
-        *(["write", str(f), n] for f, n in zip(files, names, strict=True)),
+        *(["makedir", folder] for folder in folders(names)),
+        *(["write", str(host_path(f)), n] for f, n in zip(files, names, strict=True)),
     ]
     if startup_file is not None:
         steps += [["makedir", "s"], ["write", str(startup_file), STARTUP]]
@@ -61,12 +94,15 @@ def xdftool_args(
 
 
 def make_adf(
-    image: Path, files: list[Path], startup: list[str] | None = None, label: str | None = None
+    image: Path,
+    files: Sequence[DiskFile],
+    startup: list[str] | None = None,
+    label: str | None = None,
 ) -> Path:
-    """Write a bootable OFS floppy holding `files` in its root."""
+    """Write a bootable OFS floppy holding `files`, in its root or at their paths."""
     for f in files:
-        if not f.is_file():
-            raise SystemExit(f"not a file: {f}")
+        if not host_path(f).is_file():
+            raise SystemExit(f"not a file: {host_path(f)}")
     image.parent.mkdir(parents=True, exist_ok=True)
     # xdftool picks the image type from the suffix, so the partial keeps `.adf`.
     partial = image.with_name(f".{image.stem}.partial.adf")
@@ -90,3 +126,20 @@ def _check_name(name: str, what: str) -> None:
         raise SystemExit(f"{what} must be 1 to {MAX_NAME} characters")
     if any(c in name for c in ":/") or name == SEPARATOR:
         raise SystemExit(f"{what} may not contain ':' or '/', or be {SEPARATOR!r}")
+
+
+def blocks(image: Path) -> tuple[int, int]:
+    """Used and free blocks of a floppy image, from its bitmap (amitools)."""
+    from amitools.fs.ADFSVolume import ADFSVolume
+    from amitools.fs.blkdev.BlkDevFactory import BlkDevFactory
+
+    device = BlkDevFactory().open(str(image), read_only=True)
+    try:
+        volume = ADFSVolume(device)
+        volume.open()
+        free = volume.bitmap.get_num_free()
+        used = volume.bitmap.get_num_used()
+        volume.close()
+    finally:
+        device.close()
+    return used, free
