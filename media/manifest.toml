@@ -483,3 +483,15 @@ source = "collection"
 origin = "Various/Commodore Amiga - Applications - ADF (TOSEC 20100813)/Commodore Amiga Developer Update v3.1 (1993)(Commodore)(Disk 5 of 5)(Examples 2).7z"
 licence = "Personal collection (TOSEC dump)"
 optional = true
+
+[[item]]
+dest = "adf/3.2/DiskDoctor.adf"
+source = "amigaos32"
+origin = "ADF/DiskDoctor.adf"
+licence = "AmigaOS 3.2 CD-ROM"
+
+[[item]]
+dest = "adf/3.2/Backdrops3.2.adf"
+source = "amigaos32"
+origin = "ADF/Backdrops3.2.adf"
+licence = "AmigaOS 3.2 CD-ROM"

@@ -39,12 +39,28 @@
     "origin": "Shared/adf/amiga-os-310-workbench.adf",
     "licence": "Amiga Forever 10 Plus"
   },
+  "adf/3.2/Backdrops3.2.adf": {
+    "kind": "file",
+    "sha256": "879adcb3e04ddaa8c6ba631b5b97f833261014c08061c685829bd759be261a4f",
+    "size": 901120,
+    "source": "amigaos32",
+    "origin": "ADF/Backdrops3.2.adf",
+    "licence": "AmigaOS 3.2 CD-ROM"
+  },
   "adf/3.2/Classes3.2.adf": {
     "kind": "file",
     "sha256": "4940c19490fa070ccd246be6a3fffa1031d8e919a3e2f8e75992706211fb6f0f",
     "size": 901120,
     "source": "amigaos32",
     "origin": "ADF/Classes3.2.adf",
+    "licence": "AmigaOS 3.2 CD-ROM"
+  },
+  "adf/3.2/DiskDoctor.adf": {
+    "kind": "file",
+    "sha256": "12fc60124042d8c3910e49c99155ac64ac4db0f5af512d86f6582ac764bf1986",
+    "size": 901120,
+    "source": "amigaos32",
+    "origin": "ADF/DiskDoctor.adf",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
   "adf/3.2/Extras3.2.adf": {
