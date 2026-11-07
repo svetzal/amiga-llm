@@ -76,3 +76,13 @@ class TestDisks:
         assert disk.ofs_blocks(488) == 2
         assert disk.ofs_blocks(72 * 488) == 73
         assert disk.ofs_blocks(73 * 488) == 75
+
+
+def test_the_boot_silence_is_dropped_up_to_a_lead():
+    silence = struct.pack("<2h", 3, -3) * 44100 * 3
+    music = struct.pack("<2h", 1000, -1000) * 10
+
+    trimmed, dropped = machine.trim_lead(silence + music, lead_s=1.0)
+
+    assert dropped == 2.0
+    assert trimmed == silence[: 4 * 44100] + music

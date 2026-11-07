@@ -21,6 +21,8 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NamedTuple
 
+import numpy as np
+
 from .. import profile, session
 from . import m68k
 
@@ -47,6 +49,9 @@ TIMER_PERIOD = 716  # E-clock ticks between the player's interrupts
 AUDIO_RATE = 44_100
 # What a real A500 does and Amiberry does not by default: full stereo separation.
 AUDIO_SETTINGS = ("sound_stereo_separation=10", "floppy0sound=0")
+# SDL's disk driver file trails the emulation: a run that quit as soon as the
+# player finished lost the last 5 s of the nocturne. Keep playing silence a while.
+AUDIO_TAIL_S = 15.0
 
 
 class Status(NamedTuple):
@@ -109,6 +114,20 @@ def wav_from_raw(raw: bytes, path: Path, rate: int = AUDIO_RATE) -> None:
         w.setsampwidth(2)
         w.setframerate(rate)
         w.writeframes(raw[:usable])
+
+
+def trim_lead(raw: bytes, lead_s: float = 1.0, threshold: int = 64) -> tuple[bytes, float]:
+    """Drop the silence of the boot before the music, keeping `lead_s` of it.
+
+    Returns the audio and the seconds dropped. A frame is silent when both
+    channels are within `threshold` of zero.
+    """
+    usable = len(raw) - len(raw) % 4
+    frames = np.abs(np.frombuffer(raw[:usable], dtype="<i2").reshape(-1, 2)).max(axis=1)
+    loud = np.flatnonzero(frames > threshold)
+    first = int(loud[0]) if len(loud) else len(frames)
+    start = max(0, first - round(lead_s * AUDIO_RATE))
+    return raw[start * 4 : usable], start / AUDIO_RATE
 
 
 def read_block(read_long: Callable[[int], int], address: int, size: int) -> bytes:
@@ -192,6 +211,8 @@ def run_piece(
             amiga.send("SET_WARP", "1")
         status = _wait(amiga, out / f"{name}-playing.png", timeout)
         amiga.screenshot(out / f"{name}-done.png")
+        if audio:
+            time.sleep(AUDIO_TAIL_S)
         found["status"] = status._asdict()
         if status.state == FAILED:
             raise SystemExit(f"the player failed; see {out / f'{name}-done.png'}")
@@ -207,9 +228,11 @@ def run_piece(
     finally:
         amiga.stop()
     if audio and raw.exists():
-        wav_from_raw(raw.read_bytes(), out / f"{name}.wav")
+        music, dropped = trim_lead(raw.read_bytes())
+        wav_from_raw(music, out / f"{name}.wav")
         raw.unlink()
         found["wav"] = str(out / f"{name}.wav")
+        found["wav_starts_after_s"] = round(dropped, 2)
     (out / f"{name}.json").write_text(json.dumps(found, indent=2) + "\n")
     return found
 
