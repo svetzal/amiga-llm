@@ -44,13 +44,63 @@ origin = "AmigaForever10Plus/Amiga Files/Shared/rom/rom.key"
 licence = "Amiga Forever 10 Plus"
 
 [[item]]
+dest = "rom/forever/amiga-os-120.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-120.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-130-a3000.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-a3000.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-130-a570-ext.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-a570-ext.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-130-cdtv-ext.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-cdtv-ext.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
 dest = "rom/forever/amiga-os-130.rom"
 origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130.rom"
 licence = "Amiga Forever 10 Plus"
 
 [[item]]
+dest = "rom/forever/amiga-os-140-a3000.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-140-a3000.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-204-a3000.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-204-a3000.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
 dest = "rom/forever/amiga-os-204.rom"
 origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-204.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-205-a600.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-205-a600.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-230-cdtv-ext.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-230-cdtv-ext.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-300-a1200.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-300-a1200.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-300-a4000.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-300-a4000.rom"
 licence = "Amiga Forever 10 Plus"
 
 [[item]]
@@ -61,6 +111,61 @@ licence = "Amiga Forever 10 Plus"
 [[item]]
 dest = "rom/forever/amiga-os-310-a3000.rom"
 origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a3000.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-310-a4000.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a4000.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-310-a4000t.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a4000t.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-310-a600.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a600.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-310-cd32-ext.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-cd32-ext.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-310-cd32.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-cd32.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-320-walker.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-320-walker.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-3x0-a1200.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a1200.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-3x0-a3000.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a3000.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-3x0-a4000.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a4000.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-3x0-a4000t.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a4000t.rom"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "rom/forever/amiga-os-3x0-a600.rom"
+origin = "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a600.rom"
 licence = "Amiga Forever 10 Plus"
 
 # ---- AmigaOS 3.2 install floppies -------------------------------------------
@@ -131,6 +236,11 @@ origin = "AmigaOS3.2CD/ADF/ModulesA3000_3.2.adf"
 licence = "AmigaOS 3.2 CD-ROM"
 
 # ---- Classic Workbench floppies (Amiga Forever 10 Plus) ---------------------
+
+[[item]]
+dest = "adf/1.2/workbench.adf"
+origin = "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-120-workbench.adf"
+licence = "Amiga Forever 10 Plus"
 
 [[item]]
 dest = "adf/1.3/workbench.adf"

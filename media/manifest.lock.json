@@ -1,4 +1,11 @@
 {
+  "adf/1.2/workbench.adf": {
+    "kind": "file",
+    "sha256": "1035a9a317fbbf0056848a25397f245967d7a8f1bc5079b02a018f410899bdf0",
+    "size": 901120,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/adf/amiga-os-120-workbench.adf",
+    "licence": "Amiga Forever 10 Plus"
+  },
   "adf/1.3/extras.adf": {
     "kind": "file",
     "sha256": "c1fc772a25fe7fdb782704fc14349c513d28a56aa6875b8e089de5b86dcef425",
@@ -188,6 +195,34 @@
     "origin": "AmigaOS3.2CD/ROM/kickCDTVa1000a500a2000a600.rom",
     "licence": "AmigaOS 3.2 CD-ROM"
   },
+  "rom/forever/amiga-os-120.rom": {
+    "kind": "file",
+    "sha256": "781a36914b49642ab14b5a6f1e7263c7fc2dcbaba3c1fc141a163fd5299b976d",
+    "size": 262155,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-120.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-130-a3000.rom": {
+    "kind": "file",
+    "sha256": "559c2b37e2cc2d6b6ca4499543f6637c362c9989b1cc5572cf52976b956b1901",
+    "size": 262155,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-a3000.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-130-a570-ext.rom": {
+    "kind": "file",
+    "sha256": "cb7d4a755f562bc8c18b22a3b5ef860bc40aa319d347565fb90daa2d71ccae29",
+    "size": 262155,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-a570-ext.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-130-cdtv-ext.rom": {
+    "kind": "file",
+    "sha256": "2190edbba29e73855e5bf61f1bcaab0914f9dd9b8f4e5ca07f38c8a89e90dcf2",
+    "size": 262155,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130-cdtv-ext.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
   "rom/forever/amiga-os-130.rom": {
     "kind": "file",
     "sha256": "caa4910942b8d558c9ae2284405af81db3752535192cc25f7939765c3ea2d5e0",
@@ -195,11 +230,53 @@
     "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-130.rom",
     "licence": "Amiga Forever 10 Plus"
   },
+  "rom/forever/amiga-os-140-a3000.rom": {
+    "kind": "file",
+    "sha256": "69f13d96a8d47c51644e4302057a2ad54bf6e802b320b6dc2d57d1917ad3c272",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-140-a3000.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-204-a3000.rom": {
+    "kind": "file",
+    "sha256": "3cd65ab48bad3238e63f4da4df59fac187ecbbc45b48fdfd78d360133113ddaf",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-204-a3000.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
   "rom/forever/amiga-os-204.rom": {
     "kind": "file",
     "sha256": "e1eb7c0a322358bc454166bcef8ea04808791596fa6280df70e531dab2a5b3f1",
     "size": 524299,
     "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-204.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-205-a600.rom": {
+    "kind": "file",
+    "sha256": "04a535dba6264db5fc8da5061397ba1506750a4126d41dccc6c3f2b6ba24ca69",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-205-a600.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-230-cdtv-ext.rom": {
+    "kind": "file",
+    "sha256": "501825f9749e750c495d042136722203c1f34329c601f5c8986f8d3682f47873",
+    "size": 262155,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-230-cdtv-ext.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-300-a1200.rom": {
+    "kind": "file",
+    "sha256": "d9ac60f1475aa1af5e6ccc522aa49a4555f7e53997cf4350fcae5b07d39bfbb5",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-300-a1200.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-300-a4000.rom": {
+    "kind": "file",
+    "sha256": "f55e0b52711ac35d6a8bc238d2569e57a0463ba0a160f8b5b2bfb65b6f6f8e08",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-300-a4000.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/amiga-os-310-a1200.rom": {
@@ -214,6 +291,83 @@
     "sha256": "9d55788d8dc7fa869d1fe49d46e4890ffc1b2370630e243ca190db0910f46712",
     "size": 524299,
     "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a3000.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-310-a4000.rom": {
+    "kind": "file",
+    "sha256": "9d21022ad848e36d89e28041ee71ec8620f2c198010fe0c24403490184e48ce7",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a4000.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-310-a4000t.rom": {
+    "kind": "file",
+    "sha256": "a5695544dcc273a38ce3381617046eaacceef6e66a10962204abf080546be248",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a4000t.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-310-a600.rom": {
+    "kind": "file",
+    "sha256": "03ec7583249c686a3f63b5b92634b12e14ce72fc27b0066a8c3cca57f869443e",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-a600.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-310-cd32-ext.rom": {
+    "kind": "file",
+    "sha256": "c06b29f3bb8fd4ba63fb3fcecbb5bda1246f4bb66692b45b26fd8f6848739077",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-cd32-ext.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-310-cd32.rom": {
+    "kind": "file",
+    "sha256": "cf79b896d88a85e535eb220fd82466199bddf36ffa88f865483376d939ce9f11",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-310-cd32.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-320-walker.rom": {
+    "kind": "file",
+    "sha256": "615138595bb1a70a34bd5b3efb93726d0c7fa77ff14355e981f53ae18d52c6a6",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-320-walker.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-3x0-a1200.rom": {
+    "kind": "file",
+    "sha256": "c6988e48b770fa7d025563dea5f927add338cf79f68a9a62083c304375a06a03",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a1200.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-3x0-a3000.rom": {
+    "kind": "file",
+    "sha256": "9ceb473129693d3cb9a7e87f0f0a47d3403769b0b5732862d5f77d5b97493272",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a3000.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-3x0-a4000.rom": {
+    "kind": "file",
+    "sha256": "1756f729ad5e7c311a85f105dcd1848c19950a461b0d868f41b5a22bff19d51e",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a4000.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-3x0-a4000t.rom": {
+    "kind": "file",
+    "sha256": "89513d28fa4e084711982122c65fa9984d732ce004e0fb7efef5d973aea15ad0",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a4000t.rom",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "rom/forever/amiga-os-3x0-a600.rom": {
+    "kind": "file",
+    "sha256": "b854d22bfc3ed23248a043ce2c4741a240b9aad70af87d267b7b708c0a8eebda",
+    "size": 524299,
+    "origin": "AmigaForever10Plus/Amiga Files/Shared/rom/amiga-os-3x0-a600.rom",
     "licence": "Amiga Forever 10 Plus"
   },
   "rom/forever/rom.key": {

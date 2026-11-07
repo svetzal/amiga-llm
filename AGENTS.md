@@ -23,12 +23,18 @@ timing claim is checked on.
 A result that needs a faster or larger machine is reported as a labelled
 option, never in place of a miss on the A500. No fast mode is defined yet.
 
-The emulated baseline profile matches that machine. These facts are not yet
-read off it, so the profile uses Amiberry's A500 defaults until they are:
+The emulated baseline profile matches that machine:
+
+| Fact | Value | Source |
+| --- | --- | --- |
+| Kickstart version | 1.2 (`media/rom/forever/amiga-os-120.rom`) | Stacey, 2026-11-07 |
+| Workbench | 1.2 (`media/adf/1.2/workbench.adf`) | follows the Kickstart |
+
+These facts are not yet read off it, so the profile uses Amiberry's A500
+defaults until they are:
 
 | Fact | Default until read |
 | --- | --- |
-| Kickstart version | 1.3 (`media/rom/forever/amiga-os-130.rom`) |
 | Memory layout | 512 KB chip plus 512 KB "slow" trapdoor RAM |
 | Agnus (OCS or ECS) | OCS |
 | Video standard | NTSC (the machine is in Canada) |

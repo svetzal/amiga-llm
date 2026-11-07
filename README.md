@@ -54,8 +54,8 @@ states and screenshots stay inside the project. See
 
 Stacey's Amiga 500 with 1 MB of memory, at its normal clock rate. It is the
 physical machine timing claims are checked on. The emulated baseline matches
-it; its Kickstart version, memory layout, Agnus and video standard are still
-to be read off the machine. See `AGENTS.md`.
+it. It runs Kickstart 1.2. Its memory layout, Agnus and video standard are
+still to be read off the machine. See `AGENTS.md`.
 
 ## Open decisions
 
