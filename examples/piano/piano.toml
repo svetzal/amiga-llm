@@ -1,0 +1,32 @@
+# EXP-004, the expressive piano: the recipe for `amiga-env piano`.
+# Paths are under media/ (sfz, midi) or the project (out). Both pieces and
+# the piano come from [[download]] entries in media/manifest.toml.
+
+sfz = "salamander/SalamanderGrandPianoV3_44.1khz16bit/SalamanderGrandPianoV3.sfz"
+out = "runs/exp004"
+
+# Chip RAM for the samples, the larger score, the player's tables and the
+# program, out of the A500's 512 KB; the rest is left to the system.
+budget_bytes = 389120   # 380 KB
+program_bytes = 8192    # an estimate until the 68000 player exists
+
+# Paula volume = 64 * (velocity / 127) ** velocity_exponent, at least 1.
+velocity_exponent = 1.5
+
+[samples]
+spacing = 3
+min_rate = 11025.0
+max_rate = 27000.0
+harmonics = 4.0
+attack_bass_s = 1.4
+attack_treble_s = 0.4
+loop_s = 0.1
+fade_s = 0.01
+
+[[piece]]
+name = "nocturne-op9-2"
+midi = "maestro/maestro-v3.0.0/2011/MIDI-Unprocessed_06_R3_2011_MID--AUDIO_R3-D3_05_Track05_wav.midi"
+
+[[piece]]
+name = "bwv846"
+midi = "maestro/maestro-v3.0.0/2014/MIDI-UNPROCESSED_16-18_R1_2014_MID--AUDIO_16_R1_2014_wav--1.midi"

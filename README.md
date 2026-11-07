@@ -76,6 +76,14 @@ refused rather than silently used. The manuals and the reference
 configuration are optional, so `collection` can stay unset. For one run,
 `uv run amiga-env media --source NAME=PATH` names a source's folder directly.
 
+Freely licensed material comes from the internet instead: a `[[download]]`
+in the manifest pins a URL, its size, SHA-256 and licence, and `make media`
+fetches it, refuses anything that does not match, and unpacks archives as
+data only. The MAESTRO MIDI performances and the Salamander Grand Piano
+samples arrive this way, for
+[`experiments/EXP-004-expressive-piano.md`](experiments/EXP-004-expressive-piano.md),
+the expressive piano. They are optional.
+
 Run Amiberry for this project with:
 
 ```sh
@@ -124,6 +132,12 @@ it writes `build/prog` and a bootable `build/prog.adf` whose
 startup-sequence runs it. `amiga-env asm` and `amiga-env adf` are the two
 halves. The disk is OFS with the Kickstart 1.x bootblock. See
 [`research/toolchain.md`](research/toolchain.md).
+
+`make piano` (`amiga-env piano examples/piano/piano.toml`) builds EXP-004's
+Paula piano on the host: 8-bit samples with loops from the Salamander SFZ,
+an event stream from each MAESTRO performance, and a model of the 68000
+player and Paula that writes a voice log, a WAV and a report to
+`runs/exp004/`.
 
 `amiga-env run` and the machine commands set `HOME` to `runs/home/` so
 Amiberry's settings, ROM path, save states and screenshots stay inside the

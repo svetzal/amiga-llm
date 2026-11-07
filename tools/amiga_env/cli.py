@@ -137,6 +137,11 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         help="boot an exported image (`system export`) in place of the system folder",
     )
 
+    piano = sub.add_parser(
+        "piano", help="build a Paula piano from RECIPE.toml: samples, scores, voice logs, WAVs"
+    )
+    piano.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+
     # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
     return parser, sub
@@ -169,6 +174,7 @@ COMMANDS = {
     "bootdisk": lambda args: assemble.bootdisk(args.source),
     "system": lambda args: _system(args),
     "exec": lambda args: _exec(args),
+    "piano": lambda args: _piano(args.recipe),
 }
 
 
@@ -202,6 +208,23 @@ def _exec(args: argparse.Namespace) -> int:
     sys.stdout.write(outcome.log)
     print(f"exec      return code {outcome.return_code} after {outcome.seconds:.1f} s")
     return 0 if outcome.return_code == 0 else 1
+
+
+def _piano(recipe: Path) -> None:
+    from .piano import build  # numpy and mido load only for this command
+
+    report = build.build(recipe)
+    memory = report["memory"]
+    print(f"piano     {len(report['samples'])} samples, layer {report['layer']}")
+    print(
+        f"memory    {memory['total_bytes']} of {memory['budget_bytes']} bytes "
+        f"(samples {memory['samples_bytes']}, headroom {memory['headroom_bytes']})"
+    )
+    for name, piece in report["pieces"].items():
+        print(
+            f"{name:<16} {piece['bytes']} score bytes, {piece['steals_per_minute']} steals/min, "
+            f"stolen volume median {piece['stolen_volume_median']}"
+        )
 
 
 def _ready(machine: profile.Machine) -> None:
