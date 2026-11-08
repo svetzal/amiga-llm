@@ -137,3 +137,14 @@ unchanged.
 
 The emulator numbers above were measured before this change. They are not
 yet measured again; the real machine run will measure the changed program.
+
+### 2026-11-07: way C added
+
+`mixbench.s` has a third way, C: the A3500 piano's inner loop from EXP-006,
+the A3500 piano. It does linear interpolation between the sample at the
+phase and the next, one MOVE.L fetching both, and puts every voice on both
+sides, with two MULS.W and two ADD.L into longword sums: 18 instructions a
+voice-sample. It runs with 16 voices, data cache off and then on, after the
+six tests of ways A and B, so the program now prints eight lines. It is
+assembled but not yet run.
+

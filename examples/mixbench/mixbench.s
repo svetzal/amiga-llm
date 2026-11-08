@@ -9,7 +9,7 @@
 ;   amiga-env bootdisk examples/mixbench/mixbench.s
 ;   amiga-env a3500 build/mixbench.adf
 ;
-; or boot build/mixbench.adf on the real machine from a floppy. It runs six
+; or boot build/mixbench.adf on the real machine from a floppy. It runs eight
 ; tests of about 4 seconds each, plays a chord through all four Paula
 ; channels while it does, prints a line for each test, and writes the same
 ; numbers to a status block at $100 for the host (see STATUS).
@@ -24,10 +24,14 @@
 ;      level (65 levels, 33 KB), indexed by the sample byte. The voice
 ;      keeps 8 bits of detail at any volume, as on a Paula channel.
 ;   B  16-bit samples and MULS.W by the volume, then ADD.L of the 32-bit
-;      product to a longword sum (the A3500 piano's mixer, EXP-006).
+;      product to a longword sum.
+;   C  the A3500 piano's inner loop (EXP-006, tools/amiga_env/piano/mixer.py):
+;      16-bit samples, linear interpolation between the sample at the phase
+;      and the next (one MOVE.L fetches both), then the pan: every voice to
+;      both sides, two MULS.W and two ADD.L into longword sums.
 ;
 ; Way A sums each side into a 16-bit word per output sample, with headroom
-; for 8 voices at full volume. Way B sums into a longword per output sample;
+; for 8 voices at full volume. Ways B and C sum into a longword per sample;
 ; its out step shifts each sum right by 14 and clamps it to 16 bits. Either
 ; way the sum goes out as 14 bits: the high byte on a channel at volume 64
 ; and the next 6 bits on a channel at volume 1 (left: channels 0 and 3;
@@ -115,7 +119,8 @@ VO_VOL          equ 20          ; B: MULS.W factor
 VO_ACC          equ 22          ; its side's sums
 VO_BASEA        equ 26
 VO_BASEB        equ 30
-VO_SIZE         equ 34
+VO_VOLLR        equ 34          ; C: right multiplier, left multiplier (words)
+VO_SIZE         equ 38
 
 ; Status block, read by the host through the emulator's memory.
 STATUS          equ $100
@@ -126,7 +131,7 @@ ST_CALIB        equ 12          ; E-clock ticks for CALIB_TURNS turns
 ST_RUNS         equ 16          ; tests done
 ST_CACR         equ 20          ; CacheControl's bits at the start
 ST_RUN          equ 24          ; the tests, RU_SIZE bytes each
-RU_WAY          equ 0           ; 'A' or 'B'
+RU_WAY          equ 0           ; 'A', 'B' or 'C'
 RU_VOICES       equ 4
 RU_DCACHE       equ 8           ; 1 with the data cache on
 RU_BLOCKS       equ 12
@@ -356,6 +361,7 @@ make_data:
         lea     TABLES+LEVEL*512+256(a0),a3
         move.l  a3,VO_TABLE(a1)
         move.w  #LEVEL<<5,VO_VOL(a1)    ; the same level as LEVEL<<7 and SWAP
+        move.l  #(LEVEL<<4)<<16|(LEVEL<<4),VO_VOLLR(a1) ; half a side each
         lea     ACC_L(a0),a3
         btst    #0,d7
         beq.s   .left
@@ -389,7 +395,7 @@ calibrate:
         jsr     _LVOPermit(a6)
         rts
 
-; run_test: d0 = way ('A' or 'B'), d1 = voices, d2 = 1 for the data cache.
+; run_test: d0 = way ('A', 'B' or 'C'), d1 = voices, d2 = 1 for the data cache.
 run_test:
         move.l  d0,WAY(a5)
         move.l  d1,NVOICES(a5)
@@ -555,8 +561,16 @@ handler:
         move.l  VO_TABLE(a4),a3
         bsr     mix_a
         bra.s   .mixed
-.b:     move.w  VO_VOL(a4),d6
+.b:     cmp.l   #'C',WAY(a5)
+        beq.s   .c
+        move.w  VO_VOL(a4),d6
         bsr     mix_b
+        bra.s   .mixed
+.c:     move.l  FASTMEM(a5),a2
+        lea     ACC_R(a2),a3
+        lea     ACC_L(a2),a2
+        move.l  VO_VOLLR(a4),d7
+        bsr     mix_c
 .mixed: cmp.l   #WAVE,d0
         blo.s   .inloop
         sub.l   #WAVE,d0
@@ -633,6 +647,60 @@ mix_b:
         dbra    d7,.turn
         rts
 
+; Way C, one voice into both sides: a0 samples (16-bit, padded so the
+; sample after the last one read exists), d0 phase, d2 fraction, d1 and d3
+; the step's fraction and integer, d7 the multipliers (left in the low
+; word), a2 and a3 the left and right sums. The output sample is
+; s0 + ((s1 - s0) * (f >> 1)) >> 15. Each sample does the side whose
+; multiplier is in d7's low word first, so one SWAP a sample keeps them in
+; step over each pair. 18 instructions a voice-sample, and a CMPA.L and BLO.W
+; every four.
+mix_c:
+        lea     N*4(a2),a1              ; the end of the left sums
+.turn:
+        rept    2
+        move.l  (a0,d0.l*2),d4          ; s0 in the high word, s1 in the low
+        move.l  d4,d6
+        swap    d6                      ; s0
+        sub.w   d6,d4                   ; s1 - s0
+        move.w  d2,d5
+        lsr.w   #1,d5                   ; f >> 1
+        muls.w  d5,d4
+        add.l   d4,d4
+        swap    d4                      ; >> 15
+        add.w   d6,d4                   ; the interpolated sample
+        move.w  d4,d6
+        muls.w  d7,d4
+        add.l   d4,(a2)+                ; left
+        swap    d7
+        muls.w  d7,d6
+        add.l   d6,(a3)+                ; right
+        add.w   d1,d2
+        addx.l  d3,d0
+
+        move.l  (a0,d0.l*2),d4
+        move.l  d4,d6
+        swap    d6
+        sub.w   d6,d4
+        move.w  d2,d5
+        lsr.w   #1,d5
+        muls.w  d5,d4
+        add.l   d4,d4
+        swap    d4
+        add.w   d6,d4
+        move.w  d4,d6
+        muls.w  d7,d4
+        add.l   d4,(a3)+                ; right
+        swap    d7
+        muls.w  d7,d6
+        add.l   d6,(a2)+                ; left
+        add.w   d1,d2
+        addx.l  d3,d0
+        endr
+        cmpa.l  a1,a2
+        blo.w   .turn
+        rts
+
 ; out: the out step for the test's way, from the sums at a2.
 out:    cmp.l   #'A',WAY(a5)
         beq.s   out14
@@ -683,6 +751,8 @@ tests:  dc.l    'A',8,0
         dc.l    'B',16,0
         dc.l    'A',16,1
         dc.l    'B',16,1
+        dc.l    'C',16,0
+        dc.l    'C',16,1
         dc.l    0
 
 ; Pitch steps in 16.16, a chord over three octaves.
