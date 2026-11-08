@@ -68,7 +68,6 @@ applications target this machine, not the A500.
 | Video standard | NTSC | same |
 | Kickstart (profile) | 3.2 (`media/rom/3.2/kick-a3000.rom`) | chosen 2026-11-07 |
 | Boot floppy (profile) | `media/adf/3.2/Install3.2.adf` | `Workbench3.2.adf` does not boot alone |
-
 | Kickstart (machine) | 3.2 A3000 ROM, checksum identical to `media/rom/3.2/kick-a3000.rom` | Stacey, 2026-11-07 |
 | Accelerator | Z3660: 68060 at 50 MHz (its `z3660cfg.txt`), with the 68060's FPU and MMU | Stacey, 2026-11-07 |
 | Hard disk | RDB image, 32 heads, 63 sectors; FFS 47.4 in the RDB; `Workbench` (49 MiB, DOS3, boots) and `Work` (748 MiB, DOS3) | her `A3000Current.hdf`, read 2026-11-07 |
@@ -76,6 +75,22 @@ applications target this machine, not the A500.
 
 Not yet known: the Z3660's fast RAM size. Stacey's MUI licence is a 3.8
 registration (`media/mui/README.txt`).
+
+### A3500: the big-memory machine
+
+**Stacey's Amiga 3500**, a Commodore prototype that came before the A3000T.
+She rescued it from Commodore Canada, where she worked in the 1990s. It is
+the target for programs that need more memory than the A3000 has, such as a
+piano with several velocity layers and software-mixed voices. It has no
+profile in `amiga.toml` yet: the facts below are not enough to choose one.
+
+| Fact | Value | Source |
+| --- | --- | --- |
+| Chip RAM | 2 MB | Stacey, 2026-11-07 |
+| Fast RAM | 16 MB | Stacey, 2026-11-07 |
+
+Not yet known: CPU and FPU, chipset, Kickstart, video standard, drives.
+Being a prototype, it may differ from a production A3000T in any of them.
 
 ### a3000-dev: the A3000 as a development machine
 
