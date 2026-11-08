@@ -9,7 +9,7 @@ from amiga_env.piano.player3500 import Instrument, MixSample, Sound
 
 def tiny():
     """Two keys, two layers, one root, two samples."""
-    data = [np.arange(10, dtype=np.int16), np.array([-1, 2, -3, 4], dtype=np.int16)]
+    data = [np.arange(11, dtype=np.int16), np.array([-1, 2, -3, 4], dtype=np.int16)]
     samples = [MixSample(mixer.padded(d, 2), len(d), 2) for d in data]
     sounds = (
         (Sound(0, 0x10000, 0xFFF0, 0x8000, 7), Sound(1, 0x8000, 0xFFE0, 0x4000, 3)),
@@ -31,15 +31,19 @@ class TestSamples:
 
         data = m68k3500.samples_bytes(samples)
 
-        assert len(data) == 2 * (10 + 4 + 2 * mixer.PAD)
+        first = 2 * (11 + mixer.PAD) + 2  # 1,035 words: a zero word to a long boundary
+        assert len(data) == first + 2 * (4 + mixer.PAD)
         assert struct.unpack_from(">3h", data, 0) == (0, 1, 2)
-        second = 2 * (10 + mixer.PAD)
+        assert data[first - 2 : first] == bytes(2)
+        second = first
         assert struct.unpack_from(">4h", data, second) == (-1, 2, -3, 4)
 
     def test_each_entry_gives_offset_length_loop_start_and_loop_length(self):
         _, samples = tiny()
 
-        assert m68k3500.sample_entries(samples) == [(0, 10, 2, 8), (2 * (10 + mixer.PAD), 4, 2, 2)]
+        second = 2 * (11 + mixer.PAD) + 2
+        assert m68k3500.sample_entries(samples) == [(0, 11, 2, 9), (second, 4, 2, 2)]
+        assert second % 4 == 0
 
 
 class TestTables:

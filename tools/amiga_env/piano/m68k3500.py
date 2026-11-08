@@ -6,8 +6,9 @@ piece's score (score.py's stream, unchanged).
 
 `samples.bin`: every sample end to end as signed 16-bit words, each with
 its pad already in place (mixer.padded: PAD more samples round its loop),
-so the player only loads it. Sample i starts at the byte offset its table
-entry gives.
+so the player only loads it. Each sample starts on a multiple of 4 bytes
+(a zero word follows a sample of odd padded length), so its even indexes
+are long-aligned; sample i starts at the byte offset its table entry gives.
 
 `piano.tab`: a header of TABLE_HEADER_BYTES, then five sections, one after
 the other, each an even number of bytes:
@@ -57,9 +58,16 @@ class Tables(NamedTuple):
     sounds: tuple[tuple[Sound, ...], ...]
 
 
+ALIGN = 4  # bytes each sample starts on a multiple of
+
+
 def samples_bytes(samples: Sequence[MixSample]) -> bytes:
-    """samples.bin: the padded samples end to end, big-endian."""
-    return b"".join(np.asarray(s.data, dtype=">i2").tobytes() for s in samples)
+    """samples.bin: the padded samples end to end, big-endian, each long-aligned."""
+    out = bytearray()
+    for s in samples:
+        out += np.asarray(s.data, dtype=">i2").tobytes()
+        out += bytes(-len(out) % ALIGN)
+    return bytes(out)
 
 
 def sample_entries(samples: Sequence[MixSample]) -> list[tuple[int, int, int, int]]:
@@ -67,6 +75,7 @@ def sample_entries(samples: Sequence[MixSample]) -> list[tuple[int, int, int, in
     for s in samples:
         entries.append((offset, s.length, s.loop_start, s.length - s.loop_start))
         offset += 2 * len(s.data)
+        offset += -offset % ALIGN
     return entries
 
 
