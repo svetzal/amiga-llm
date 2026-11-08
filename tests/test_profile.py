@@ -48,6 +48,7 @@ def test_the_a3500_is_an_ntsc_a3000_at_25_mhz_on_kickstart_2_04_and_workbench_2_
         "cpu_speed=real",
         "cpu_multiplier=7",
         "cpu_data_cache=true",
+        "sound_max_buff=8192",
     ]
 
 

@@ -48,6 +48,10 @@ disk = "adf/2.1/workbench.adf"
 settings = [
   "ntsc=true", "a3000mem_size=16",
   "cpu_speed=real", "cpu_multiplier=7", "cpu_data_cache=true",
+  # A host setting, not the real machine: Amiberry's default buffer is 768
+  # frames (17 ms), and the cycle-exact 68030 sometimes misses it, which the
+  # Mac plays as glitches; 8192 gives 2048 frames (46 ms).
+  "sound_max_buff=8192",
 ]
 purpose = "boot the A3500 prototype (Kickstart 2.04, Workbench 2.1, 16 MB fast)"
 

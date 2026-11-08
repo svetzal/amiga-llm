@@ -93,18 +93,18 @@ def line_tops(recipe: build3500.Recipe) -> list[int]:
 
 
 def scope_columns(shot: np.ndarray, origin: Origin, recipe: build3500.Recipe) -> list[float]:
-    """For each scope, the share of its columns with a trace pixel in the band."""
-    spec = recipe.screen
+    """For each of the two scopes (the left channel's, then the right's), the share
+    of its columns with a trace pixel in the band. Both draw in the mix trace colour."""
+    spec, scopes = recipe.screen, recipe.scopes
+    if scopes is None:
+        raise SystemExit("the recipe has no [scopes] table")
     band = (spec.scope_band.top, spec.scope_band.bottom)
-    voice = picture.rgb_of(picture.parse_ocs(spec.voice_trace))
-    mix = picture.rgb_of(picture.parse_ocs(spec.mix_trace))
-    scopes = [(x, spec.voice_scope_width, voice) for x in spec.voice_scopes]
-    scopes.append((spec.mix_scope[0], spec.mix_scope[1], mix))
+    rgb = np.array(picture.rgb_of(picture.parse_ocs(spec.mix_trace)))
     rows = shot[origin.y + SCALE * band[0] : origin.y + SCALE * band[1]].astype(int)
     shares = []
-    for left, width, rgb in scopes:
-        columns = [origin.x + SCALE * x for x in range(left, left + width)]
-        near = np.abs(rows[:, columns] - np.array(rgb)).sum(axis=2) < 30
+    for left in scopes.left:
+        columns = [origin.x + SCALE * x for x in range(left, left + scopes.width)]
+        near = np.abs(rows[:, columns] - rgb).sum(axis=2) < 30
         shares.append(round(float(near.any(axis=0).mean()), 2))
     return shares
 

@@ -33,7 +33,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import project
-from . import clips, layers, mixer, paula, player3500, samples, score, sfz, zoh
+from . import clips, layers, mixer, paula, picture, player3500, samples, score, sfz, zoh
 from . import screen as screen_mod
 from .build import Piece
 
@@ -41,6 +41,49 @@ KEY_BYTES_FIXED = 6  # root index and two pan gains
 KEY_BYTES_PER_LAYER = 10  # sample index, step (long), release factor, attack blocks
 SAMPLE_TABLE_BYTES = 18  # offset, length, loop start, loop length (longs), held factor
 WAV_RATE = paula.OUTPUT_RATE
+
+
+@dataclass(frozen=True)
+class Scopes:
+    """The player's two scopes: the left output channel's, then the right's."""
+
+    left: tuple[int, int]  # the first column of each scope
+    width: int  # columns in each scope
+
+
+def load_scopes(table: dict) -> Scopes:
+    """The recipe's [scopes] table, checked (check_scopes)."""
+    try:
+        scopes = Scopes(left=tuple(table["left"]), width=table["width"])
+    except KeyError as missing:
+        raise SystemExit(f"[scopes]: no {missing.args[0]}") from None
+    check_scopes(scopes)
+    return scopes
+
+
+def check_scopes(scopes: Scopes) -> None:
+    """Two scopes, on byte boundaries, on the screen and apart; SystemExit otherwise.
+
+    The player draws each scope in two halves, and each half must start and
+    end on a byte of the row, so the width is a multiple of 16 columns.
+    """
+    if len(scopes.left) != 2:
+        raise SystemExit("[scopes]: give two lefts, the left channel's scope and the right's")
+    for left in scopes.left:
+        if left % 8:
+            raise SystemExit(f"[scopes]: the scope at column {left} does not start on a byte")
+    if scopes.width <= 0 or scopes.width % 16:
+        raise SystemExit(
+            f"[scopes]: a width of {scopes.width} is not a multiple of 16; each half of a"
+            " scope must end on a byte"
+        )
+    for left in scopes.left:
+        right = left + scopes.width
+        if left < 0 or right > picture.WIDTH:
+            raise SystemExit(f"[scopes]: a scope from column {left} to {right} leaves the screen")
+    first, second = sorted(scopes.left)
+    if second < first + scopes.width:
+        raise SystemExit("[scopes]: the two scopes overlap")
 
 
 @dataclass(frozen=True)
@@ -58,6 +101,7 @@ class Recipe:
     screen: screen_mod.ScreenSpec | None = None  # the player's screen (from `pieces`'s recipe)
     rotate_s: int = 15  # seconds of quiet before the player plays the next piece by itself
     credits: str = ""  # the full notices, under the project
+    scopes: Scopes | None = None  # the player's two scopes, left and right channel
 
 
 @dataclass(frozen=True)
@@ -115,6 +159,7 @@ def load_recipe(path: Path) -> Recipe:
         screen=screen_mod.load_spec(shared["screen"]) if "screen" in shared else None,
         rotate_s=shared.get("rotate_s", 15),
         credits=data.get("credits", ""),
+        scopes=load_scopes(data["scopes"]) if "scopes" in data else None,
     )
 
 

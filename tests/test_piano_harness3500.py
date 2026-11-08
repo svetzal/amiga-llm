@@ -101,3 +101,46 @@ class TestIndex:
 def test_the_status_file_holds_every_field_the_player_writes():
     assert run3500.STATUS_BYTES == 192
     assert len(struct.pack(f">{len(run3500.STATUS_FIELDS)}L", *[0] * 48)) == 192
+
+
+class TestScopeColumns:
+    @pytest.fixture
+    def recipe(self):
+        from amiga_env.piano import build3500
+        from conftest import REPO
+
+        return build3500.load_recipe(REPO / "examples" / "piano3500" / "piano.toml")
+
+    def shot_with_traces(self, recipe, columns, colour):
+        """A doubled screenshot at (4, 6), black but for `colour` on the centre row
+        in each of `columns`."""
+        origin = harness3500.Origin(4, 6, 0.0)
+        shot = np.zeros((6 + 2 * 200, 4 + 2 * 320, 3), dtype=np.uint8)
+        y = origin.y + harness3500.SCALE * recipe.screen.scope_centre
+        for x in columns:
+            shot[y, origin.x + harness3500.SCALE * x] = colour
+        return shot, origin
+
+    def mix(self, recipe):
+        from amiga_env.piano import picture
+
+        return picture.rgb_of(picture.parse_ocs(recipe.screen.mix_trace))
+
+    def test_each_channels_scope_is_measured_over_its_own_80_columns(self, recipe):
+        shot, origin = self.shot_with_traces(
+            recipe, [*range(80, 160), *range(160, 200)], self.mix(recipe)
+        )
+
+        assert harness3500.scope_columns(shot, origin, recipe) == [1.0, 0.5]
+
+    def test_a_trace_outside_the_two_scopes_does_not_count(self, recipe):
+        shot, origin = self.shot_with_traces(
+            recipe, [*range(80), *range(240, 320)], self.mix(recipe)
+        )
+
+        assert harness3500.scope_columns(shot, origin, recipe) == [0.0, 0.0]
+
+    def test_only_the_mix_trace_colour_counts(self, recipe):
+        shot, origin = self.shot_with_traces(recipe, range(80, 240), (255, 0, 255))
+
+        assert harness3500.scope_columns(shot, origin, recipe) == [0.0, 0.0]

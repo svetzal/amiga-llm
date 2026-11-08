@@ -27,7 +27,8 @@
 ; VOICES, BLOCK, PERIOD, FADE_STEP, STOP_VOLUME, LIMIT_BLOCKS, OUTPUT_SHIFT,
 ; QUEUE and LOG. They are not written here, so they cannot drift from the
 ; model's. screen.i and menu.i (made from EXP-004's screen by the host)
-; give the list's rows, the colours, the scopes and the piece keys.
+; give the list's rows, the colours and the piece keys; scopes.i (from the
+; recipe's [scopes]) gives the two scopes' columns.
 ;
 ; How it plays. Paula plays blocks of BLOCK samples at period PERIOD from
 ; two buffers in chip RAM, four channels: left high byte (0, volume 64),
@@ -48,14 +49,12 @@
 ;
 ; Nothing the task does changes what the interrupt makes. The task draws
 ; the screen: the playing piece's line in gold (a user copper list), and
-; five scopes in the floor band. The four small scopes show the four
-; loudest voices sounding, each traced from its own sample, phase and
-; multipliers; the large one shows the output itself, left plus right,
-; from the block Paula is playing. The scopes go in a cycle of eight
-; steps: make the traces, then draw each of seven units (the four small
-; scopes, the large one in three parts). One step is done after a vertical
-; blank, and at most one a block, so the screen adds one step's work to a
-; block at most.
+; two scopes in the floor band, side by side in the middle of the screen:
+; the left output channel and the right, from the block Paula is playing.
+; The scopes go in a cycle of five steps: make the traces, then draw each
+; of four units (each scope in two halves). One step is done after a
+; vertical blank, and at most one a block, so the screen adds one step's
+; work to a block at most.
 ;
 ; Status block at $100 (longs), read by the host: see STATUS below.
 
@@ -185,23 +184,20 @@ SCREEN_HEIGHT   equ 200
 DEPTH           equ 4
 ROW_BYTES       equ SCREEN_WIDTH/8
 PICTURE_BYTES   equ ROW_BYTES*SCREEN_HEIGHT*DEPTH
-SCOPES          equ 4           ; small scopes: the four loudest voices
-VOICE_HALF      equ 16          ; a small scope's trace: at most this from the centre
-VOICE_SHIFT     equ 25          ; sample * multiplier >> this
-MIX_HALF        equ 21          ; the large one's: at most this
-MIX_SHIFT       equ 3           ; (left + right high bytes) >> this
-MIX_STRIDE      equ 4           ; output samples a column of the large scope
-COLUMN_HALVES   equ 15          ; a small scope's column: 7.5 output samples (960 Paula clocks)
-UNITS           equ 7           ; drawing units: four scopes, the large one in three parts
+SCOPE_HALF      equ 21          ; a trace: at most this from the centre
+SCOPE_SHIFT     equ 2           ; a channel's high byte >> this
+SCOPE_STRIDE    equ 6           ; output samples a column
+UNITS           equ 4           ; drawing units: each scope in two halves
 STEPS           equ UNITS+1     ; a cycle: make the traces, then draw each unit
 BEAM_GUARD      equ 64          ; lines above the band a unit may not start on
 
         include "screen.i"      ; LIST_*, LINE_*, colours, SCOPE_*, line_tops
+        include "scopes.i"      ; STEREO_LEFT_L, STEREO_LEFT_R, STEREO_WIDTH
 BAND_BYTES      equ ROW_BYTES*SCOPE_ROWS
-; The large scope's parts end on byte boundaries, so no two units share a
-; byte of the screen.
-MIX_SPLIT1      equ ((MIX_SCOPE_LEFT+MIX_SCOPE_WIDTH/3+7)/8)*8-MIX_SCOPE_LEFT
-MIX_SPLIT2      equ ((MIX_SCOPE_LEFT+2*MIX_SCOPE_WIDTH/3+7)/8)*8-MIX_SCOPE_LEFT
+HALF_WIDTH      equ STEREO_WIDTH/2  ; a unit: half a scope, ending on a byte boundary
+        if      STEREO_WIDTH*SCOPE_STRIDE>BLOCK
+        fail    "a scope's columns would read past the block"
+        endif
 
 ; Status block (longs at $100).
 STATUS          equ $100
@@ -2531,132 +2527,34 @@ scope_tick:
         movem.l (sp)+,d2-d7/a2-a4
         rts
 
-; make_traces: the four loudest voices sounding, in voice order, and the
-; output Paula is playing, as rows from the centre.
+; make_traces: the block Paula is playing, the left channel's high bytes
+; and the right's, as rows from the centre.
 make_traces:
-        ; pick: four passes, each taking the loudest voice not yet taken
-        moveq   #0,d6                   ; taken, a bit a voice
-        moveq   #SCOPES-1,d5
-.pick:  lea     VOICE_ARRAY(a5),a0
-        moveq   #-1,d2                  ; the best voice
-        moveq   #0,d3                   ; its volume
-        moveq   #0,d1
-.cand:  tst.w   VO_HASTONE(a0)
-        beq.s   .skip
-        tst.w   VO_KEY(a0)
-        bmi.s   .skip
-        btst    d1,d6
-        bne.s   .skip
-        moveq   #0,d0
-        move.w  VO_VOLUME(a0),d0
-        cmp.l   d3,d0
-        bls.s   .skip
-        move.l  d0,d3
-        move.l  d1,d2
-.skip:  lea     VO_SIZE(a0),a0
-        addq.w  #1,d1
-        cmp.w   #VOICES,d1
-        bcs.s   .cand
-        tst.l   d2
-        bmi.s   .picked
-        bset    d2,d6
-        dbra    d5,.pick
-.picked:
         lea     traces,a2
-        lea     VOICE_ARRAY(a5),a4
-        moveq   #0,d7                   ; voice
-        moveq   #SCOPES-1,d5            ; scopes to fill
-.voice: cmp.w   #VOICES,d7
-        bcc.s   .flat
-        btst    d7,d6
-        bne.s   .trace
-        lea     VO_SIZE(a4),a4
-        addq.w  #1,d7
-        bra.s   .voice
-.trace: bsr     trace_voice
-        lea     VO_SIZE(a4),a4
-        addq.w  #1,d7
-        dbra    d5,.voice
-        bra.s   .mix
-.flat:  moveq   #VOICE_SCOPE_WIDTH-1,d0
-.zero:  clr.b   (a2)+
-        dbra    d0,.zero
-        dbra    d5,.flat
-.mix:   ; the large scope: the block Paula plays now, left plus right
         move.l  PLAYING(a5),d0
         eor.l   #1,d0
         lsl.l   #2,d0
         mulu.w  #BLOCK,d0
         move.l  CHIPMEM(a5),a0
         add.l   d0,a0                   ; channel 0: left high bytes
-        lea     BLOCK(a0),a1            ; channel 1: right
-        move.w  #MIX_SCOPE_WIDTH-1,d7
-.col:   move.b  (a0),d0
+        bsr.s   trace_channel
+        lea     BLOCK(a0),a0            ; channel 1: right
+; trace_channel: STEREO_WIDTH columns from the bytes at a0 into a2.
+trace_channel:
+        move.l  a0,a1
+        moveq   #STEREO_WIDTH-1,d7
+.col:   move.b  (a1),d0
         ext.w   d0
-        move.b  (a1),d1
-        ext.w   d1
-        add.w   d1,d0
-        asr.w   #MIX_SHIFT,d0
-        cmp.w   #MIX_HALF,d0
+        asr.w   #SCOPE_SHIFT,d0
+        cmp.w   #SCOPE_HALF,d0
         ble.s   .low
-        moveq   #MIX_HALF,d0
-.low:   cmp.w   #-MIX_HALF,d0
+        moveq   #SCOPE_HALF,d0
+.low:   cmp.w   #-SCOPE_HALF,d0
         bge.s   .high
-        moveq   #-MIX_HALF,d0
+        moveq   #-SCOPE_HALF,d0
 .high:  move.b  d0,(a2)+
-        addq.l  #MIX_STRIDE,a0
-        addq.l  #MIX_STRIDE,a1
+        addq.l  #SCOPE_STRIDE,a1
         dbra    d7,.col
-        rts
-
-; trace_voice: voice a4's trace into a2 (VOICE_SCOPE_WIDTH rows): its
-; sample from its phase, a column every 7.5 output samples, times the mean
-; of its two multipliers.
-trace_voice:
-        movem.l d5-d7/a4,-(sp)
-        moveq   #0,d0
-        move.w  VO_TSAMPLE(a4),d0
-        lsl.l   #4,d0
-        move.l  SAMPTAB(a5),a1
-        add.l   d0,a1
-        move.l  SAMPLES(a5),a0
-        add.l   SE_OFFSET(a1),a0
-        move.l  VO_TPHASE(a4),d2        ; where it is
-.wrap:  cmp.l   SE_LENGTH(a1),d2
-        bcs.s   .in
-        sub.l   SE_LOOPLEN(a1),d2
-        bra.s   .wrap
-.in:    move.l  VO_TSTEP(a4),d3
-        mulu.l  #COLUMN_HALVES,d3
-        lsr.l   #1,d3                   ; 16.16 a column
-        moveq   #0,d4                   ; 16.16 so far
-        moveq   #0,d6
-        move.w  VO_TLEFT(a4),d6
-        moveq   #0,d0
-        move.w  VO_TRIGHT(a4),d0
-        add.l   d0,d6
-        lsr.l   #1,d6
-        mulu.w  VO_TQ(a4),d6
-        lsr.l   #2,d6                   ; the multiplier, faded as it plays
-        moveq   #VOICE_SHIFT,d5
-        moveq   #VOICE_SCOPE_WIDTH-1,d7
-.col:   move.l  d4,d0
-        swap    d0
-        and.l   #$ffff,d0
-        add.l   d2,d0
-        move.w  (a0,d0.l*2),d0
-        muls.w  d6,d0
-        asr.l   d5,d0
-        cmp.l   #VOICE_HALF,d0
-        ble.s   .low
-        moveq   #VOICE_HALF,d0
-.low:   cmp.l   #-VOICE_HALF,d0
-        bge.s   .high
-        moveq   #-VOICE_HALF,d0
-.high:  move.b  d0,(a2)+
-        add.l   d3,d4
-        dbra    d7,.col
-        movem.l (sp)+,d5-d7/a4
         rts
 
 ; draw_unit_step: unit step_next - 1, from unit_table: take back its old
@@ -2678,13 +2576,6 @@ draw_unit_step:
         move.w  (a1)+,d4                ; its left column
         move.w  (a1)+,d6                ; its points
         move.w  (a1)+,d3                ; 0 for colour 14, 1 for 15
-        cmp.w   #SCOPES,d7
-        bcc.s   .placed
-        lea     voice_scope_left(pc),a1 ; a small scope: its column from screen.i
-        move.w  d7,d0
-        add.w   d0,d0
-        move.w  (a1,d0.w),d4
-.placed:
         lea     unit_drawn,a1
         add.w   d7,a1
         add.w   d7,a1
@@ -2756,21 +2647,16 @@ beam_clear:
 volumes:
         dc.w    64,64,1,1               ; channels 0-3: L high, R high, R low, L low
 
-        SCREEN_TABLES                   ; line_tops, voice_scope_left (screen.i)
+        SCREEN_TABLES                   ; line_tops (screen.i)
 
-; The drawing units: first point among the traces, left column (the small
-; scopes take theirs from voice_scope_left), points, colour (0 for 14, 1 for
-; 15). The traces are the four small scopes', then the large one's.
-VSW     equ VOICE_SCOPE_WIDTH
-MIXT    equ SCOPES*VSW
+; The drawing units: first point among the traces, left column, points,
+; colour (0 for 14, 1 for 15). The traces are the left scope's, then the
+; right's; both are drawn in colour 15.
 unit_table:
-        dc.w    0,0,VSW,0
-        dc.w    VSW,0,VSW,0
-        dc.w    2*VSW,0,VSW,0
-        dc.w    3*VSW,0,VSW,0
-        dc.w    MIXT,MIX_SCOPE_LEFT,MIX_SPLIT1,1
-        dc.w    MIXT+MIX_SPLIT1,MIX_SCOPE_LEFT+MIX_SPLIT1,MIX_SPLIT2-MIX_SPLIT1,1
-        dc.w    MIXT+MIX_SPLIT2,MIX_SCOPE_LEFT+MIX_SPLIT2,MIX_SCOPE_WIDTH-MIX_SPLIT2,1
+        dc.w    0,STEREO_LEFT_L,HALF_WIDTH,1
+        dc.w    HALF_WIDTH,STEREO_LEFT_L+HALF_WIDTH,HALF_WIDTH,1
+        dc.w    STEREO_WIDTH,STEREO_LEFT_R,HALF_WIDTH,1
+        dc.w    STEREO_WIDTH+HALF_WIDTH,STEREO_LEFT_R+HALF_WIDTH,HALF_WIDTH,1
 
 dosname:
         dc.b    "dos.library",0
@@ -2859,8 +2745,8 @@ step_block:     ds.l 1
 alarm_on:       ds.w 1
 clock_on:       ds.w 1
 led_known:      ds.w 1
-old_points:     ds.w SCOPES*VOICE_SCOPE_WIDTH+MIX_SCOPE_WIDTH
-traces:         ds.b SCOPES*VOICE_SCOPE_WIDTH+MIX_SCOPE_WIDTH
+old_points:     ds.w 2*STEREO_WIDTH
+traces:         ds.b 2*STEREO_WIDTH
 alarm_bit:      ds.b 1
 led_start:      ds.b 1
         cnop    0,4

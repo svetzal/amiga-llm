@@ -38,3 +38,8 @@ attack_treble_s = 0.8
 loop_s = 0.1
 fade_s = 0.01
 peak = 32700            # largest sample value after normalising, below 32767 for the dither
+
+# The player's two scopes, in columns; their rows come from the shared [screen].
+[scopes]
+left = [80, 160]   # the left channel's scope, then the right's: a quarter of the screen each, centred
+width = 80

@@ -532,7 +532,8 @@ real 68030 can say which.
 with the song list composited on the host (`screen.py`, from EXP-004's
 recipe, which the A3500 recipe now shares with its `rotate_s`), the pixel
 font, the gold user copper line on the playing piece, the dim attribution,
-the "svetzal" signature and five scopes in the floor band. The screen code
+the "svetzal" signature and five scopes in the floor band (two since
+2026-11-08, below). The screen code
 (the ILBM reader, Intuition's screen and backdrop window, the copper list,
 the choices, the rotation, the vertical blank server and the filter key)
 is EXP-004's, copied into the A3500 player and adapted to it; the two
@@ -637,6 +638,55 @@ Amiberry did. `runs/exp006/machine/image-boot.png` shows it (looked at).
 
 Not done: the image on the real A3500 and its BlueSCSI; audio from the
 emulator.
+
+### 2026-11-08: two stereo scopes, and the emulator's glitches (machine tier)
+
+Stacey's listening, from the image in a window: the five scopes made no
+sense, and she heard audio glitches she put down to the emulator's timing.
+
+#### Two scopes
+
+The player now draws two scopes, the left output channel and the right,
+each a quarter of the screen wide (80 columns), side by side in the middle
+(columns 80 to 239), in register 15. Each traces its channel's high bytes
+from the block Paula is playing, a column every 6 output samples (480 of
+the block's 512), shifted right by 2 and held to 21 rows from the centre.
+The columns come from the A3500 recipe's `[scopes]` table (`scopes.i`);
+the rows are still EXP-004's band. The four loudest voices' traces are
+gone. The cycle is five steps (make the traces, then draw each scope in two
+halves of 40 points), so each scope is redrawn about 11 times a second
+instead of 6.8. `runs/exp006/glitch/stereo.png` shows them under the
+nocturne (looked at).
+
+The screen run again (`amiga-env piano3500-run ... --screen`, test build):
+every step as on 2026-11-07, the nocturne's and BWV 802's voice logs
+identical to the model's, both scopes traced in every column in each
+screenshot checked. The nocturne's worst block, mixing and screen, 47.5%
+(47.1% with five scopes); BWV 802's 40.7%; the screen 1.7% on average, at
+most 467 E-clock ticks for one step.
+
+#### The glitches
+
+Three measurements, with the image playing the nocturne (Stacey's build,
+no log):
+
+- The emulator keeps time: 0.99 emulated seconds a wall second, sampled
+  each second for 25 s, on about half of one host core.
+- The player keeps time: no block overran, the worst took 38.3% of a block
+  with the screen up.
+- Amiberry's output has no gaps: 30 s captured through SDL's disk driver
+  had no runs of silence, no held samples and no clicks
+  (second-difference spikes).
+
+So the Amiga side is clean, and the glitches come after it, between
+Amiberry and the Mac's audio device. Amiberry ran with its default buffer,
+768 frames at 44.1 kHz (17 ms), in push mode; the cycle-exact 68030 makes
+the emulator's frames uneven enough to miss that now and then. The `a3500`
+profile now sets `sound_max_buff=8192`, a 2048-frame buffer (46 ms; 16384
+gives 4096 frames). This is a host setting, not the real machine. It adds
+about 30 ms between a click and the sound in the emulator only. Whether it
+cures what Stacey heard is for her ears; the capture cannot show a device
+underrun.
 
 ## What the 68030 player must match
 

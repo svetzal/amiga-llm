@@ -273,17 +273,31 @@ def index_text(pieces: Sequence[tuple[str, str]]) -> str:
     return "".join(f"{name} {title}\n" for name, title in pieces)
 
 
+def scopes_include(scopes: build3500.Scopes) -> str:
+    """`scopes.i` for the player: where its two scopes start, and their width."""
+    left, right = scopes.left
+    return (
+        "; scopes.i: made by `amiga-env piano3500-run` (run3500.py); do not edit.\n"
+        f"STEREO_LEFT_L   equ {left}\n"
+        f"STEREO_LEFT_R   equ {right}\n"
+        f"STEREO_WIDTH    equ {scopes.width}\n"
+    )
+
+
 def screen_data(recipe: build3500.Recipe, data: Path) -> Path:
-    """title.ilbm, screen.i and menu.i (EXP-004's screen and keys) into `data`;
-    returns the picture."""
+    """title.ilbm, screen.i and menu.i (EXP-004's screen and keys) and scopes.i
+    (the two channels' scopes) into `data`; returns the picture."""
     if recipe.screen is None:
         raise SystemExit("the recipe shares no [screen] table (pieces = ...)")
+    if recipe.scopes is None:
+        raise SystemExit("the recipe has no [scopes] table")
     data.mkdir(parents=True, exist_ok=True)
     root = project.root()
     names = disk.titles(recipe)
     made = screen_mod.make(names, recipe.screen, root)
     picture = screen_mod.write(made, recipe.screen, root, data, data)
     (data / "menu.i").write_text(disk.menu_include(len(names), recipe.rotate_s), encoding="ascii")
+    (data / "scopes.i").write_text(scopes_include(recipe.scopes), encoding="ascii")
     return picture
 
 
