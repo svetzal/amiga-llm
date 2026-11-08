@@ -405,6 +405,105 @@ voice-sample (with the pan) to 18, or from 5 to 14 in mono. EXP-005's
 for the coordinator to run. Until then, whether 16 voices fit in the
 CPU's time with interpolation is not known.
 
+### 2026-11-07: procedure step 4, the 68030 player (machine tier)
+
+Everything here ran on Amiberry 8.5.0 on the Mac, on the `a3500` machine:
+Kickstart 2.04, a cycle-exact 68030 at 25.06 MHz (`cpu_multiplier=7`) with
+its data cache emulated, ECS, NTSC, 16 MB of fast RAM. Amiberry's 68030
+timing is approximate (EXP-005), so the CPU figures are the emulator's, not
+the A3500's. The real A3500 is off the bench.
+
+#### The player
+
+`examples/piano3500/player.s`, 68030 assembly for vasm. It has no screen:
+sound and the voice log only. `player RUN NAME` loads `piano.tab` and
+`samples.bin` whole into fast RAM, and `scores/NAME.score` (score.py's
+stream, unchanged). It takes channel 0's audio interrupt with SetIntVector,
+as mixbench does, and makes each block in that interrupt in the model's
+order: decay, the block's events at their own samples, the mix into 32-bit
+sums in runs split at queued changes, the shift by 14 and clamp, the 14-bit
+split and the checksum, then the log record and the decision whether there
+is another block. The data cache is on while it plays.
+
+The model's constants (voices, block, period, fade step, stop volume, the
+blocks after the last event, the output shift) are not written in the
+source. The host passes them to vasm with -D from `player3500.py` and
+`mixer.py`, and the source refuses to assemble without them. A test checks
+that every constant passed is one the source uses and does not define
+itself.
+
+- The inner loop is mixer.py's, 18 instructions a voice-sample. A run of an
+  odd length is pairs of samples (left first, then right first, so one SWAP
+  a sample keeps the multipliers in step) and one sample more.
+- Each voice has a queue of up to 32 changes (a fade level or a new tone,
+  each at its sample). A full queue loses the change and is counted; none
+  was lost.
+- The test build (LOG=1) fills a 14,848-byte buffer (64 blocks) in the
+  interrupt while the task writes the other to `logs/NAME.log`. At the end
+  it writes the rest, then seeks back and writes the header with the block
+  count. No log block was lost in any run.
+- At the end the player writes its status block (72 bytes) to
+  `logs/NAME.stat`, so the host has each piece's figures after the next
+  piece has started.
+
+The data files (`m68k3500.py`, which documents and tests them):
+`samples.bin` holds the 240 samples with their pads in place, 16-bit
+big-endian, 10,972,800 bytes; `piano.tab` holds the layer of each velocity,
+the volume table, the sample table, each key's root and pan gains, and each
+key's sound in each layer, 20,816 bytes. The player is 3,568 bytes.
+
+#### The run
+
+`amiga-env piano3500-run examples/piano3500/piano.toml PIECE...` (`make
+piano3500-run`, with `PIECES=` to choose) builds a volume in
+`runs/exp006/machine/volume/` (`S/Startup-Sequence`, the player's test
+build, the data, the scores), boots it as DH0: with no floppy and no
+window, waits for each piece's `.stat` file, compares each log with the
+model's, and stops the emulator it started. Kickstart 2.04 boots the host
+folder through Amiberry's filesystem2 in about 4 s. The Startup-Sequence
+holds one line a piece (`player 1 nocturne-op9-2`) after `FailAt 21`, so a
+piece that fails does not stop the rest.
+
+#### Results
+
+| Piece | Blocks | Log | CPU, mean | CPU, worst block | Overruns | Wall time (warp) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Nocturne Op. 9 No. 2 | 12,566 | identical | 39.5% | 44.3% | 0 | 67.3 s |
+| BWV 846 | 13,151 | identical | 24.8% | 43.1% | 0 | 57.3 s |
+| BWV 802 | 7,235 | identical | 21.0% | 37.6% | 0 | 31.1 s |
+
+"CPU" is E-clock ticks from the handler's first ReadEClock to its last, over
+the 13,107 ticks a block lasts; it leaves out the time exec takes to call
+the handler. An overrun is a block that took longer than a block lasts.
+The player's counts of notes, steals and restrikes are the model's (the
+nocturne 1,498, 508 and 861; BWV 846 1,925, 9 and 938), and it clamped no
+output value.
+
+The logs are identical byte for byte: 2,915,328 bytes for the nocturne and
+3,051,048 for BWV 846, every voice's key, sample, volume, multipliers and
+phase in every block, and the checksum of every block's output. They were
+identical in the first run; nothing had to be corrected in the player
+after it first assembled.
+
+Warp. The runs above went in warp. BWV 802 was also run at the machine's
+own speed (138.5 s): 2,748 E-clock ticks a block on average in both, and
+4,931 against 4,932 for the worst block. In warp Amiberry keeps the
+emulated CPU's time against the E-clock, so warp is good for the CPU share.
+Between two warp runs BWV 846's worst block was 5,636 and 5,644 ticks: the
+worst case moves by a few ticks from run to run, the mean does not.
+
+The make target took 2 min 14 s for the two pieces, of which about 8 s
+builds the volume (the samples, the model's logs and the player).
+
+Against EXP-005's 50% bar: the densest piece takes 39.5% on average and
+44.3% in its worst block on the emulator, close to mixbench's way C (38 to
+41% for 16 voices). There is room, but not much, and the real 68030 may
+differ.
+
+Not done: audio from the emulator (SDL's disk driver), which the brief made
+optional. The logs, with each block's output checksum, show the mix is the
+model's.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):

@@ -174,6 +174,11 @@ builds EXP-006's A3500 piano on the host: 8 velocity layers of 16-bit
 samples, and a model of a 68030 player that mixes 16 voices in software
 into 14-bit stereo on Paula's four channels. For each of EXP-004's pieces it
 writes a WAV, a binary voice log and a line of `runs/exp006/report.json`.
+`make piano3500-run` (`amiga-env piano3500-run examples/piano3500/piano.toml
+PIECE...`) assembles the 68030 player (`examples/piano3500/player.s`),
+boots it headless on the `a3500` machine from a folder in
+`runs/exp006/machine/volume/`, plays the pieces, compares each voice log
+with the model's byte for byte and reports the CPU share it measured.
 
 `amiga-env run` and the machine commands set `HOME` to `runs/home/` so
 Amiberry's settings, ROM path, save states and screenshots stay inside the
