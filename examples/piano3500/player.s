@@ -2,19 +2,32 @@
 ; tools/amiga_env/piano/player3500.py.
 ;
 ; For the A3500 (68030 at 25 MHz, ECS, NTSC, Kickstart 2.04 or later) with
-; about 12 MB of fast RAM free. It plays one piece and returns:
+; about 12 MB of fast RAM free. Two ways to run it, from the folder that
+; holds its files:
 ;
-;   player RUN NAME
+;   player           the screen: the title picture with the song list (as
+;                    EXP-004's A500 disk shows it). A click on a piece's
+;                    line, or its key (1 to 9, then A to Z without F and Q),
+;                    plays it, or switches to it. Left alone it plays the
+;                    pieces in turn: the first ROTATE_S seconds after the
+;                    screen appears, and each next one ROTATE_S seconds after
+;                    the last ends. Space stops and holds the rotation until
+;                    the next choice; F switches the audio filter (and the
+;                    power LED); Esc or Q quits.
+;   player RUN NAME  one piece, scores/NAME.score, with no screen; RUN is a
+;                    number the host waits for.
 ;
-; RUN is a number the host waits for in the status block; NAME is a piece,
-; read from scores/NAME.score. It loads piano.tab and samples.bin (see
-; tools/amiga_env/piano/m68k3500.py) from the current directory. The test
-; build (LOG=1) writes the voice log to logs/NAME.log as it plays.
+; It loads piano.tab and samples.bin (tools/amiga_env/piano/m68k3500.py),
+; and for the screen title.ilbm and scores/index (one line a piece: its
+; name, a space, its title) with every score at the start. The test build
+; (LOG=1) writes each piece's voice log to logs/NAME.log as it plays, and
+; when a piece ends, the status block to logs/NAME.stat.
 ;
 ; The host passes the model's constants with -D (amiga-env piano3500-run):
 ; VOICES, BLOCK, PERIOD, FADE_STEP, STOP_VOLUME, LIMIT_BLOCKS, OUTPUT_SHIFT,
 ; QUEUE and LOG. They are not written here, so they cannot drift from the
-; model's.
+; model's. screen.i and menu.i (made from EXP-004's screen by the host)
+; give the list's rows, the colours, the scopes and the piece keys.
 ;
 ; How it plays. Paula plays blocks of BLOCK samples at period PERIOD from
 ; two buffers in chip RAM, four channels: left high byte (0, volume 64),
@@ -33,9 +46,16 @@
 ;   5. the test build: the block's record into the voice log;
 ;   6. decide whether there is another block, as the model does.
 ;
-; The task loads everything, starts the sound, then waits. The test build's
-; log goes through two buffers: the interrupt fills one while the task
-; writes the other to the file.
+; Nothing the task does changes what the interrupt makes. The task draws
+; the screen: the playing piece's line in gold (a user copper list), and
+; five scopes in the floor band. The four small scopes show the four
+; loudest voices sounding, each traced from its own sample, phase and
+; multipliers; the large one shows the output itself, left plus right,
+; from the block Paula is playing. The scopes go in a cycle of eight
+; steps: make the traces, then draw each of seven units (the four small
+; scopes, the large one in three parts). One step is done after a vertical
+; blank, and at most one a block, so the screen adds one step's work to a
+; block at most.
 ;
 ; Status block at $100 (longs), read by the host: see STATUS below.
 
@@ -48,14 +68,19 @@
 _LVOForbid          equ -132
 _LVOPermit          equ -138
 _LVOSetIntVector    equ -162
+_LVOAddIntServer    equ -168
+_LVORemIntServer    equ -174
 _LVOAllocMem        equ -198
 _LVOFreeMem         equ -210
+_LVOAvailMem        equ -216
 _LVOFindTask        equ -294
 _LVOSetSignal       equ -306
 _LVOWait            equ -318
 _LVOSignal          equ -324
 _LVOAllocSignal     equ -330
 _LVOFreeSignal      equ -336
+_LVOGetMsg          equ -372
+_LVOReplyMsg        equ -378
 _LVOCloseLibrary    equ -414
 _LVOOpenDevice      equ -444
 _LVOCloseDevice     equ -450
@@ -67,8 +92,24 @@ _LVORead            equ -42
 _LVOWrite           equ -48
 _LVOSeek            equ -66
 _LVOReadEClock      equ -60         ; timer.device
+_LVOLoadRGB4        equ -192        ; graphics
+_LVOWaitTOF         equ -270
+_LVOCBump           equ -366
+_LVOCMove           equ -372
+_LVOCWait           equ -378
+_LVOFreeCopList     equ -546
+_LVOUCopperListInit equ -594
+_LVOCloseScreen     equ -66         ; intuition
+_LVOCloseWindow     equ -72
+_LVOOpenScreen      equ -198
+_LVOOpenWindow      equ -204
+_LVOShowTitle       equ -288
+_LVOMakeScreen      equ -384
+_LVORethinkDisplay  equ -396
 
 ExecBase        equ 4
+VBlankFrequency equ 530
+MEMF_PUBLIC     equ 1
 MEMF_CHIP       equ 2
 MEMF_FAST       equ 4
 MEMF_CLEAR      equ $10000
@@ -77,13 +118,47 @@ MODE_NEWFILE    equ 1006
 OFFSET_BEGINNING equ -1
 OFFSET_END      equ 1
 CACRF_EnableD   equ $100
+INTB_VERTB      equ 5
 INTB_AUD0       equ 7
 INTF_AUD0       equ $0080
 NT_INTERRUPT    equ 2
 IO_DEVICE       equ 20
 IOTV_SIZE       equ 40
 
+; Intuition and graphics structures (as in EXP-004's player)
+sc_ViewPort     equ 44
+sc_BitMap       equ 184
+bm_Planes       equ 8
+vp_UCopIns      equ 20
+vp_DyOffset     equ 30
+gb_ActiView     equ 34
+v_DyOffset      equ 12
+ucl_FirstCopList equ 4
+ucl_SIZEOF      equ 12
+wd_UserPort     equ 86
+mp_SigBit       equ 15
+im_Class        equ 20
+im_Code         equ 24
+im_MouseX       equ 32
+im_MouseY       equ 34
+CUSTOMSCREEN    equ $000f
+SCREENQUIET     equ $0100
+MOUSEBUTTONS    equ $00000008
+RAWKEY          equ $00000400
+SIMPLE_REFRESH  equ $00000040
+BACKDROP        equ $00000100
+BORDERLESS      equ $00000800
+ACTIVATE        equ $00001000
+RMBTRAP         equ $00010000
+NOCAREREFRESH   equ $00020000
+SELECTDOWN      equ $68
+KEY_ESC         equ $45
+KEY_Q           equ $10
+KEY_SPACE       equ $40
+KEY_F           equ $23
+
 CUSTOM          equ $dff000
+VPOSR           equ $004
 DMACON          equ $096
 INTENA          equ $09a
 INTREQ          equ $09c
@@ -91,6 +166,9 @@ AUD0LC          equ $0a0
 AUDLEN          equ 4
 AUDPER          equ 6
 AUDVOL          equ 8
+COLOR13         equ CUSTOM+$19a
+ciaapra         equ $bfe001         ; bit 1: the power LED and the audio filter, 0 = on
+LED_BIT         equ 1
 
 BLOCK_E         equ BLOCK*PERIOD/5  ; E-clock ticks a block (13,107.2 rounded down)
 LOG_VOICE       equ 14
@@ -99,14 +177,39 @@ LOG_HALF_BLOCKS equ 64
 LOG_HALF        equ LOG_HALF_BLOCKS*LOG_BLOCK
 LOG_HEADER      equ 16
 SILENT          equ $ff
+MAX_PIECES      equ 33
+
+; The screen and the scopes; screen.i (made with the picture) has the rows.
+SCREEN_WIDTH    equ 320
+SCREEN_HEIGHT   equ 200
+DEPTH           equ 4
+ROW_BYTES       equ SCREEN_WIDTH/8
+PICTURE_BYTES   equ ROW_BYTES*SCREEN_HEIGHT*DEPTH
+SCOPES          equ 4           ; small scopes: the four loudest voices
+VOICE_HALF      equ 16          ; a small scope's trace: at most this from the centre
+VOICE_SHIFT     equ 25          ; sample * multiplier >> this
+MIX_HALF        equ 21          ; the large one's: at most this
+MIX_SHIFT       equ 3           ; (left + right high bytes) >> this
+MIX_STRIDE      equ 4           ; output samples a column of the large scope
+COLUMN_HALVES   equ 15          ; a small scope's column: 7.5 output samples (960 Paula clocks)
+UNITS           equ 7           ; drawing units: four scopes, the large one in three parts
+STEPS           equ UNITS+1     ; a cycle: make the traces, then draw each unit
+BEAM_GUARD      equ 64          ; lines above the band a unit may not start on
+
+        include "screen.i"      ; LIST_*, LINE_*, colours, SCOPE_*, line_tops
+BAND_BYTES      equ ROW_BYTES*SCOPE_ROWS
+; The large scope's parts end on byte boundaries, so no two units share a
+; byte of the screen.
+MIX_SPLIT1      equ ((MIX_SCOPE_LEFT+MIX_SCOPE_WIDTH/3+7)/8)*8-MIX_SCOPE_LEFT
+MIX_SPLIT2      equ ((MIX_SCOPE_LEFT+2*MIX_SCOPE_WIDTH/3+7)/8)*8-MIX_SCOPE_LEFT
 
 ; Status block (longs at $100).
 STATUS          equ $100
 ST_MAGIC        equ 0           ; 'P35P'
-ST_STATE        equ 4           ; 0 loading, 1 playing, 2 done, -1 failed
+ST_STATE        equ 4           ; 0 loading, 1 playing, 2 done, 3 waiting for a choice, -1 failed
 ST_ERROR        equ 8           ; why it failed (ERR_ below)
 ST_RUN          equ 12          ; RUN from the command line
-ST_BLOCKS       equ 16          ; blocks made
+ST_BLOCKS       equ 16          ; blocks made (this piece, from here to ST_QUEUE_FULL)
 ST_TOTAL_E      equ 20          ; E-clock ticks making them
 ST_WORST_E      equ 24          ; the most for one block
 ST_OVERRUNS     equ 28          ; blocks that took longer than a block lasts
@@ -120,7 +223,38 @@ ST_QUEUE_FULL   equ 56          ; changes lost: a voice's queue was full
 ST_EFREQ        equ 60          ; E-clock ticks a second
 ST_CACR         equ 64          ; CacheControl's bits found at the start
 ST_SAMPLES      equ 68          ; where the samples are
-ST_SIZE         equ 72
+ST_MODE         equ 72          ; 1 with the screen
+ST_PIECE        equ 76          ; the piece playing or last played, from 0
+ST_PIECES       equ 80          ; pieces in the index
+ST_PLAYED       equ 84          ; pieces played to their end or stopped
+ST_STOPPED      equ 88          ; 1 when the last piece was stopped
+ST_STARTS       equ 92          ; pieces started
+ST_ROTATED      equ 96          ; of those, started by the rotation
+ST_NEXT         equ 100         ; the piece the rotation plays next
+ST_ROTATE_AT    equ 104         ; when, -1 while it waits for a choice
+ST_HIGHLIGHT    equ 108         ; the line in gold, -1 for none
+ST_WINDOW       equ 112         ; the backdrop window
+ST_KEY          equ 116         ; the last RAWKEY code
+ST_KEYS         equ 120
+ST_CLICKS       equ 124
+ST_CLICK_XY     equ 128         ; x in the high word, y in the low
+ST_FILTER_KEYS  equ 132         ; presses of F
+; Times are vertical blanks counted from the start of the program.
+ST_VBLANKS      equ 136
+ST_VBLANK_HZ    equ 140
+ST_LOADED_AT    equ 144         ; the samples were in memory
+ST_PRELOAD_FRAMES equ 148       ; vertical blanks loading every score
+ST_SCREEN_AT    equ 152         ; the screen was up and taking choices
+ST_CHOSEN_AT    equ 156         ; the task took the last choice
+ST_GOLD_AT      equ 160         ; its line was gold
+ST_PLAYING_AT   equ 164         ; its first block was made
+ST_FIRST_NOTE_AT equ 168        ; its first note was started
+ST_ENDED_AT     equ 172
+ST_WORST_TOTAL_E equ 176        ; the most E-clock ticks of mixing and screen work in one block's time
+ST_TASK_E       equ 180         ; the screen's E-clock ticks while this piece played
+ST_UNITS        equ 184         ; drawing units drawn
+ST_UNIT_MAX_E   equ 188         ; the most for one
+ST_SIZE         equ 192
 
 ERR_DOS         equ 1
 ERR_ARGS        equ 2
@@ -132,6 +266,8 @@ ERR_TIMER       equ 7
 ERR_LOG         equ 8
 ERR_SCOREBYTE   equ 9
 ERR_SIGNAL      equ 10
+ERR_INDEX       equ 11
+ERR_SCREEN      equ 12
 
 ; A sound record in piano.tab (12 bytes).
 SO_SAMPLE       equ 0
@@ -192,12 +328,14 @@ SIGBIT          rs.l 1
 OLDINT          rs.l 1
 INSTALLED       rs.l 1
 CACR            rs.l 1
+SCREEN          rs.l 1          ; 1: the screen; 0: one piece from the command line
 TABLES          rs.l 1
 TABLES_SIZE     rs.l 1
 SAMPLES         rs.l 1
 SAMPLES_SIZE    rs.l 1
-SCORE           rs.l 1
-SCORE_SIZE      rs.l 1
+SCORE           rs.l 1          ; the score playing
+ONE_SCORE       rs.l 1          ; the command line's piece's score
+ONE_SCORE_SIZE  rs.l 1
 CHIPMEM         rs.l 1
 LOGMEM          rs.l 1
 LOGFILE         rs.l 1
@@ -220,9 +358,11 @@ BEGIN           rs.l 1          ; BLOCKNO * BLOCK
 PEDAL           rs.w 1
 PADV            rs.w 1
 SERIAL          rs.l 1
-PLAYING         rs.l 1          ; the buffer Paula plays next
-OUTBUF          rs.l 1          ; channel 0's half of the buffer being made
-FINISHED        rs.l 1
+PLAYING         rs.l 1          ; the buffer being made, 0 or 1
+OUTBUF          rs.l 1          ; channel 0's part of the buffer being made
+FINISHED        rs.l 1          ; the piece has ended, or was stopped
+PIECE_ON        rs.l 1          ; a piece is playing (the task's view)
+TASK_E_PENDING  rs.l 1          ; the screen's E-clock ticks since the last block
 OFFSET          rs.l 1          ; where the run being mixed starts, in samples
 RUNCOUNT        rs.l 1
 LOGHALF         rs.l 1          ; the log buffer the interrupt fills, 0 or 1
@@ -231,6 +371,9 @@ LOGFULL0        rs.l 1          ; a full buffer waiting for the task
 LOGFULL1        rs.l 1
 T0              rs.l 2
 T1              rs.l 2
+W0              rs.l 2          ; the screen's stopwatch
+W1              rs.l 2
+W_MIX           rs.l 1          ; ST_TOTAL_E when the stopwatch started
 RUNNO           rs.l 1
 NAMEP           rs.l 1
 VOICE_ARRAY     rs.b VOICES*VO_SIZE
@@ -238,6 +381,18 @@ SUMS_L          rs.l BLOCK
 SUMS_R          rs.l BLOCK
 PATH            rs.b 128
 VARS_SIZE       rs.b 0
+
+CALLGFX macro
+        move.l  gfxbase,a6
+        jsr     _LVO\1(a6)
+        move.l  ExecBase.w,a6
+        endm
+
+CALLINT macro
+        move.l  intbase,a6
+        jsr     _LVO\1(a6)
+        move.l  ExecBase.w,a6
+        endm
 
         section code,code
 
@@ -251,6 +406,11 @@ start:
 .clrv:  clr.l   (a0)+
         subq.l  #1,d0
         bpl.s   .clrv
+        lea     screen_vars,a0
+        move.l  #(screen_vars_end-screen_vars)/4-1,d0
+.clrs:  clr.l   (a0)+
+        subq.l  #1,d0
+        bpl.s   .clrs
         move.l  ExecBase.w,a6
         move.l  a6,EXECBASE(a5)
         moveq   #-1,d0
@@ -259,11 +419,18 @@ start:
         moveq   #ST_SIZE/4-1,d0
 .clrst: clr.l   (a0)+
         dbra    d0,.clrst
+        move.l  #-1,STATUS+ST_HIGHLIGHT.w
+        move.l  #-1,STATUS+ST_ROTATE_AT.w
         move.l  #'P35P',STATUS+ST_MAGIC.w
+        move.b  ciaapra,d0              ; the filter as it was, for the end
+        and.b   #1<<LED_BIT,d0
+        move.b  d0,led_start
+        move.w  #1,led_known
 
         bsr     parse_args
         bne     failed
         move.l  RUNNO(a5),STATUS+ST_RUN.w
+        move.l  SCREEN(a5),STATUS+ST_MODE.w
 
         lea     dosname(pc),a1
         moveq   #37,d0
@@ -281,9 +448,14 @@ start:
         tst.l   d0
         bne     failed
         move.l  timereq+IO_DEVICE,TIMERBASE(a5)
+        bsr     start_clock             ; the vertical blank count and the alarm
+        moveq   #ERR_SIGNAL,d7
+        tst.l   d0
+        beq     failed
 
         ; The data.
         lea     tabname(pc),a0
+        moveq   #0,d2
         bsr     load_file
         moveq   #ERR_TABLES,d7
         tst.l   d0
@@ -293,6 +465,7 @@ start:
         bsr     tables
         bne     failed
         lea     samname(pc),a0
+        moveq   #0,d2
         bsr     load_file
         moveq   #ERR_SAMPLES,d7
         tst.l   d0
@@ -300,16 +473,7 @@ start:
         move.l  d0,SAMPLES(a5)
         move.l  d1,SAMPLES_SIZE(a5)
         move.l  d0,STATUS+ST_SAMPLES.w
-        lea     scoredir(pc),a0
-        lea     scoreext(pc),a1
-        bsr     make_path
-        lea     PATH(a5),a0
-        bsr     load_file
-        moveq   #ERR_SCORE,d7
-        tst.l   d0
-        beq     failed
-        move.l  d0,SCORE(a5)
-        move.l  d1,SCORE_SIZE(a5)
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_LOADED_AT.w
 
         move.l  EXECBASE(a5),a6
         move.l  #8*BLOCK,d0
@@ -318,7 +482,6 @@ start:
         jsr     _LVOAllocMem(a6)
         move.l  d0,CHIPMEM(a5)
         beq     failed
-
         if      LOG
         move.l  #2*LOG_HALF,d0
         move.l  #MEMF_FAST|MEMF_CLEAR,d1
@@ -326,27 +489,8 @@ start:
         jsr     _LVOAllocMem(a6)
         move.l  d0,LOGMEM(a5)
         beq     failed
-        lea     logdir(pc),a0
-        lea     logext(pc),a1
-        bsr     make_path
-        move.l  DOSBASE(a5),a6
-        lea     PATH(a5),a0
-        move.l  a0,d1
-        move.l  #MODE_NEWFILE,d2
-        moveq   #ERR_LOG,d7
-        jsr     _LVOOpen(a6)
-        move.l  d0,LOGFILE(a5)
-        beq     failed
-        bsr     write_header            ; a header with 0 blocks, until the end
         endif
 
-        ; The player's state, and the first event.
-        bsr     reset_voices
-        move.l  SCORE(a5),SCOREP(a5)
-        bsr     next_event
-        bne     failed
-
-        move.l  EXECBASE(a5),a6
         moveq   #ERR_SIGNAL,d7
         moveq   #-1,d0
         jsr     _LVOAllocSignal(a6)
@@ -386,12 +530,24 @@ start:
         move.l  d0,OLDINT(a5)
         move.l  #1,INSTALLED(a5)
 
-        moveq   #0,d0
-        move.l  SIGMASK(a5),d1
-        jsr     _LVOSetSignal(a6)
-        move.l  #1,STATUS+ST_STATE.w
-        bsr     start_sound
+        tst.l   SCREEN(a5)
+        bne.s   .screen
 
+        ; One piece, named on the command line; no screen.
+        lea     scoredir(pc),a0
+        lea     scoreext(pc),a1
+        bsr     make_path
+        lea     PATH(a5),a0
+        moveq   #0,d2
+        bsr     load_file
+        moveq   #ERR_SCORE,d7
+        tst.l   d0
+        beq     failed
+        move.l  d0,ONE_SCORE(a5)
+        move.l  d1,ONE_SCORE_SIZE(a5)
+        move.l  d0,SCORE(a5)
+        bsr     begin_piece
+        bne     failed
 .wait:  move.l  EXECBASE(a5),a6
         move.l  SIGMASK(a5),d0
         jsr     _LVOWait(a6)
@@ -400,15 +556,26 @@ start:
         endif
         tst.l   FINISHED(a5)
         beq.s   .wait
+        bsr     finish_piece
+        moveq   #0,d7
+        bra     cleanup
 
-        if      LOG
-        bsr     write_full
-        bsr     write_rest
-        endif
+        ; The screen: every score loaded now, then choices until Esc or Q.
+.screen:
+        bsr     read_index
+        moveq   #ERR_INDEX,d7
+        tst.l   d0
+        beq     failed
+        bsr     load_scores
+        bsr     open_display
+        moveq   #ERR_SCREEN,d7
+        tst.l   d0
+        beq     failed
+        bsr     choose
+        bsr     close_display
         move.l  #2,STATUS+ST_STATE.w
         moveq   #0,d7
-        bsr     write_status
-        bra     cleanup
+        bra.s   cleanup
 
 failed: move.l  d7,STATUS+ST_ERROR.w
         move.l  #-1,STATUS+ST_STATE.w
@@ -421,6 +588,8 @@ cleanup:
         move.w  #INTF_AUD0,INTENA(a0)
         move.w  #$000f,DMACON(a0)
         move.l  EXECBASE(a5),a6
+        bsr     close_display
+        bsr     restore_filter
         tst.l   INSTALLED(a5)
         beq.s   .noint
         moveq   #INTB_AUD0,d0
@@ -432,12 +601,19 @@ cleanup:
 .noint: move.l  SIGBIT(a5),d0
         bmi.s   .nosig
         jsr     _LVOFreeSignal(a6)
-.nosig: move.l  LOGFILE(a5),d1
+.nosig: bsr     stop_clock
+        move.l  LOGFILE(a5),d1
         beq.s   .nofile
         move.l  DOSBASE(a5),a6
         jsr     _LVOClose(a6)
+        clr.l   LOGFILE(a5)
         move.l  EXECBASE(a5),a6
 .nofile:
+        bsr     free_scores
+        lea     index_mem,a0
+        move.l  index_bytes,d0
+        addq.l  #1,d0
+        bsr     free
         lea     CHIPMEM(a5),a0
         move.l  #8*BLOCK,d0
         bsr     free
@@ -450,8 +626,8 @@ cleanup:
         lea     SAMPLES(a5),a0
         move.l  SAMPLES_SIZE(a5),d0
         bsr     free
-        lea     SCORE(a5),a0
-        move.l  SCORE_SIZE(a5),d0
+        lea     ONE_SCORE(a5),a0
+        move.l  ONE_SCORE_SIZE(a5),d0
         bsr     free
         tst.l   TIMERBASE(a5)
         beq.s   .notimer
@@ -464,6 +640,86 @@ cleanup:
         jsr     _LVOCloseLibrary(a6)
 .out:   move.l  d7,d0
         movem.l (sp)+,d2-d7/a2-a6
+        rts
+
+; ---------------------------------------------------------------------------
+; One piece: begin it, finish it. The interrupt does the playing.
+; ---------------------------------------------------------------------------
+
+; begin_piece: the piece whose score is SCORE and name NAMEP, from its start.
+; Z set when it plays, else d7 says why.
+begin_piece:
+        movem.l d2-d7/a2-a4,-(sp)
+        lea     STATUS+ST_BLOCKS.w,a0   ; this piece's measurements
+        moveq   #(ST_QUEUE_FULL+4-ST_BLOCKS)/4-1,d0
+.st:    clr.l   (a0)+
+        dbra    d0,.st
+        clr.l   STATUS+ST_STOPPED.w
+        clr.l   STATUS+ST_PLAYING_AT.w
+        clr.l   STATUS+ST_FIRST_NOTE_AT.w
+        clr.l   STATUS+ST_WORST_TOTAL_E.w
+        clr.l   STATUS+ST_TASK_E.w
+        clr.l   STATUS+ST_UNITS.w
+        clr.l   STATUS+ST_UNIT_MAX_E.w
+        lea     NOW_MS(a5),a0           ; the player's state, NOW_MS to LOGFULL1
+        move.l  #(T0-NOW_MS)/4-1,d0
+.pv:    clr.l   (a0)+
+        dbra    d0,.pv
+        bsr     reset_voices
+        if      LOG
+        lea     logdir(pc),a0
+        lea     logext(pc),a1
+        bsr     make_path
+        move.l  DOSBASE(a5),a6
+        lea     PATH(a5),a0
+        move.l  a0,d1
+        move.l  #MODE_NEWFILE,d2
+        moveq   #ERR_LOG,d7
+        jsr     _LVOOpen(a6)
+        move.l  d0,LOGFILE(a5)
+        beq.s   .bad
+        bsr     write_header            ; a header with 0 blocks, until the end
+        endif
+        move.l  SCORE(a5),SCOREP(a5)
+        bsr     next_event
+        bne.s   .bad
+        move.l  CHIPMEM(a5),a0
+        move.w  #8*BLOCK/4-1,d0
+.chip:  clr.l   (a0)+
+        dbra    d0,.chip
+        move.l  EXECBASE(a5),a6
+        moveq   #0,d0
+        move.l  SIGMASK(a5),d1
+        jsr     _LVOSetSignal(a6)
+        move.l  #1,PIECE_ON(a5)
+        addq.l  #1,STATUS+ST_STARTS.w
+        move.l  #1,STATUS+ST_STATE.w
+        bsr     start_sound
+        moveq   #0,d0
+.out:   movem.l (sp)+,d2-d7/a2-a4
+        rts
+.bad:   moveq   #1,d0
+        bra.s   .out
+
+; finish_piece: stop the sound if it still plays, write the rest of the log
+; and the piece's status file.
+finish_piece:
+        movem.l d2-d7/a2-a4,-(sp)
+        lea     CUSTOM,a0
+        move.w  #INTF_AUD0,INTENA(a0)
+        move.w  #$000f,DMACON(a0)
+        move.l  #1,FINISHED(a5)
+        if      LOG
+        bsr     write_full
+        bsr     write_rest
+        endif
+        clr.l   PIECE_ON(a5)
+        addq.l  #1,STATUS+ST_PLAYED.w
+        move.l  #2,STATUS+ST_STATE.w
+        bsr     write_status
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_ENDED_AT.w
+        move.l  EXECBASE(a5),a6
+        movem.l (sp)+,d2-d7/a2-a4
         rts
 
 ; write_status: the status block to logs/NAME.stat, so the host has each
@@ -502,13 +758,16 @@ free:   move.l  (a0),d1
 .none:  rts
 
 ; parse_args: a2 the command line, d2 its length -> RUNNO, NAMEP (the name,
-; ended with a zero byte in place). Z set when it is good, else d7 = ERR_ARGS.
+; ended with a zero byte in place), or SCREEN = 1 for an empty line. Z set
+; when it is good, else d7 = ERR_ARGS.
 parse_args:
         moveq   #ERR_ARGS,d7
+        tst.l   d2
+        beq.s   .screen
         clr.b   -1(a2,d2.l)             ; the line ends with a newline: end it there
         moveq   #0,d0
 .space: move.b  (a2)+,d1
-        beq.s   .bad
+        beq.s   .screen                 ; nothing on the line: the screen
         cmp.b   #' ',d1
         beq.s   .space
 .digit: sub.b   #'0',d1
@@ -537,11 +796,16 @@ parse_args:
         clr.b   -1(a2)
 .good:  moveq   #0,d0
         rts
+.screen:
+        move.l  #1,SCREEN(a5)
+        moveq   #0,d0
+        rts
 .bad:   moveq   #1,d0
         rts
 
-; make_path: PATH = the string at a0, the name, the string at a1.
+; make_path: PATH = the string at a0, the name, the string at a1. Keeps a2.
 make_path:
+        move.l  a2,-(sp)
         lea     PATH(a5),a2
 .dir:   move.b  (a0)+,(a2)+
         bne.s   .dir
@@ -552,12 +816,15 @@ make_path:
         subq.l  #1,a2
 .ext:   move.b  (a1)+,(a2)+
         bne.s   .ext
+        move.l  (sp)+,a2
         rts
 
-; load_file: the file named at a0, whole, into new fast RAM. d0 = its address
-; (0 when it failed), d1 = its size.
+; load_file: the file named at a0, whole, into new fast RAM, with d2 more
+; bytes after it (d2 is 0 or 1; 1 puts a 0 there). d0 = its address (0 when
+; it failed), d1 = its size; free it with the size plus d2.
 load_file:
-        movem.l d2-d6/a6,-(sp)
+        movem.l d2-d7/a6,-(sp)
+        move.l  d2,d7                   ; the extra bytes
         moveq   #0,d6                   ; the memory
         moveq   #0,d5                   ; the size
         move.l  DOSBASE(a5),a6
@@ -578,6 +845,7 @@ load_file:
         ble.s   .close
         move.l  EXECBASE(a5),a6
         move.l  d5,d0
+        add.l   d7,d0
         move.l  #MEMF_FAST,d1
         jsr     _LVOAllocMem(a6)
         move.l  d0,d6
@@ -588,10 +856,16 @@ load_file:
         move.l  d5,d3
         jsr     _LVORead(a6)
         cmp.l   d5,d0
+        bne.s   .short
+        tst.l   d7
         beq.s   .close
-        move.l  EXECBASE(a5),a6         ; short: give the memory back
+        move.l  d6,a0
+        clr.b   (a0,d5.l)               ; the 0 after the text
+        bra.s   .close
+.short: move.l  EXECBASE(a5),a6         ; short: give the memory back
         move.l  d6,a1
         move.l  d5,d0
+        add.l   d7,d0
         jsr     _LVOFreeMem(a6)
         moveq   #0,d6
 .close: move.l  DOSBASE(a5),a6
@@ -599,7 +873,7 @@ load_file:
         jsr     _LVOClose(a6)
 .out:   move.l  d6,d0
         move.l  d5,d1
-        movem.l (sp)+,d2-d6/a6
+        movem.l (sp)+,d2-d7/a6
         rts
 
 ; tables: check piano.tab and find its sections. Z set when good.
@@ -640,11 +914,13 @@ tables:
 
 ; reset_voices: every voice free.
 reset_voices:
-        lea     VOICE_ARRAY(a5),a0
-        moveq   #VOICES-1,d0
-.v:     move.w  #-1,VO_KEY(a0)
-        lea     VO_SIZE(a0),a0
-        dbra    d0,.v
+        movem.l d7/a2,-(sp)
+        lea     VOICE_ARRAY(a5),a2
+        moveq   #VOICES-1,d7
+.v:     bsr     free_voice
+        lea     VO_SIZE(a2),a2
+        dbra    d7,.v
+        movem.l (sp)+,d7/a2
         rts
 
 ; start_sound: silence in both buffers, the four channels pointed at
@@ -763,7 +1039,10 @@ handler:
         mulu.w  #BLOCK,d0
         add.l   CHIPMEM(a5),d0
         move.l  d0,OUTBUF(a5)
-        lea     CUSTOM+AUD0LC,a0
+        tst.l   BLOCKNO(a5)
+        bne.s   .later
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_PLAYING_AT.w
+.later: lea     CUSTOM+AUD0LC,a0
         move.l  d0,(a0)
         add.l   #BLOCK,d0
         move.l  d0,$10(a0)
@@ -795,6 +1074,12 @@ handler:
         bls.s   .intime
         addq.l  #1,STATUS+ST_OVERRUNS.w
 .intime:
+        add.l   TASK_E_PENDING(a5),d0   ; with the screen's work since the last block
+        clr.l   TASK_E_PENDING(a5)
+        cmp.l   STATUS+ST_WORST_TOTAL_E.w,d0
+        bls.s   .total
+        move.l  d0,STATUS+ST_WORST_TOTAL_E.w
+.total:
         move.l  BLOCKNO(a5),STATUS+ST_BLOCKS.w
 .quick: movem.l (sp)+,d2-d7/a2-a4
         rts
@@ -896,6 +1181,10 @@ events:
 note_on:
         addq.l  #1,SERIAL(a5)
         addq.l  #1,STATUS+ST_NOTES.w
+        tst.l   STATUS+ST_FIRST_NOTE_AT.w
+        bne.s   .stamped
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_FIRST_NOTE_AT.w
+.stamped:
         move.l  NEXT_KEY(a5),d5
         move.l  NEXT_AT(a5),d4
         bsr     choose_voice            ; a2 = the voice
@@ -1439,18 +1728,1068 @@ write:
         rts
         endif
 
+; ---------------------------------------------------------------------------
+; The clock, the filter, the pieces (as EXP-004's player has them).
+; ---------------------------------------------------------------------------
+
+; Put the filter back as it was when the program started.
+restore_filter:
+        tst.w   led_known
+        beq.s   .same
+        move.b  ciaapra,d0
+        move.b  led_start,d1
+        eor.b   d1,d0
+        btst    #LED_BIT,d0
+        beq.s   .same
+        bchg    #LED_BIT,ciaapra
+.same:  rts
+
+; The vertical blank count (ST_VBLANKS) and the alarm: a signal the
+; vertical blank server sends the task when the count reaches alarm_at
+; while alarm_on is set. d0: 0 when there is no signal for it.
+start_clock:
+        move.l  EXECBASE(a5),a6
+        move.b  VBlankFrequency(a6),d0
+        and.l   #$ff,d0
+        move.l  d0,STATUS+ST_VBLANK_HZ.w
+        sub.l   a1,a1
+        jsr     _LVOFindTask(a6)
+        move.l  d0,task
+        moveq   #-1,d0
+        jsr     _LVOAllocSignal(a6)
+        move.b  d0,alarm_bit
+        bmi.s   .none
+        moveq   #0,d1
+        bset    d0,d1
+        move.l  d1,alarm_mask
+        moveq   #INTB_VERTB,d0
+        lea     vbint,a1
+        jsr     _LVOAddIntServer(a6)
+        move.w  #1,clock_on
+        moveq   #1,d0
+        rts
+.none:  moveq   #0,d0
+        rts
+
+stop_clock:
+        move.l  EXECBASE(a5),a6
+        tst.w   clock_on
+        beq.s   .signal
+        moveq   #INTB_VERTB,d0
+        lea     vbint,a1
+        jsr     _LVORemIntServer(a6)
+        clr.w   clock_on
+.signal:
+        move.b  alarm_bit,d0
+        ble.s   .out
+        ext.w   d0
+        ext.l   d0
+        jsr     _LVOFreeSignal(a6)
+        clr.b   alarm_bit
+.out:   rts
+
+; The vertical blank server: count, and signal the task at its alarm.
+vb_handler:
+        addq.l  #1,STATUS+ST_VBLANKS.w
+        tst.w   alarm_on
+        beq.s   .out
+        move.l  STATUS+ST_VBLANKS.w,d0
+        sub.l   alarm_at,d0
+        bmi.s   .out
+        clr.w   alarm_on
+        move.l  task,a1
+        move.l  alarm_mask,d0
+        move.l  ExecBase.w,a6
+        jsr     _LVOSignal(a6)
+.out:   moveq   #0,d0                   ; the rest of the chain runs too
+        rts
+
+; read_index: scores/index into pieces: each line a name, a space and a
+; title; the names are ended with 0 in place. d0: 0 when it cannot.
+read_index:
+        lea     index_name(pc),a0
+        moveq   #1,d2                   ; a 0 after the text
+        bsr     load_file
+        tst.l   d0
+        beq.s   .out
+        move.l  d0,index_mem
+        move.l  d1,index_bytes
+        move.l  d0,a0
+        lea     files,a1
+        moveq   #0,d1
+.line:  tst.b   (a0)
+        beq.s   .done
+        cmp.b   #10,(a0)
+        bne.s   .entry
+        addq.l  #1,a0
+        bra.s   .line
+.entry: cmp.w   #MAX_PIECES,d1
+        beq.s   .done
+        move.l  a0,(a1)+                ; the name
+.name:  move.b  (a0)+,d0
+        beq.s   .last
+        cmp.b   #10,d0
+        beq.s   .eol
+        cmp.b   #' ',d0
+        bne.s   .name
+        clr.b   -1(a0)
+.title: move.b  (a0)+,d0
+        beq.s   .last
+        cmp.b   #10,d0
+        bne.s   .title
+.eol:   clr.b   -1(a0)
+        addq.w  #1,d1
+        bra.s   .line
+.last:  subq.l  #1,a0
+        addq.w  #1,d1
+.done:  move.l  d1,pieces
+        move.l  d1,STATUS+ST_PIECES.w
+        moveq   #1,d0
+.out:   rts
+
+; load_scores: every piece's score now, so a choice never waits for the disk.
+load_scores:
+        movem.l d2-d4/a2,-(sp)
+        move.l  STATUS+ST_VBLANKS.w,d3
+        lea     score_table,a2
+        moveq   #0,d4
+.next:  cmp.l   pieces,d4
+        beq.s   .done
+        lea     files,a0
+        move.l  (a0,d4.l*4),NAMEP(a5)
+        lea     scoredir(pc),a0
+        lea     scoreext(pc),a1
+        bsr     make_path
+        lea     PATH(a5),a0
+        moveq   #0,d2
+        bsr     load_file
+        move.l  d0,(a2)+
+        move.l  d1,(a2)+
+        addq.l  #1,d4
+        bra.s   .next
+.done:  move.l  STATUS+ST_VBLANKS.w,d0
+        sub.l   d3,d0
+        move.l  d0,STATUS+ST_PRELOAD_FRAMES.w
+        movem.l (sp)+,d2-d4/a2
+        rts
+
+free_scores:
+        movem.l d2/a2,-(sp)
+        lea     score_table,a2
+        moveq   #MAX_PIECES-1,d2
+.next:  move.l  a2,a0
+        move.l  4(a2),d0
+        bsr     free
+        addq.l  #8,a2
+        dbra    d2,.next
+        movem.l (sp)+,d2/a2
+        rts
+
+; ---------------------------------------------------------------------------
+; The screen: open it, show the picture, take choices, close it.
+; ---------------------------------------------------------------------------
+
+; open_display: graphics and Intuition, the screen and its window, the
+; picture. d0: 0 when something is missing.
+open_display:
+        movem.l d2-d7/a2-a5,-(sp)
+        move.l  ExecBase.w,a6
+        lea     gfxname(pc),a1
+        moveq   #37,d0
+        jsr     _LVOOpenLibrary(a6)
+        move.l  d0,gfxbase
+        beq     .fail
+        lea     intname_lib(pc),a1
+        moveq   #37,d0
+        jsr     _LVOOpenLibrary(a6)
+        move.l  d0,intbase
+        beq     .fail
+        lea     picture_name(pc),a0
+        moveq   #0,d2
+        bsr     load_file
+        move.l  ExecBase.w,a6
+        move.l  d0,picture_mem
+        move.l  d1,picture_bytes
+        beq     .fail
+        bsr     parse_ilbm
+        tst.l   d0
+        beq     .fail
+        move.l  #BAND_BYTES*DEPTH,d0    ; the floor band's copy
+        moveq   #MEMF_PUBLIC,d1
+        jsr     _LVOAllocMem(a6)
+        move.l  d0,band_copy
+        beq     .fail
+        bsr     make_rows
+
+        lea     newscreen,a0
+        CALLINT OpenScreen
+        move.l  d0,screen
+        beq     .fail
+        lea     newwindow,a0
+        move.l  d0,30(a0)               ; nw_Screen
+        CALLINT OpenWindow
+        move.l  d0,window
+        beq     .fail
+        move.l  d0,STATUS+ST_WINDOW.w
+        move.l  screen,a0
+        moveq   #0,d0
+        CALLINT ShowTitle
+
+        move.l  screen,a0
+        lea     sc_BitMap(a0),a0
+        lea     planes,a1
+        moveq   #DEPTH-1,d0
+.planes:
+        move.l  bm_Planes(a0),(a1)+
+        addq.l  #4,a0
+        dbra    d0,.planes
+        bsr     show_picture
+        move.l  gfxbase,a0              ; the band's lines on the display
+        move.l  gb_ActiView(a0),a0
+        move.w  v_DyOffset(a0),d0
+        move.l  screen,a0
+        add.w   sc_ViewPort+vp_DyOffset(a0),d0
+        add.w   #SCOPE_TOP,d0
+        move.w  d0,d1
+        sub.w   #BEAM_GUARD,d0
+        move.w  d0,band_first
+        add.w   #SCOPE_ROWS-1,d1
+        move.w  d1,band_last
+        move.l  screen,a0
+        lea     sc_ViewPort(a0),a0
+        lea     palette,a1
+        moveq   #16,d0
+        CALLGFX LoadRGB4
+        bsr     copy_band
+        lea     picture_mem,a0
+        move.l  picture_bytes,d0
+        bsr     free
+        moveq   #1,d0
+        bra.s   .out
+.fail:  moveq   #0,d0
+.out:   move.l  ExecBase.w,a6
+        movem.l (sp)+,d2-d7/a2-a5
+        rts
+
+; close_display: whatever open_display opened; safe to call twice.
+close_display:
+        move.l  ExecBase.w,a6
+        moveq   #-1,d0
+        bsr     highlight
+        move.l  window,d0
+        beq.s   .screen
+        move.l  d0,a0
+        bsr     drain_messages
+        move.l  window,a0
+        CALLINT CloseWindow
+        clr.l   window
+        clr.l   STATUS+ST_WINDOW.w
+.screen:
+        move.l  screen,d0
+        beq.s   .mem
+        move.l  d0,a0
+        CALLINT CloseScreen
+        clr.l   screen
+.mem:   lea     picture_mem,a0
+        move.l  picture_bytes,d0
+        bsr     free
+        lea     band_copy,a0
+        move.l  #BAND_BYTES*DEPTH,d0
+        bsr     free
+        move.l  ExecBase.w,a6
+        move.l  intbase,d0
+        beq.s   .gfx
+        move.l  d0,a1
+        jsr     _LVOCloseLibrary(a6)
+        clr.l   intbase
+.gfx:   move.l  gfxbase,d0
+        beq.s   .out
+        move.l  d0,a1
+        jsr     _LVOCloseLibrary(a6)
+        clr.l   gfxbase
+.out:   rts
+
+drain_messages:
+        move.l  a2,-(sp)
+        move.l  wd_UserPort(a0),a2
+.next:  move.l  a2,a0
+        jsr     _LVOGetMsg(a6)
+        tst.l   d0
+        beq.s   .out
+        move.l  d0,a1
+        jsr     _LVOReplyMsg(a6)
+        bra.s   .next
+.out:   move.l  (sp)+,a2
+        rts
+
+; parse_ilbm: the ILBM's header, colours and body in picture_mem. d0: 0
+; unless it is 320x200, 4 planes and uncompressed. Sets palette and body.
+parse_ilbm:
+        move.l  picture_mem,a0
+        cmp.l   #'FORM',(a0)
+        bne     .bad
+        cmp.l   #'ILBM',8(a0)
+        bne     .bad
+        move.l  a0,a1
+        add.l   picture_bytes,a1
+        lea     12(a0),a0
+        clr.l   body
+        moveq   #0,d2
+.chunk: lea     8(a0),a2
+        cmp.l   a1,a2
+        bhi     .done
+        move.l  4(a0),d1
+        cmp.l   #'BMHD',(a0)
+        bne.s   .cmap
+        cmp.w   #SCREEN_WIDTH,(a2)
+        bne     .bad
+        cmp.w   #SCREEN_HEIGHT,2(a2)
+        bne     .bad
+        cmp.b   #DEPTH,8(a2)
+        bne     .bad
+        tst.b   10(a2)
+        bne     .bad
+        moveq   #1,d2
+        bra.s   .skip
+.cmap:  cmp.l   #'CMAP',(a0)
+        bne.s   .body
+        lea     palette,a3
+        move.l  d1,d3
+        divu    #3,d3
+        cmp.w   #16,d3
+        bls.s   .count
+        moveq   #16,d3
+.count: move.l  a2,a4
+        bra.s   .cnext
+.colour:
+        moveq   #0,d0
+        move.b  (a4)+,d0
+        lsr.w   #4,d0
+        lsl.w   #4,d0
+        move.b  (a4)+,d4
+        lsr.b   #4,d4
+        or.b    d4,d0
+        lsl.w   #4,d0
+        move.b  (a4)+,d4
+        lsr.b   #4,d4
+        or.b    d4,d0
+        move.w  d0,(a3)+
+.cnext: dbra    d3,.colour
+        bra.s   .skip
+.body:  cmp.l   #'BODY',(a0)
+        bne.s   .skip
+        cmp.l   #PICTURE_BYTES,d1
+        bcs.s   .bad
+        move.l  a2,body
+.skip:  addq.l  #1,d1
+        and.w   #$fffe,d1
+        lea     0(a2,d1.l),a0
+        bra     .chunk
+.done:  tst.l   d2
+        beq.s   .bad
+        tst.l   body
+        beq.s   .bad
+        moveq   #1,d0
+        rts
+.bad:   moveq   #0,d0
+        rts
+
+show_picture:
+        movem.l d2-d3/a2,-(sp)
+        move.l  body,a0
+        moveq   #0,d2
+        move.w  #SCREEN_HEIGHT-1,d3
+.row:   lea     planes,a2
+        moveq   #DEPTH-1,d1
+.plane: move.l  (a2)+,a1
+        add.l   d2,a1
+        moveq   #ROW_BYTES/4-1,d0
+.long:  move.l  (a0)+,(a1)+
+        dbra    d0,.long
+        dbra    d1,.plane
+        add.l   #ROW_BYTES,d2
+        dbra    d3,.row
+        movem.l (sp)+,d2-d3/a2
+        rts
+
+copy_band:
+        move.l  band_copy,a1
+        lea     planes,a2
+        moveq   #DEPTH-1,d1
+.plane: move.l  (a2)+,a0
+        add.l   #SCOPE_TOP*ROW_BYTES,a0
+        move.w  #BAND_BYTES/4-1,d0
+.long:  move.l  (a0)+,(a1)+
+        dbra    d0,.long
+        dbra    d1,.plane
+        rts
+
+; restore_band: the whole band back from band_copy, when a piece ends.
+restore_band:
+        tst.l   screen
+        beq.s   .out
+        move.l  band_copy,a0
+        lea     planes,a2
+        moveq   #DEPTH-1,d1
+.plane: move.l  (a2)+,a1
+        add.l   #SCOPE_TOP*ROW_BYTES,a1
+        move.w  #BAND_BYTES/4-1,d0
+.long:  move.l  (a0)+,(a1)+
+        dbra    d0,.long
+        dbra    d1,.plane
+        lea     unit_drawn,a0
+        moveq   #UNITS-1,d0
+.u:     clr.w   (a0)+
+        dbra    d0,.u
+        clr.w   step_next
+.out:   rts
+
+make_rows:
+        lea     row_offsets,a0
+        moveq   #0,d0
+        move.w  #SCREEN_HEIGHT-1,d1
+.row:   move.w  d0,(a0)+
+        add.w   #ROW_BYTES,d0
+        dbra    d1,.row
+        rts
+
+; choose: take choices until Esc or Q (EXP-004's rules). While a piece
+; plays, one scope unit is drawn after each vertical blank.
+choose:
+        move.l  ExecBase.w,a6
+        move.l  #3,STATUS+ST_STATE.w
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_SCREEN_AT.w
+        move.l  #ROTATE_S,d0
+        mulu    STATUS+ST_VBLANK_HZ+2.w,d0
+        move.l  d0,rotate_frames
+        clr.l   STATUS+ST_NEXT.w
+        bsr     arm_rotation
+.loop:  tst.l   PIECE_ON(a5)
+        beq.s   .idle
+        tst.l   FINISHED(a5)
+        beq.s   .draw
+        moveq   #-1,d0
+        bsr     end_piece               ; it played to its end
+        bsr     arm_rotation
+        bra.s   .loop
+.draw:  bsr     scope_tick
+        if      LOG
+        bsr     write_full
+        endif
+        move.l  ExecBase.w,a6
+        bra.s   .messages
+.idle:  bsr     rotation_due
+        bne     .rotate
+        move.l  window,a0
+        move.l  wd_UserPort(a0),a0
+        moveq   #0,d1
+        move.b  mp_SigBit(a0),d1
+        moveq   #0,d0
+        bset    d1,d0
+        or.l    alarm_mask,d0
+        jsr     _LVOWait(a6)
+.messages:
+        bsr     next_choice
+        tst.l   d0
+        bne.s   .act
+        tst.l   d1
+        beq.s   .loop
+        cmp.l   #-1,STATUS+ST_ROTATE_AT.w
+        beq.s   .loop
+        bsr     arm_rotation
+        bra.s   .loop
+.act:   cmp.l   #-1,d0
+        beq     .quit
+        cmp.l   #-2,d0
+        beq     .hold
+        subq.l  #1,d0
+.play:  move.l  d0,-(sp)
+        addq.l  #1,d0
+        cmp.l   pieces,d0
+        bcs.s   .next
+        moveq   #0,d0
+.next:  move.l  d0,STATUS+ST_NEXT.w
+        bsr     hold_rotation
+        tst.l   PIECE_ON(a5)
+        beq.s   .start
+        move.l  #1,STATUS+ST_STOPPED.w
+        move.l  (sp),d0
+        bsr     end_piece               ; and its line gold at once
+.start: move.l  (sp)+,d0
+        bsr     start_piece
+        tst.l   d0
+        beq     .loop
+        bsr     arm_rotation
+        bra     .loop
+.rotate:
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_CHOSEN_AT.w
+        addq.l  #1,STATUS+ST_ROTATED.w
+        move.l  STATUS+ST_NEXT.w,d0
+        bra.s   .play
+.hold:  bsr     hold_rotation
+        tst.l   PIECE_ON(a5)
+        beq     .loop
+        move.l  #1,STATUS+ST_STOPPED.w
+        moveq   #-1,d0
+        bsr     end_piece
+        bra     .loop
+.quit:  bsr     hold_rotation
+        tst.l   PIECE_ON(a5)
+        beq.s   .out
+        move.l  #1,STATUS+ST_STOPPED.w
+        moveq   #-1,d0
+        bsr     end_piece
+.out:   rts
+
+arm_rotation:
+        tst.l   pieces
+        beq.s   hold_rotation
+        move.l  STATUS+ST_VBLANKS.w,d0
+        add.l   rotate_frames,d0
+        clr.w   alarm_on
+        move.l  d0,alarm_at
+        move.l  d0,STATUS+ST_ROTATE_AT.w
+        move.w  #1,alarm_on
+        rts
+
+hold_rotation:
+        clr.w   alarm_on
+        move.l  #-1,STATUS+ST_ROTATE_AT.w
+        rts
+
+rotation_due:
+        move.l  STATUS+ST_ROTATE_AT.w,d0
+        cmp.l   #-1,d0
+        beq.s   .no
+        sub.l   STATUS+ST_VBLANKS.w,d0
+        bgt.s   .no
+        moveq   #1,d0
+        rts
+.no:    moveq   #0,d0
+        rts
+
+; next_choice: the window's messages. d0: -1 to quit, -2 to stop and hold
+; (Space), n + 1 for piece n, 0 for nothing; d1: key presses and clicks.
+next_choice:
+        movem.l d2-d5/a2,-(sp)
+        moveq   #0,d4
+        moveq   #0,d5
+.next:  move.l  window,a0
+        move.l  wd_UserPort(a0),a0
+        jsr     _LVOGetMsg(a6)
+        tst.l   d0
+        beq     .out
+        move.l  d0,a1
+        move.l  im_Class(a1),d2
+        move.w  im_Code(a1),d3
+        move.w  im_MouseX(a1),d0
+        swap    d0
+        move.w  im_MouseY(a1),d0
+        move.l  d0,a2
+        jsr     _LVOReplyMsg(a6)
+        cmp.l   #RAWKEY,d2
+        bne.s   .mouse
+        addq.l  #1,STATUS+ST_KEYS.w
+        and.l   #$ffff,d3
+        move.l  d3,STATUS+ST_KEY.w
+        btst    #7,d3
+        bne     .next
+        addq.l  #1,d5
+        cmp.b   #KEY_ESC,d3
+        beq     .quit
+        cmp.b   #KEY_Q,d3
+        beq     .quit
+        cmp.b   #KEY_SPACE,d3
+        beq     .hold
+        cmp.b   #KEY_F,d3
+        beq     .filter
+        lea     piece_keys,a0
+        moveq   #0,d0
+.key:   cmp.l   pieces,d0
+        beq     .next
+        cmp.b   (a0)+,d3
+        beq.s   .chosen
+        addq.l  #1,d0
+        bra.s   .key
+.mouse: cmp.l   #MOUSEBUTTONS,d2
+        bne     .next
+        cmp.w   #SELECTDOWN,d3
+        bne     .next
+        addq.l  #1,d5
+        addq.l  #1,STATUS+ST_CLICKS.w
+        move.l  a2,STATUS+ST_CLICK_XY.w
+        move.l  a2,d1
+        swap    d1
+        cmp.w   #LIST_LEFT-4,d1
+        blt     .next
+        swap    d1
+        lea     line_tops(pc),a0
+        moveq   #0,d0
+.line:  cmp.l   pieces,d0
+        beq     .next
+        cmp.w   #LIST_LINES,d0
+        beq     .next
+        move.w  (a0)+,d2
+        cmp.w   d2,d1
+        blt.s   .below
+        add.w   #LINE_PITCH,d2
+        cmp.w   d2,d1
+        blt.s   .chosen
+.below: addq.l  #1,d0
+        bra.s   .line
+.chosen:
+        addq.l  #1,d0
+        cmp.l   #-1,d4
+        beq     .next
+        move.l  d0,d4
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_CHOSEN_AT.w
+        bra     .next
+.hold:  cmp.l   #-1,d4
+        beq     .next
+        moveq   #-2,d4
+        bra     .next
+.filter:
+        bchg    #LED_BIT,ciaapra        ; the filter and the power LED, by the task
+        addq.l  #1,STATUS+ST_FILTER_KEYS.w
+        bra     .next
+.quit:  moveq   #-1,d4
+        bra     .next
+.out:   move.l  d4,d0
+        move.l  d5,d1
+        movem.l (sp)+,d2-d5/a2
+        rts
+
+; highlight: line d0 in gold with a user copper list (EXP-004's), -1 for none.
+highlight:
+        movem.l d2-d3/a2-a3,-(sp)
+        move.l  ExecBase.w,a6
+        move.l  screen,d1
+        beq     .out
+        cmp.l   STATUS+ST_HIGHLIGHT.w,d0
+        beq     .already
+        move.l  d0,d2
+        sub.l   a2,a2
+        tst.l   d2
+        bmi     .set
+        moveq   #ucl_SIZEOF,d0
+        move.l  #MEMF_PUBLIC|MEMF_CLEAR,d1
+        jsr     _LVOAllocMem(a6)
+        tst.l   d0
+        beq     .out
+        move.l  d0,a2
+        move.l  a2,a0
+        moveq   #5,d0
+        CALLGFX UCopperListInit
+        lea     line_tops(pc),a0
+        add.w   d2,d2
+        move.w  0(a0,d2.w),d3
+        move.l  a2,a1
+        move.w  d3,d0
+        moveq   #0,d1
+        CALLGFX CWait
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1
+        move.l  #COLOR13,d0
+        move.w  #HIGHLIGHT_COLOUR,d1
+        CALLGFX CMove
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1
+        move.w  d3,d0
+        add.w   #LINE_ROWS,d0
+        moveq   #0,d1
+        CALLGFX CWait
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1
+        move.l  #COLOR13,d0
+        move.w  #TEXT_COLOUR,d1
+        CALLGFX CMove
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1
+        move.w  #10000,d0
+        move.w  #255,d1
+        CALLGFX CWait
+        move.l  a2,a1
+        CALLGFX CBump
+        lsr.w   #1,d2
+.set:   jsr     _LVOForbid(a6)
+        move.l  screen,a0
+        move.l  sc_ViewPort+vp_UCopIns(a0),a3
+        move.l  a2,sc_ViewPort+vp_UCopIns(a0)
+        jsr     _LVOPermit(a6)
+        move.l  screen,a0
+        CALLINT MakeScreen
+        CALLINT RethinkDisplay
+        move.l  d2,STATUS+ST_HIGHLIGHT.w
+        bmi.s   .gone
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_GOLD_AT.w
+.gone:  move.l  a3,d0
+        beq.s   .out
+        CALLGFX WaitTOF
+        move.l  ucl_FirstCopList(a3),a0
+        CALLGFX FreeCopList
+        move.l  a3,a1
+        moveq   #ucl_SIZEOF,d0
+        jsr     _LVOFreeMem(a6)
+.out:   movem.l (sp)+,d2-d3/a2-a3
+        rts
+.already:
+        tst.l   d0
+        bmi.s   .out
+        move.l  STATUS+ST_GOLD_AT.w,d1
+        cmp.l   STATUS+ST_CHOSEN_AT.w,d1
+        bcc.s   .out
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_GOLD_AT.w
+        bra.s   .out
+
+; start_piece: piece d0 (from 0): its line gold first, then its score.
+; d0: 0 when it plays.
+start_piece:
+        movem.l d2-d7/a2-a4,-(sp)
+        move.l  d0,d6
+        lea     score_table,a0
+        move.l  (a0,d6.l*8),d1
+        beq.s   .none
+        move.l  d1,SCORE(a5)
+        lea     files,a0
+        move.l  (a0,d6.l*4),NAMEP(a5)
+        move.l  d6,d0
+        bsr     highlight
+        move.l  d6,STATUS+ST_PIECE.w
+        bsr     begin_piece
+        bne.s   .none
+        moveq   #0,d0
+        bra.s   .out
+.none:  moveq   #1,d0
+.out:   move.l  ExecBase.w,a6
+        movem.l (sp)+,d2-d7/a2-a4
+        rts
+
+; end_piece: stop the piece, put line d0 in gold (-1 for none), clear the
+; scopes.
+end_piece:
+        movem.l d2-d7/a2-a4,-(sp)
+        move.l  d0,d6
+        bsr     finish_piece
+        move.l  #3,STATUS+ST_STATE.w
+        move.l  d6,d0
+        bsr     highlight
+        bsr     restore_band
+        movem.l (sp)+,d2-d7/a2-a4
+        rts
+
+; ---------------------------------------------------------------------------
+; The scopes.
+; ---------------------------------------------------------------------------
+
+; scope_tick: after the vertical blank, one step of the scopes' cycle (make
+; the traces, or draw one unit), and only one a block: a vertical blank in
+; the same block as the last step does nothing. The step's E-clock ticks,
+; less the interrupt's, go to the block being made (TASK_E_PENDING), where
+; the handler adds them to its own.
+scope_tick:
+        movem.l d2-d7/a2-a4,-(sp)
+        CALLGFX WaitTOF
+        move.l  BLOCKNO(a5),d0
+        cmp.l   step_block,d0
+        beq     .out                    ; this block has had its step
+        move.l  d0,step_block
+        bsr     beam_clear
+        move.l  STATUS+ST_TOTAL_E.w,W_MIX(a5)
+        move.l  TIMERBASE(a5),a6
+        lea     W0(a5),a0
+        jsr     _LVOReadEClock(a6)
+        move.w  step_next,d0
+        bne.s   .draw
+        bsr     make_traces
+        bra.s   .timed
+.draw:  bsr     draw_unit_step
+.timed: addq.w  #1,step_next
+        cmp.w   #STEPS,step_next
+        bcs.s   .watch
+        clr.w   step_next
+.watch: move.l  TIMERBASE(a5),a6
+        lea     W1(a5),a0
+        jsr     _LVOReadEClock(a6)
+        move.l  W1+4(a5),d0
+        sub.l   W0+4(a5),d0
+        move.l  STATUS+ST_TOTAL_E.w,d1
+        sub.l   W_MIX(a5),d1
+        sub.l   d1,d0                   ; less the mixing that came between
+        bpl.s   .pos
+        moveq   #0,d0
+.pos:   add.l   d0,TASK_E_PENDING(a5)
+        add.l   d0,STATUS+ST_TASK_E.w
+        addq.l  #1,STATUS+ST_UNITS.w
+        cmp.l   STATUS+ST_UNIT_MAX_E.w,d0
+        bls.s   .out
+        move.l  d0,STATUS+ST_UNIT_MAX_E.w
+.out:   move.l  ExecBase.w,a6
+        movem.l (sp)+,d2-d7/a2-a4
+        rts
+
+; make_traces: the four loudest voices sounding, in voice order, and the
+; output Paula is playing, as rows from the centre.
+make_traces:
+        ; pick: four passes, each taking the loudest voice not yet taken
+        moveq   #0,d6                   ; taken, a bit a voice
+        moveq   #SCOPES-1,d5
+.pick:  lea     VOICE_ARRAY(a5),a0
+        moveq   #-1,d2                  ; the best voice
+        moveq   #0,d3                   ; its volume
+        moveq   #0,d1
+.cand:  tst.w   VO_HASTONE(a0)
+        beq.s   .skip
+        tst.w   VO_KEY(a0)
+        bmi.s   .skip
+        btst    d1,d6
+        bne.s   .skip
+        moveq   #0,d0
+        move.w  VO_VOLUME(a0),d0
+        cmp.l   d3,d0
+        bls.s   .skip
+        move.l  d0,d3
+        move.l  d1,d2
+.skip:  lea     VO_SIZE(a0),a0
+        addq.w  #1,d1
+        cmp.w   #VOICES,d1
+        bcs.s   .cand
+        tst.l   d2
+        bmi.s   .picked
+        bset    d2,d6
+        dbra    d5,.pick
+.picked:
+        lea     traces,a2
+        lea     VOICE_ARRAY(a5),a4
+        moveq   #0,d7                   ; voice
+        moveq   #SCOPES-1,d5            ; scopes to fill
+.voice: cmp.w   #VOICES,d7
+        bcc.s   .flat
+        btst    d7,d6
+        bne.s   .trace
+        lea     VO_SIZE(a4),a4
+        addq.w  #1,d7
+        bra.s   .voice
+.trace: bsr     trace_voice
+        lea     VO_SIZE(a4),a4
+        addq.w  #1,d7
+        dbra    d5,.voice
+        bra.s   .mix
+.flat:  moveq   #VOICE_SCOPE_WIDTH-1,d0
+.zero:  clr.b   (a2)+
+        dbra    d0,.zero
+        dbra    d5,.flat
+.mix:   ; the large scope: the block Paula plays now, left plus right
+        move.l  PLAYING(a5),d0
+        eor.l   #1,d0
+        lsl.l   #2,d0
+        mulu.w  #BLOCK,d0
+        move.l  CHIPMEM(a5),a0
+        add.l   d0,a0                   ; channel 0: left high bytes
+        lea     BLOCK(a0),a1            ; channel 1: right
+        move.w  #MIX_SCOPE_WIDTH-1,d7
+.col:   move.b  (a0),d0
+        ext.w   d0
+        move.b  (a1),d1
+        ext.w   d1
+        add.w   d1,d0
+        asr.w   #MIX_SHIFT,d0
+        cmp.w   #MIX_HALF,d0
+        ble.s   .low
+        moveq   #MIX_HALF,d0
+.low:   cmp.w   #-MIX_HALF,d0
+        bge.s   .high
+        moveq   #-MIX_HALF,d0
+.high:  move.b  d0,(a2)+
+        addq.l  #MIX_STRIDE,a0
+        addq.l  #MIX_STRIDE,a1
+        dbra    d7,.col
+        rts
+
+; trace_voice: voice a4's trace into a2 (VOICE_SCOPE_WIDTH rows): its
+; sample from its phase, a column every 7.5 output samples, times the mean
+; of its two multipliers.
+trace_voice:
+        movem.l d5-d7/a4,-(sp)
+        moveq   #0,d0
+        move.w  VO_TSAMPLE(a4),d0
+        lsl.l   #4,d0
+        move.l  SAMPTAB(a5),a1
+        add.l   d0,a1
+        move.l  SAMPLES(a5),a0
+        add.l   SE_OFFSET(a1),a0
+        move.l  VO_TPHASE(a4),d2        ; where it is
+.wrap:  cmp.l   SE_LENGTH(a1),d2
+        bcs.s   .in
+        sub.l   SE_LOOPLEN(a1),d2
+        bra.s   .wrap
+.in:    move.l  VO_TSTEP(a4),d3
+        mulu.l  #COLUMN_HALVES,d3
+        lsr.l   #1,d3                   ; 16.16 a column
+        moveq   #0,d4                   ; 16.16 so far
+        moveq   #0,d6
+        move.w  VO_TLEFT(a4),d6
+        moveq   #0,d0
+        move.w  VO_TRIGHT(a4),d0
+        add.l   d0,d6
+        lsr.l   #1,d6
+        mulu.w  VO_TQ(a4),d6
+        lsr.l   #2,d6                   ; the multiplier, faded as it plays
+        moveq   #VOICE_SHIFT,d5
+        moveq   #VOICE_SCOPE_WIDTH-1,d7
+.col:   move.l  d4,d0
+        swap    d0
+        and.l   #$ffff,d0
+        add.l   d2,d0
+        move.w  (a0,d0.l*2),d0
+        muls.w  d6,d0
+        asr.l   d5,d0
+        cmp.l   #VOICE_HALF,d0
+        ble.s   .low
+        moveq   #VOICE_HALF,d0
+.low:   cmp.l   #-VOICE_HALF,d0
+        bge.s   .high
+        moveq   #-VOICE_HALF,d0
+.high:  move.b  d0,(a2)+
+        add.l   d3,d4
+        dbra    d7,.col
+        movem.l (sp)+,d5-d7/a4
+        rts
+
+; draw_unit_step: unit step_next - 1, from unit_table: take back its old
+; points, plot its new ones.
+draw_unit_step:
+        move.w  step_next,d7
+        subq.w  #1,d7                   ; the unit
+        lea     unit_table(pc),a1
+        move.w  d7,d0
+        lsl.w   #3,d0
+        add.w   d0,a1
+        moveq   #0,d0
+        move.w  (a1)+,d0                ; its first point among the traces
+        lea     traces,a0
+        add.l   d0,a0
+        lea     old_points,a2
+        add.l   d0,a2
+        add.l   d0,a2
+        move.w  (a1)+,d4                ; its left column
+        move.w  (a1)+,d6                ; its points
+        move.w  (a1)+,d3                ; 0 for colour 14, 1 for 15
+        cmp.w   #SCOPES,d7
+        bcc.s   .placed
+        lea     voice_scope_left(pc),a1 ; a small scope: its column from screen.i
+        move.w  d7,d0
+        add.w   d0,d0
+        move.w  (a1,d0.w),d4
+.placed:
+        lea     unit_drawn,a1
+        add.w   d7,a1
+        add.w   d7,a1
+        bra     draw_unit
+
+; draw_unit (EXP-004's): d6 points from the trace a0, from column d4; d3 0
+; for colour 14, 1 for 15; a2 its points from last time; a1 its drawn flag.
+draw_unit:
+        movem.l d7/a1/a5/a6,-(sp)
+        movem.l planes,a3-a6
+        tst.w   (a1)
+        beq.s   .plot
+        movem.l a0/a2,-(sp)
+        move.l  a2,a1
+        move.l  band_copy,a0
+        sub.l   #SCOPE_TOP*ROW_BYTES,a0
+        move.w  d6,d7
+        subq.w  #1,d7
+.back:  move.w  (a1)+,d0
+        move.b  0(a0,d0.w),0(a3,d0.w)
+        move.b  BAND_BYTES(a0,d0.w),0(a4,d0.w)
+        move.b  2*BAND_BYTES(a0,d0.w),0(a5,d0.w)
+        move.b  3*BAND_BYTES(a0,d0.w),0(a6,d0.w)
+        dbra    d7,.back
+        movem.l (sp)+,a0/a2
+.plot:  lea     row_offsets+SCOPE_CENTRE*2,a1
+        move.w  d4,d5
+        lsr.w   #3,d4
+        not.w   d5
+        and.w   #7,d5
+        move.w  d6,d7
+        subq.w  #1,d7
+.point: move.b  (a0)+,d0
+        ext.w   d0
+        add.w   d0,d0
+        move.w  0(a1,d0.w),d2
+        add.w   d4,d2
+        move.w  d2,(a2)+
+        tst.w   d3
+        bne.s   .fifteen
+        bclr    d5,0(a3,d2.w)
+        bra.s   .upper
+.fifteen:
+        bset    d5,0(a3,d2.w)
+.upper: bset    d5,0(a4,d2.w)
+        bset    d5,0(a5,d2.w)
+        bset    d5,0(a6,d2.w)
+        subq.w  #1,d5
+        bpl.s   .same
+        moveq   #7,d5
+        addq.w  #1,d4
+.same:  dbra    d7,.point
+        movem.l (sp)+,d7/a1/a5/a6
+        move.w  #1,(a1)
+        rts
+
+; beam_clear: wait until the beam is not on the band or within BEAM_GUARD
+; lines above it.
+beam_clear:
+.wait:  move.l  CUSTOM+VPOSR,d0
+        lsr.l   #8,d0
+        and.w   #$1ff,d0
+        cmp.w   band_first,d0
+        bcs.s   .clear
+        cmp.w   band_last,d0
+        bls.s   .wait
+.clear: rts
+
 volumes:
         dc.w    64,64,1,1               ; channels 0-3: L high, R high, R low, L low
+
+        SCREEN_TABLES                   ; line_tops, voice_scope_left (screen.i)
+
+; The drawing units: first point among the traces, left column (the small
+; scopes take theirs from voice_scope_left), points, colour (0 for 14, 1 for
+; 15). The traces are the four small scopes', then the large one's.
+VSW     equ VOICE_SCOPE_WIDTH
+MIXT    equ SCOPES*VSW
+unit_table:
+        dc.w    0,0,VSW,0
+        dc.w    VSW,0,VSW,0
+        dc.w    2*VSW,0,VSW,0
+        dc.w    3*VSW,0,VSW,0
+        dc.w    MIXT,MIX_SCOPE_LEFT,MIX_SPLIT1,1
+        dc.w    MIXT+MIX_SPLIT1,MIX_SCOPE_LEFT+MIX_SPLIT1,MIX_SPLIT2-MIX_SPLIT1,1
+        dc.w    MIXT+MIX_SPLIT2,MIX_SCOPE_LEFT+MIX_SPLIT2,MIX_SCOPE_WIDTH-MIX_SPLIT2,1
+
 dosname:
         dc.b    "dos.library",0
 timername:
         dc.b    "timer.device",0
+gfxname:
+        dc.b    "graphics.library",0
+intname_lib:
+        dc.b    "intuition.library",0
 intrname:
         dc.b    "piano3500",0
 tabname:
         dc.b    "piano.tab",0
 samname:
         dc.b    "samples.bin",0
+index_name:
+        dc.b    "scores/index",0
+picture_name:
+        dc.b    "title.ilbm",0
 scoredir:
         dc.b    "scores/",0
 scoreext:
@@ -1463,9 +2802,66 @@ statext:
         dc.b    ".stat",0
         even
 
+        section tables,data
+newscreen:      dc.w 0,0,SCREEN_WIDTH,SCREEN_HEIGHT,DEPTH
+                dc.b 0,1
+                dc.w 0
+                dc.w CUSTOMSCREEN|SCREENQUIET
+                dc.l 0,0,0,0
+newwindow:      dc.w 0,0,SCREEN_WIDTH,SCREEN_HEIGHT
+                dc.b 0,1
+                dc.l MOUSEBUTTONS|RAWKEY
+                dc.l BACKDROP|BORDERLESS|ACTIVATE|RMBTRAP|SIMPLE_REFRESH|NOCAREREFRESH
+                dc.l 0,0,0
+                dc.l 0                  ; the screen (nw_Screen, 30)
+                dc.l 0
+                dc.w 0,0,0,0
+                dc.w CUSTOMSCREEN
+vbint:          dc.l 0,0
+                dc.b NT_INTERRUPT,0
+                dc.l intrname,0,vb_handler
+        include "menu.i"                ; ROTATE_S, and piece_keys
+        even
+
         section vars,bss
 vars:   ds.b    VARS_SIZE
 timereq:
         ds.b    IOTV_SIZE
 intr:   ds.b    22
 header: ds.b    LOG_HEADER
+        cnop    0,4
+screen_vars:
+gfxbase:        ds.l 1
+intbase:        ds.l 1
+screen:         ds.l 1
+window:         ds.l 1
+planes:         ds.l DEPTH
+picture_mem:    ds.l 1
+picture_bytes:  ds.l 1
+body:           ds.l 1
+band_copy:      ds.l 1
+task:           ds.l 1
+alarm_mask:     ds.l 1
+alarm_at:       ds.l 1
+rotate_frames:  ds.l 1
+pieces:         ds.l 1
+files:          ds.l MAX_PIECES
+index_mem:      ds.l 1
+index_bytes:    ds.l 1
+score_table:    ds.l 2*MAX_PIECES       ; each piece's score: memory and size
+palette:        ds.w 16
+row_offsets:    ds.w SCREEN_HEIGHT
+band_first:     ds.w 1
+band_last:      ds.w 1
+unit_drawn:     ds.w UNITS
+step_next:      ds.w 1
+step_block:     ds.l 1
+alarm_on:       ds.w 1
+clock_on:       ds.w 1
+led_known:      ds.w 1
+old_points:     ds.w SCOPES*VOICE_SCOPE_WIDTH+MIX_SCOPE_WIDTH
+traces:         ds.b SCOPES*VOICE_SCOPE_WIDTH+MIX_SCOPE_WIDTH
+alarm_bit:      ds.b 1
+led_start:      ds.b 1
+        cnop    0,4
+screen_vars_end:

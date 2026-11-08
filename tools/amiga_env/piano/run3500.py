@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 from .. import assemble, profile, project, session
-from . import build3500, m68k3500, mixer, player3500, score
+from . import build3500, disk, m68k3500, mixer, player3500, score
+from . import screen as screen_mod
 
 PROGRAM = "player"
 VOLUME_LABEL = "Piano3500"
@@ -55,6 +56,36 @@ STATUS_FIELDS = (
     "e_freq",
     "cacr",
     "samples",
+    "mode",
+    "piece",
+    "pieces",
+    "played",
+    "stopped",
+    "starts",
+    "rotated",
+    "next",
+    "rotate_at",
+    "highlight",
+    "window",
+    "key",
+    "keys",
+    "clicks",
+    "click_xy",
+    "filter_keys",
+    "vblanks",
+    "vblank_hz",
+    "loaded_at",
+    "preload_frames",
+    "screen_at",
+    "chosen_at",
+    "gold_at",
+    "playing_at",
+    "first_note_at",
+    "ended_at",
+    "worst_total_e",
+    "task_e",
+    "units",
+    "unit_max_e",
 )
 STATUS_BYTES = 4 * len(STATUS_FIELDS)
 BLOCK_E = mixer.BLOCK * mixer.MIX_PERIOD / 5  # E-clock ticks a block lasts: Paula's clock / 5
@@ -79,6 +110,36 @@ class Status(NamedTuple):
     e_freq: int
     cacr: int
     samples: int
+    mode: int
+    piece: int
+    pieces: int
+    played: int
+    stopped: int
+    starts: int
+    rotated: int
+    next: int
+    rotate_at: int
+    highlight: int
+    window: int
+    key: int
+    keys: int
+    clicks: int
+    click_xy: int
+    filter_keys: int
+    vblanks: int
+    vblank_hz: int
+    loaded_at: int
+    preload_frames: int
+    screen_at: int
+    chosen_at: int
+    gold_at: int
+    playing_at: int
+    first_note_at: int
+    ended_at: int
+    worst_total_e: int
+    task_e: int
+    units: int
+    unit_max_e: int
 
 
 def defines(log: bool = True) -> dict[str, int]:
@@ -199,30 +260,85 @@ def compare_logs(model: bytes, machine: bytes) -> dict:
     }
 
 
-def build_volume(recipe: build3500.Recipe, pieces: Sequence[str], folder: Path) -> dict[str, bytes]:
-    """The volume the machine boots, and each piece's model voice log."""
+INDEX = "scores/index"
+PICTURE = "title.ilbm"
+CREDITS = "Credits"
+
+
+def index_text(pieces: Sequence[tuple[str, str]]) -> str:
+    """scores/index: one line a piece, its name, a space and its title."""
+    for name, title in pieces:
+        if " " in name or not title.isascii() or "\n" in title:
+            raise SystemExit(f"{name}: a name has no spaces and a title is one line of ASCII")
+    return "".join(f"{name} {title}\n" for name, title in pieces)
+
+
+def screen_data(recipe: build3500.Recipe, data: Path) -> Path:
+    """title.ilbm, screen.i and menu.i (EXP-004's screen and keys) into `data`;
+    returns the picture."""
+    if recipe.screen is None:
+        raise SystemExit("the recipe shares no [screen] table (pieces = ...)")
+    data.mkdir(parents=True, exist_ok=True)
+    root = project.root()
+    names = disk.titles(recipe)
+    made = screen_mod.make(names, recipe.screen, root)
+    picture = screen_mod.write(made, recipe.screen, root, data, data)
+    (data / "menu.i").write_text(disk.menu_include(len(names), recipe.rotate_s), encoding="ascii")
+    return picture
+
+
+def write_files(
+    recipe: build3500.Recipe, piano: build3500.Piano, folder: Path, startup: str, log: bool
+) -> None:
+    """Everything the player needs, in a folder it runs from (and boots from)."""
+    if not recipe.player:
+        raise SystemExit("the recipe names no player (player = ...)")
+    if folder.exists():
+        shutil.rmtree(folder)
+    for sub in ("S", "scores", *(["logs"] if log else [])):
+        (folder / sub).mkdir(parents=True)
+    mixing = piano.mix_samples()
+    (folder / "S" / "Startup-Sequence").write_text(startup, encoding="ascii")
+    (folder / "piano.tab").write_bytes(m68k3500.tables_bytes(piano.instrument, mixing))
+    (folder / "samples.bin").write_bytes(m68k3500.samples_bytes(mixing))
+    data = project.root() / recipe.out / "m68030"
+    shutil.copyfile(screen_data(recipe, data), folder / PICTURE)
+    if recipe.credits:
+        credits = (project.root() / recipe.credits).read_text(encoding="ascii")
+        disk.check_credits(credits)
+        (folder / CREDITS).write_text(credits, encoding="ascii")
+    media = project.media_dir()
+    (folder / INDEX).write_text(
+        index_text([(p.name, p.title) for p in recipe.pieces]), encoding="ascii"
+    )
+    for piece in recipe.pieces:
+        perf = score.performance(score.read_midi(media / piece.midi))
+        (folder / "scores" / f"{piece.name}.score").write_bytes(score.encode(perf.events))
+    assemble.assemble(project.root() / recipe.player, folder / PROGRAM, [data], defines(log=log))
+
+
+def model_logs(
+    recipe: build3500.Recipe, piano: build3500.Piano, pieces: Sequence[str]
+) -> dict[str, bytes]:
+    """The model's voice log of each named piece."""
     chosen = {p.name: p for p in recipe.pieces}
     unknown = [name for name in pieces if name not in chosen]
     if unknown:
         raise SystemExit(f"no piece {', '.join(unknown)} in the recipe")
-    piano = build3500.make_piano(recipe)
     mixing = piano.mix_samples()
-    if folder.exists():
-        shutil.rmtree(folder)
-    for sub in ("S", "scores", "logs"):
-        (folder / sub).mkdir(parents=True)
-    (folder / "S" / "Startup-Sequence").write_text(startup_sequence(pieces))
-    (folder / "piano.tab").write_bytes(m68k3500.tables_bytes(piano.instrument, mixing))
-    (folder / "samples.bin").write_bytes(m68k3500.samples_bytes(mixing))
     media = project.media_dir()
-    models = {}
-    for name in pieces:
+    logs = {}
+    for name in dict.fromkeys(pieces):
         perf = score.performance(score.read_midi(media / chosen[name].midi))
-        (folder / "scores" / f"{name}.score").write_bytes(score.encode(perf.events))
-        models[name] = player3500.play(perf.events, piano.instrument, mixing).log
-    if not recipe.player:
-        raise SystemExit("the recipe names no player (player = ...)")
-    assemble.assemble(project.root() / recipe.player, folder / PROGRAM, [], defines(log=True))
+        logs[name] = player3500.play(perf.events, piano.instrument, mixing).log
+    return logs
+
+
+def build_volume(recipe: build3500.Recipe, pieces: Sequence[str], folder: Path) -> dict[str, bytes]:
+    """The log run's volume (one line a piece), and each piece's model voice log."""
+    piano = build3500.make_piano(recipe)
+    models = model_logs(recipe, piano, pieces)
+    write_files(recipe, piano, folder, startup_sequence(pieces), log=True)
     return models
 
 

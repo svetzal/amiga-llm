@@ -34,6 +34,7 @@ import numpy as np
 
 from .. import project
 from . import clips, layers, mixer, paula, player3500, samples, score, sfz, zoh
+from . import screen as screen_mod
 from .build import Piece
 
 KEY_BYTES_FIXED = 6  # root index and two pan gains
@@ -54,6 +55,9 @@ class Recipe:
     budget_bytes: int  # fast RAM for the samples, the tables and the score
     player: str = ""  # the 68030 player's source, under the project
     machine: str = ""  # the amiga.toml machine it runs on
+    screen: screen_mod.ScreenSpec | None = None  # the player's screen (from `pieces`'s recipe)
+    rotate_s: int = 15  # seconds of quiet before the player plays the next piece by itself
+    credits: str = ""  # the full notices, under the project
 
 
 @dataclass(frozen=True)
@@ -96,6 +100,7 @@ def load_recipe(path: Path) -> Recipe:
     unknown = sorted(data.get("samples", {}).keys() - known)
     if unknown:
         raise SystemExit(f"{path} [samples]: unknown key {', '.join(unknown)}")
+    shared = _shared(data)
     return Recipe(
         sfz=data["sfz"],
         out=data["out"],
@@ -107,12 +112,22 @@ def load_recipe(path: Path) -> Recipe:
         budget_bytes=data["budget_bytes"],
         player=data.get("player", ""),
         machine=data.get("machine", ""),
+        screen=screen_mod.load_spec(shared["screen"]) if "screen" in shared else None,
+        rotate_s=shared.get("rotate_s", 15),
+        credits=data.get("credits", ""),
     )
 
 
-def _pieces(data: dict, path: Path) -> tuple[Piece, ...]:
+def _shared(data: dict) -> dict:
+    """The recipe `pieces` names, whose pieces, screen and rotation this one shares;
+    else this recipe itself."""
     if "pieces" in data:
-        data = tomllib.loads((project.root() / data["pieces"]).read_text())
+        return tomllib.loads((project.root() / data["pieces"]).read_text())
+    return data
+
+
+def _pieces(data: dict, path: Path) -> tuple[Piece, ...]:
+    data = _shared(data)
     if "piece" not in data:
         raise SystemExit(f"{path}: no [[piece]] tables and no `pieces` recipe")
     return tuple(Piece(p["name"], p["midi"], p.get("title", "")) for p in data["piece"])

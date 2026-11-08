@@ -1,0 +1,46 @@
+Piano: the expressive piano for the Amiga 3500.
+From the amiga-llm project, github.com/svetzal/amiga-llm
+(EXP-006, the A3500 piano).
+
+This disk and its scores are shared under the Creative
+Commons Attribution-NonCommercial-ShareAlike 4.0 licence
+(CC BY-NC-SA 4.0), because the performances are.
+Not for commercial use.
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+THE PIANO
+Salamander Grand Piano V3 (2016-12-09), a Yamaha C5,
+by Alexander Holm.
+Licence: Creative Commons Attribution 3.0 (CC BY 3.0),
+https://creativecommons.org/licenses/by/3.0/
+Source: https://freepats.zenvoid.org/Piano/
+SalamanderGrandPiano/
+SalamanderGrandPianoV3+20161209_44khz16bit.tar.xz
+Changed for this disk: 8 of the 16 velocity layers and one
+sample every three semitones, kept at 16 bits, resampled,
+cut to a recorded attack plus a short crossfaded loop, and
+set to new levels, with each sample's original level kept
+for the player, which mixes 16 voices in software.
+
+THE PERFORMANCES
+MAESTRO dataset v3.0.0 by Google LLC (Magenta), MIDI
+recorded at the International Piano-e-Competition.
+Licence: Creative Commons Attribution-NonCommercial-
+ShareAlike 4.0 (CC BY-NC-SA 4.0),
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+Source: https://magenta.tensorflow.org/datasets/maestro
+Changed for this disk: each performance's notes, velocities
+and sustain pedal converted to this player's score format.
+The titles on the screen were written for this disk.
+
+THE PICTURE
+Generated with OpenAI's image model from the project's own
+description (piano-title.json), then cropped, reduced to
+13 colours and dithered for this screen.
+
+THE PROGRAM AND THE FONT
+The player, its tools and the list's pixel font
+(font.txt) are Copyright (c) 2026 Stacey Vetzal, under
+the MIT licence (see LICENSE in the amiga-llm project).
+The samples and performances keep their own licences,
+above.

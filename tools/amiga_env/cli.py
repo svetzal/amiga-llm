@@ -153,7 +153,12 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         "compare their voice logs with the model's",
     )
     run3500.add_argument("recipe", type=Path, metavar="RECIPE.toml")
-    run3500.add_argument("pieces", nargs="+", metavar="PIECE")
+    run3500.add_argument("pieces", nargs="*", metavar="PIECE")
+    run3500.add_argument(
+        "--screen",
+        action="store_true",
+        help="boot the screen and play through its checks (rotation, click, keys, F, Space, Q)",
+    )
     run3500.add_argument(
         "--realtime", action="store_true", help="run at the machine's own speed, not in warp"
     )
@@ -374,6 +379,14 @@ def _piano3500_run(args: argparse.Namespace) -> int:
     machine = machines[recipe.machine]
     _ready(machine)
     out = project.root() / recipe.out / "machine"
+    if args.screen:
+        from .piano import harness3500
+
+        found = harness3500.run(machine, recipe, out / "screen")
+        print(json.dumps(found, indent=2))
+        return 0
+    if not args.pieces:
+        raise SystemExit("name the pieces to play, or give --screen")
     found = run3500.run(machine, recipe, args.pieces, out, not args.realtime, args.timeout)
     good = True
     for name, piece in found["pieces"].items():

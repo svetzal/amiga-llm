@@ -5,7 +5,8 @@
 
 sfz = "salamander/SalamanderGrandPianoV3_44.1khz16bit/SalamanderGrandPianoV3.sfz"
 out = "runs/exp006"
-pieces = "examples/piano/piano.toml"   # EXP-004's ten pieces, from its recipe
+pieces = "examples/piano/piano.toml"   # EXP-004's ten pieces, its screen and rotate_s
+credits = "examples/piano3500/Credits" # the full notices, as `Credits` on the image
 player = "examples/piano3500/player.s"   # the 68030 player (`amiga-env piano3500-run`)
 machine = "a3500"                        # the amiga.toml machine it runs on
 

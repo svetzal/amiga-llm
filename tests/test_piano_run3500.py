@@ -40,7 +40,7 @@ class TestDefines:
 
 class TestStatus:
     def test_the_status_file_reads_as_its_fields(self):
-        data = struct.pack(">18L", 0x50333550, 2, 0, 1, 100, 300000, 5000, 0, *range(10))
+        data = struct.pack(">48L", 0x50333550, 2, 0, 1, 100, 300000, 5000, 0, *range(40))
 
         status = run3500.parse_status(data)
 
@@ -48,7 +48,7 @@ class TestStatus:
 
     def test_the_cpu_share_is_e_clock_ticks_over_a_blocks_length(self):
         status = run3500.parse_status(
-            struct.pack(">18L", 0, 2, 0, 1, 10, 10 * 6553, 13107, 1, *[0] * 10)
+            struct.pack(">48L", 0, 2, 0, 1, 10, 10 * 6553, 13107, 1, *[0] * 40)
         )
 
         cpu = run3500.cpu_report(status)
