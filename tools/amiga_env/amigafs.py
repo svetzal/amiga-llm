@@ -40,12 +40,15 @@ def unpack_adf(adf: Path, dest: Path) -> str:
         blkdev.close()
 
 
-def format_partition(image: Path, partition: str, label: str, tree: Path | None) -> None:
-    """Format one partition of an RDB image FFS (DOS3), then pack tree into it."""
+def format_partition(
+    image: Path, partition: str, label: str, tree: Path | None, dos_type: int = DOS3
+) -> None:
+    """Format one partition of an RDB image FFS (DOS3 unless told), then pack tree
+    into it."""
     blkdev = BlkDevFactory().open(str(image), options={"part": partition})
     try:
         volume = ADFSVolume(blkdev)
-        volume.create(FSString(label), dos_type=DOS3)
+        volume.create(FSString(label), dos_type=dos_type)
         if tree is not None:
             _pack_dir(tree, volume.get_root_dir())
         volume.close()

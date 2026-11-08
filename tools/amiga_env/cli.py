@@ -147,6 +147,17 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         help="model the A3500's 68030 piano from RECIPE.toml: 16 mixed voices, voice logs, WAVs",
     )
     piano3500.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    image3500 = sub.add_parser(
+        "piano3500-image",
+        help="write the A3500 piano's RDB hard-disk image (BlueSCSI): it boots to the screen",
+    )
+    image3500.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    image3500.add_argument(
+        "--out", type=Path, metavar="HDF", help="the image; build/piano3500/piano3500.hdf"
+    )
+    image3500.add_argument(
+        "--boot", action="store_true", help="then boot it headless and screenshot the screen"
+    )
     run3500 = sub.add_parser(
         "piano3500-run",
         help="boot the A3500 with the 68030 piano player, play PIECEs, "
@@ -288,6 +299,7 @@ COMMANDS = {
     "piano": lambda args: _piano(args.recipe),
     "piano3500": lambda args: _piano3500(args.recipe),
     "piano3500-run": lambda args: _piano3500_run(args),
+    "piano3500-image": lambda args: _piano3500_image(args),
     "piano-disk": lambda args: _piano_disk(args.recipe, args.out),
     "piano-survey": lambda args: _piano_survey(args),
     "piano-run": lambda args: _piano_run(args),
@@ -367,6 +379,27 @@ def _piano3500(recipe: Path) -> None:
         f"{worst['clamped']} clamped, {worst['wraps']} wrapped"
     )
     print(f"done      in {report['seconds_total']} s")
+
+
+def _piano3500_image(args: argparse.Namespace) -> None:
+    from .piano import build3500, image3500
+
+    image = image3500.build(args.recipe, args.out)
+    print(f"image     {image} ({image.stat().st_size} bytes); Credits beside it")
+    if args.boot:
+        recipe = build3500.load_recipe(args.recipe)
+        machines = profile.load_machines(reserved=command_names())
+        if recipe.machine not in machines:
+            raise SystemExit(f"{args.recipe}: no machine {recipe.machine!r} in {project.CONFIG}")
+        _ready(machines[recipe.machine])
+        found = image3500.boot(
+            machines[recipe.machine], image, project.root() / recipe.out / "machine"
+        )
+        print(
+            f"booted    through {found['controller']}: screen up {found['screen_up_s']} s "
+            f"after the player started ({found['wall_s_to_screen']} s wall); "
+            f"{found['screenshot']}"
+        )
 
 
 def _piano3500_run(args: argparse.Namespace) -> int:

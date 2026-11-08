@@ -4,7 +4,7 @@
 UV  ?= uv
 ENV := $(UV) run --quiet amiga-env
 
-.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3500 a3000-dev system hello mixbench piano piano3500 piano3500-run piano-disk guard test lint
+.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3500 a3000-dev system hello mixbench piano piano3500 piano3500-run piano3500-image piano-disk guard test lint
 
 SYSTEM ?= a3000-dev
 PIECES ?= nocturne-op9-2 bwv846
@@ -25,6 +25,7 @@ help:
 	@echo "make piano         build EXP-004's Paula piano and render its pieces to runs/exp004"
 	@echo "make piano3500     model EXP-006's A3500 piano (16 mixed voices) and render to runs/exp006"
 	@echo "make piano3500-run play PIECES with EXP-006's 68030 player on the A3500, check its logs"
+	@echo "make piano3500-image  the A3500 piano's BlueSCSI image, build/piano3500/piano3500.hdf"
 	@echo "make piano-disk    put EXP-004's 68000 player and its pieces on build/piano/piano.adf"
 	@echo "make guard         fail if git tracks licensed media or .env"
 	@echo "make test          lint and run the host-side tests"
@@ -73,6 +74,9 @@ piano3500:
 
 piano3500-run:
 	$(ENV) piano3500-run examples/piano3500/piano.toml $(PIECES)
+
+piano3500-image:
+	$(ENV) piano3500-image examples/piano3500/piano.toml --boot
 
 piano-disk:
 	$(ENV) piano-disk examples/piano/piano.toml
