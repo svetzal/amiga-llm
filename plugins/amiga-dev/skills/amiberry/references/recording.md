@@ -89,6 +89,29 @@ content path. Content can be `.adf`, `.hdf`, `.uae`, `.lha` and others.
   global Amiberry folder.
 - The core had no floppy drive sounds.
 
+### A machine the options cannot describe: a .uae as the content
+
+Verified 2026-11-08 with an NTSC A3000 (68030, Kickstart 2.04, a hard-disk
+image on the A3000's SCSI controller).
+
+- `amiberry_model` lists A500 to A4040, CD32 and CDTV, not A3000, and no
+  option sets memory, CPU speed or hard disks.
+- The core puts the content path last on the command line, as a bare
+  argument. A `.uae` there is loaded over built-in defaults, not over the
+  arguments before it: a file with only `a3000mem_size=16`, the CPU
+  settings and a `hardfile2=` line resolved to a 68000 with no Kickstart and
+  lost `sound_frequency=48000`, and booted to a black screen.
+- So give the whole machine in the file. The app's own `--dump-config` of
+  the machine's arguments (model, `-r`, every `-s`, the hard disk and the
+  sound settings), without its comment lines and `use_gui`, booted the
+  machine, and the core's command line resolved by `--dump-config` to the
+  app's configuration with no differences besides `use_gui`.
+- The frame is 756x486 for an NTSC A3000, with the 320x200 lowres screen
+  at (76, 48), each pixel 2x2; the first 25 frames were 756x484. The core
+  paced the cycle-exact 68030 at 25 MHz at real time (40.6 s wall for 40 s)
+  and gave 48 kHz sound locked to the NTSC frame rate, as for the A500. An
+  FFV1 capture of it took about 9.3 MB a second.
+
 ### Not repeatable to the frame
 
 Two boots of the same disk with the same options opened a program's screen

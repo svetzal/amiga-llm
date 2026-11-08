@@ -117,10 +117,15 @@ def ofs_blocks(size: int) -> int:
 
 def titles(recipe: Recipe) -> list[str]:
     """Each piece's title from the recipe; SystemExit when one has none."""
-    missing = [p.name for p in recipe.pieces if not p.title]
+    return titles_of(recipe.pieces)
+
+
+def titles_of(pieces: Sequence) -> list[str]:
+    """Each piece's title; SystemExit when one has none."""
+    missing = [p.name for p in pieces if not p.title]
     if missing:
         raise SystemExit(f"{missing[0]}: the recipe gives it no title")
-    return [p.title for p in recipe.pieces]
+    return [p.title for p in pieces]
 
 
 def click_points(recipe: Recipe, root: Path | None = None) -> dict[str, tuple[int, int]]:

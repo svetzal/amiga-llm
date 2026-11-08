@@ -198,6 +198,7 @@ For language-model experiments:
 | Facts about Stacey's machines and media | this file, "Target machines" |
 | Evidence and dated findings for this repository | `research/` |
 | A question being tested | `experiments/` |
+| An occasional workflow for this repository only (the piano videos for YouTube) | a project skill in `.claude/skills/` |
 
 A skill states the version and host each fact was verified on, and separates
 verified behaviour from behaviour that is only listed or documented. When a
@@ -213,6 +214,12 @@ This repository is a Claude Code plugin marketplace
 - `amiberry`: install, isolate, boot, drive and observe Amiberry.
 - `amiga-setup`: set up a new project like this one with the `amiga-env`
   tool: media from the user's own collection, machines, the build loop.
+
+Project skills, for this repository only and not published, are in
+`.claude/skills/`:
+
+- `piano-video`: record a piano disk playing by itself and prepare the 4K
+  master and description for Stacey to upload to YouTube.
 
 Candidates to extract next, when their knowledge is verified: the 68000
 cross-toolchain and boot floppies for Kickstart 1.x, OS-version headers and

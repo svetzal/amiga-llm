@@ -4,10 +4,12 @@
 UV  ?= uv
 ENV := $(UV) run --quiet amiga-env
 
-.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3500 a3000-dev system hello mixbench piano piano3500 piano3500-run piano3500-image piano-disk guard test lint
+.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3500 a3000-dev system hello mixbench piano piano3500 piano3500-run piano3500-image piano-disk piano-video piano3500-video guard test lint
 
 SYSTEM ?= a3000-dev
 PIECES ?= nocturne-op9-2 bwv846
+# For the videos, all optional: SECONDS=40 (a test run), STEPS=master,measure, OUT=runs/x
+VIDEO = $(if $(SECONDS),--seconds $(SECONDS)) $(if $(STEPS),--steps $(STEPS)) $(if $(OUT),--out $(OUT))
 
 help:
 	@echo "make tools         install the latest Amiberry into .tools/"
@@ -27,6 +29,9 @@ help:
 	@echo "make piano3500-run play PIECES with EXP-006's 68030 player on the A3500, check its logs"
 	@echo "make piano3500-image  the A3500 piano's BlueSCSI image, build/piano3500/piano3500.hdf"
 	@echo "make piano-disk    put EXP-004's 68000 player and its pieces on build/piano/piano.adf"
+	@echo "make piano-video   record the A500 floppy playing by itself; master in runs/video"
+	@echo "make piano3500-video  record the A3500 image playing by itself; master in runs/video3500"
+	@echo "                   (both take SECONDS=, STEPS= and OUT=)"
 	@echo "make guard         fail if git tracks licensed media or .env"
 	@echo "make test          lint and run the host-side tests"
 
@@ -80,6 +85,12 @@ piano3500-image:
 
 piano-disk:
 	$(ENV) piano-disk examples/piano/piano.toml
+
+piano-video:
+	$(ENV) piano-video examples/piano/piano.toml $(VIDEO)
+
+piano3500-video:
+	$(ENV) piano3500-video examples/piano3500/piano.toml $(VIDEO)
 
 guard:
 	$(ENV) guard

@@ -263,6 +263,38 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         metavar="TXT",
         help="the description with {chapters}; video-description.txt beside the recipe",
     )
+    film3500 = sub.add_parser(
+        "piano3500-video",
+        help="record the A3500 piano's BlueSCSI image playing by itself, frame by frame, and "
+        "make a 4K YouTube master, chapters and a description in runs/video3500",
+    )
+    film3500.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    film3500.add_argument(
+        "--machine", help="a machine from amiga.toml; the recipe's `machine` (a3500)"
+    )
+    film3500.add_argument(
+        "--image",
+        type=Path,
+        metavar="HDF",
+        help="the piano's image; build/piano3500/piano3500.hdf, written first if missing",
+    )
+    film3500.add_argument(
+        "--out", type=Path, metavar="DIR", help="where it all goes; runs/video3500"
+    )
+    film3500.add_argument(
+        "--seconds", type=float, metavar="S", help="stop after S seconds of emulated time (a test)"
+    )
+    film3500.add_argument(
+        "--steps",
+        default="record,master,measure",
+        help="which of record, master, measure to do; all three",
+    )
+    film3500.add_argument(
+        "--description",
+        type=Path,
+        metavar="TXT",
+        help="the description with {chapters}; video-description.txt beside the recipe",
+    )
 
     # Listed for --help only; `run` is dispatched in main, before argparse sees it.
     sub.add_parser("run", help="run Amiberry with the project's private home directory")
@@ -305,6 +337,7 @@ COMMANDS = {
     "piano-run": lambda args: _piano_run(args),
     "piano-rotation": lambda args: _piano_rotation(args),
     "piano-video": lambda args: _piano_video(args),
+    "piano3500-video": lambda args: _piano3500_video(args),
 }
 
 
@@ -537,22 +570,69 @@ def _piano_rotation(args: argparse.Namespace) -> int:
 
 
 def _piano_video(args: argparse.Namespace) -> int:
+    from functools import partial
+
     from .piano import build, disk, recording
 
     recipe = build.load_recipe(args.recipe)
     if recipe.screen is None:
         raise SystemExit(f"{args.recipe} has no [screen] table")
     out = args.out or project.root() / "runs" / "video"
+    floppy = args.floppy or project.build_dir() / "piano" / disk.DISK_NAMES[0]
+    machine = profile.load_machines(reserved=command_names())[args.machine]
     found = recording.make_video(
-        profile.load_machines(reserved=command_names())[args.machine],
-        args.floppy or project.build_dir() / "piano" / disk.DISK_NAMES[0],
+        recording.A500,
+        partial(recording.boot_floppy, machine, floppy),
         out,
-        disk.titles(recipe),
+        recording.rotation_of(recipe.pieces, recipe.rotate_s),
         recipe.screen,
         args.description or args.recipe.parent / "video-description.txt",
-        steps=[step.strip() for step in args.steps.split(",") if step.strip()],
+        steps=_steps(args.steps),
         max_seconds=args.seconds,
     )
+    _video_summary(found, out)
+    return 0
+
+
+def _piano3500_video(args: argparse.Namespace) -> int:
+    from functools import partial
+
+    from .piano import build3500, image3500, recording, video
+
+    recipe = build3500.load_recipe(args.recipe)
+    if recipe.screen is None:
+        raise SystemExit(f"{args.recipe} has no [screen] table (from its `pieces` recipe)")
+    name = args.machine or recipe.machine
+    machines = profile.load_machines(reserved=command_names())
+    if name not in machines:
+        raise SystemExit(f"{args.recipe}: no machine {name!r} in {project.CONFIG}")
+    out = args.out or project.root() / "runs" / "video3500"
+    steps = _steps(args.steps)
+    image = args.image or project.build_dir() / "piano3500" / "piano3500.hdf"
+    if "record" in steps and not image.is_file():
+        if args.image:
+            raise SystemExit(f"no image {image}")
+        image = image3500.build(args.recipe, image)
+        print(f"image     {image} ({image.stat().st_size} bytes)")
+    found = recording.make_video(
+        recording.A3500,
+        partial(recording.boot_image, machines[name], image),
+        out,
+        recording.rotation_of(recipe.pieces, recipe.rotate_s, video.note_latency3500_ms),
+        recipe.screen,
+        args.description or args.recipe.parent / "video-description.txt",
+        steps=steps,
+        max_seconds=args.seconds,
+    )
+    _video_summary(found, out)
+    return 0
+
+
+def _steps(text: str) -> list[str]:
+    return [step.strip() for step in text.split(",") if step.strip()]
+
+
+def _video_summary(found: dict, out: Path) -> None:
     if "record" in found:
         made = found["record"]
         print(
@@ -562,7 +642,6 @@ def _piano_video(args: argparse.Namespace) -> int:
     if "chapters" in found:
         print("\n".join(found["chapters"]["lines"]))
     print(f"results: {out / 'video.json'}")
-    return 0
 
 
 def _ready(machine: profile.Machine) -> None:

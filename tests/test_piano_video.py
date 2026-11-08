@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from amiga_env.piano import machine, video
+from amiga_env.piano import machine, run3500, video
 from amiga_env.profile import Machine
 
 A500 = Machine("A500", Path("rom/kick.rom"), None, ("ntsc=true",), "")
@@ -306,3 +306,69 @@ class TestSoundOffset:
         masters = [video.Master(1920, 1080, 1440, Path("hd.mp4"))]
         command = video.master_command("ffmpeg", Path("c.mkv"), Path("a.wav"), masters, delay_ms=21)
         assert command[command.index("-af") + 1] == "adelay=21:all=1"
+
+
+A3500 = Machine(
+    "A3000",
+    Path("rom/kick204.rom"),
+    None,
+    ("ntsc=true", "a3000mem_size=16", "cpu_speed=real", "cpu_multiplier=7"),
+    "",
+)
+
+
+class TestA3500:
+    def test_the_screen_is_at_76_48_in_a_756_wide_frame(self):
+        pixels = np.zeros((486, 756, 4), np.uint8)
+        pixels[48, 76] = (1, 2, 3, 0)
+        screen = video.screen_of(pixels.tobytes(), video.A3500_GEOMETRY)
+        assert tuple(screen[0, 0]) == (3, 2, 1)
+
+    def test_a_short_frame_is_fitted_to_the_a3500_canvas(self):
+        frame, fitted = video.canvas(
+            b"\xff" * (756 * 4 * 484), 756, 484, 756 * 4, video.A3500_GEOMETRY
+        )
+        assert fitted
+        assert len(frame) == 756 * 486 * 4
+
+    def test_the_capture_and_master_use_the_a3500_frame(self):
+        capture = video.capture_command(
+            "ffmpeg", video.NTSC_FPS, Path("c.mkv"), video.A3500_GEOMETRY
+        )
+        assert capture[capture.index("-video_size") + 1] == "756x486"
+        masters = [video.Master(3840, 2160, 2880, Path("4k.mp4"))]
+        graph = video.picture_filter(masters, video.A3500_GEOMETRY)
+        assert graph.startswith("[0:v]crop=640:400:76:48,scale=2880:2160:flags=neighbor")
+
+    def test_the_status_block_is_the_players_p35p_block(self):
+        longs = [0] * len(run3500.STATUS_FIELDS)
+        longs[0] = run3500.MAGIC
+        longs[run3500.STATUS_FIELDS.index("gold_at")] = 990
+        block = b"".join(n.to_bytes(4, "big") for n in longs)
+        assert video.status3500_of(block).gold_at == 990
+        assert video.status3500_of(bytes(len(block))) is None
+        assert video.status3500_of(block[:8]) is None
+
+    def test_the_options_name_the_model_and_leave_the_rest_to_the_file(self):
+        options = video.config_core_options(A3500, Path("/m/kick204.rom"))
+        assert options["amiberry_model"] == "A3000"
+        assert options["amiberry_video_standard"] == "ntsc"
+        assert options["amiberry_floppy_speed"] == "100"
+        assert not any("a3000mem" in value for value in options.values())
+
+    def test_the_config_file_is_the_dump_without_comments_or_the_gui(self):
+        dump = "; --dump-config\nconfig_version=8.5.0\nuse_gui=yes\n\ncpu_model=68030\n"
+        assert video.config_file(dump) == "config_version=8.5.0\ncpu_model=68030\n"
+
+    @pytest.mark.parametrize(("ms", "latency"), [(0, 18.3), (1, 19.3), (10, 28.3)])
+    def test_a_first_note_sounds_a_block_and_its_place_in_it_after_its_stamp(self, ms, latency):
+        assert video.note_latency3500_ms(ms) == latency
+
+
+class TestSpace:
+    def test_a_recording_runs_from_boot_through_each_piece_and_pause_to_the_tail(self):
+        assert video.expected_seconds([60_000, 30_000], 15, 20) == 20 + 75 + 45 + video.TAIL_S
+
+    def test_the_space_covers_the_capture_sound_and_master_with_a_margin(self):
+        per_s = 1_000_000 + video.WAV_BYTES_PER_S + video.MASTER_BYTES_PER_S
+        assert video.space_needed(100, 1_000_000, margin=1.0) == 100 * per_s + 2_000_000_000

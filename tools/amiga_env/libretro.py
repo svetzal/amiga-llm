@@ -9,7 +9,9 @@ recording in emulated time, whatever the host's own speed.
 
 The core builds an Amiberry command line from its options (`--model`,
 `-s ntsc=true`, `-r KICKSTART`, the content path) and calls Amiberry's own
-main, so a machine is described by options, not by a .uae file.
+main. The options describe only a few models (no A3000) and settings; the
+content can be a .uae file, which Amiberry loads over built-in defaults, in
+place of everything before it on the command line.
 
 `Core` is a gateway: a thin ctypes wrapper with no logic worth testing apart
 from `option_default`. Only one core can be loaded in a process.

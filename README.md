@@ -167,7 +167,10 @@ master, reads where each piece's line turns gold from the 4K
 master's own frames, and writes a draft, `youtube-description.generated.txt`
 (it never writes `youtube-description.txt`, the edited copy), with the
 chapters from `examples/piano/video-description.txt`. `--seconds S` stops
-early, for a test; `--steps master,measure` redoes the later steps.
+early, for a test; `--steps master,measure` redoes the later steps. `make
+piano-video` runs it; `SECONDS=`, `STEPS=` and `OUT=` pass those options.
+Before it records, it stops with a message if the output volume has too
+little free space for the run (about 9.5 GB a quarter hour of capture).
 
 `make piano3500` (`amiga-env piano3500 examples/piano3500/piano.toml`)
 builds EXP-006's A3500 piano on the host: 8 velocity layers of 16-bit
@@ -184,6 +187,13 @@ list, gold line, scopes, rotation and keys) and plays through its checks.
 `make piano3500-image` writes `build/piano3500/piano3500.hdf`, a hard-disk
 image for a BlueSCSI that boots an A3000-family machine with Kickstart 2.04
 straight into the piano, and boots it in the emulator to check it.
+`make piano3500-video` (`amiga-env piano3500-video
+examples/piano3500/piano.toml`) is `piano-video` for that image: it boots a
+copy on the `a3500` machine's SCSI controller through the libretro core,
+with the app's own configuration of the machine as the core's content
+(`machine.uae`), and puts the same files, with
+`piano3500-playthrough-4k.mp4` as the master, in `runs/video3500/`. It
+writes the image first if `build/piano3500/piano3500.hdf` is missing.
 
 `amiga-env run` and the machine commands set `HOME` to `runs/home/` so
 Amiberry's settings, ROM path, save states and screenshots stay inside the

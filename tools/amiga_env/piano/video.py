@@ -1,15 +1,20 @@
-"""A video of the piano disk playing by itself: the decisions, with no I/O.
+"""A video of a piano playing by itself: the decisions, with no I/O.
 
-`amiga-env piano-video` (recording.py) boots the disk in Amiberry's libretro
-core, keeps every emulated frame and every sample, and stops a few seconds
-after the rotation's tenth piece ends. Nothing is sent to the machine.
+`amiga-env piano-video` (the A500's floppy) and `amiga-env piano3500-video`
+(the A3500's hard-disk image) boot the piano in Amiberry's libretro core
+(recording.py), keep every emulated frame and every sample, and stop a few
+seconds after the rotation's tenth piece ends. Nothing is sent to the
+machine.
 
 This module holds what can be decided without the emulator or ffmpeg:
 
-- the core's options, all given explicitly, so that its command line
-  resolves to the same configuration as the app's machine profile;
-- when the run is over, from the player's status block;
-- each frame on a canvas of one size;
+- the core's options, all given explicitly, and for a machine the options
+  cannot describe, the configuration file the core boots as its content, so
+  that its command line resolves to the same configuration as the app's
+  machine profile;
+- when the run is over, from each player's status block;
+- where the screen is in each machine's frames, and each frame on a canvas
+  of one size;
 - which line of the list is gold in a picture of the 320x200 screen, and
   so where each piece starts in the video;
 - the YouTube chapter lines and description;
@@ -26,7 +31,7 @@ from typing import NamedTuple
 import numpy as np
 
 from .. import profile
-from . import machine
+from . import machine, mixer, run3500
 
 SAMPLE_RATE = 48_000
 # An NTSC A500 frame: 263 lines of 227.5 colour clocks at 3,579,545 Hz.
@@ -37,6 +42,23 @@ FRAME_WIDTH, FRAME_HEIGHT = 752, 486
 SCREEN_LEFT, SCREEN_TOP, SCREEN_SCALE = 60, 48, 2
 SCREEN_WIDTH, SCREEN_HEIGHT = 320, 200
 TAIL_S = 5.0  # kept after the last piece ends
+
+
+class Geometry(NamedTuple):
+    """The frame the core hands over, and where the 320x200 screen is in it."""
+
+    width: int
+    height: int
+    left: int
+    top: int
+    scale: int  # each lowres pixel is scale x scale
+
+
+A500_GEOMETRY = Geometry(FRAME_WIDTH, FRAME_HEIGHT, SCREEN_LEFT, SCREEN_TOP, SCREEN_SCALE)
+# Amiberry 8.5.0's libretro core for an NTSC A3000 (the a3500 profile): a
+# 756x486 frame with the screen at (76, 48), each lowres pixel 2x2, as the
+# app's screenshots of the A3500 show it. The first 25 frames were 756x484.
+A3500_GEOMETRY = Geometry(756, 486, 76, 48, 2)
 
 # The machine profile's settings the core can reproduce, as core options.
 SETTING_OPTIONS = {"ntsc=true": ("amiberry_video_standard", "ntsc")}
@@ -78,6 +100,34 @@ def core_options(machine_: profile.Machine, kickstart: Path) -> dict[str, str]:
         key, value = SETTING_OPTIONS[setting]
         options[key] = value
     return CORE_OPTIONS | SOUND_OPTIONS | options
+
+
+def config_core_options(machine_: profile.Machine, kickstart: Path) -> dict[str, str]:
+    """The core's options for a machine whose settings travel in a configuration file
+    (config_file): the model, the Kickstart and the settings the core has options for,
+    so that what the core reports of itself agrees with the file."""
+    options = {"amiberry_model": machine_.model, "amiberry_kickstart": str(kickstart)}
+    for setting in machine_.settings:
+        if setting in SETTING_OPTIONS:
+            key, value = SETTING_OPTIONS[setting]
+            options[key] = value
+    return CORE_OPTIONS | SOUND_OPTIONS | options
+
+
+def config_file(dump: str, leave_out: Sequence[str] = ("use_gui",)) -> str:
+    """A configuration file from the app's `--dump-config`: every setting, without
+    comments or `leave_out` (the core's frontend starts with no GUI).
+
+    The core puts its content path last on Amiberry's command line, and a
+    `.uae` there is loaded over built-in defaults, not over the options and
+    -s settings before it, so the file must hold the whole machine.
+    """
+    kept = [
+        line
+        for line in dump.splitlines()
+        if "=" in line and not line.startswith(";") and line.split("=", 1)[0] not in leave_out
+    ]
+    return "\n".join(kept) + "\n"
 
 
 def app_arguments(core_argv: Sequence[str]) -> list[str]:
@@ -127,30 +177,40 @@ def status_of(block: bytes) -> machine.Status | None:
     return status if status.magic == machine.MAGIC else None
 
 
-def finished(status: machine.Status | None, pieces: int) -> bool:
+def status3500_of(block: bytes) -> run3500.Status | None:
+    """The A3500 player's status block from chip RAM, or None before the player has written it."""
+    if len(block) < run3500.STATUS_BYTES:
+        return None
+    status = run3500.parse_status(block)
+    return status if status.magic == run3500.MAGIC else None
+
+
+def finished(status: machine.Status | run3500.Status | None, pieces: int) -> bool:
     """Whether the rotation has started and ended every piece once."""
     return status is not None and status.starts >= pieces and status.played >= pieces
 
 
-def canvas(pixels: bytes, width: int, height: int, pitch: int) -> tuple[bytes, bool]:
-    """A frame as FRAME_WIDTH x FRAME_HEIGHT XRGB8888, and whether it had to be fitted.
+def canvas(
+    pixels: bytes, width: int, height: int, pitch: int, geometry: Geometry = A500_GEOMETRY
+) -> tuple[bytes, bool]:
+    """A frame as the geometry's width x height XRGB8888, and whether it had to be fitted.
 
     A frame of another size (Amiberry hands over a few 484-line frames) is
     put at the top left of a black canvas, or cut to it.
     """
     rows = np.frombuffer(pixels, np.uint8).reshape(height, pitch)[:, : width * 4]
-    if (width, height) == (FRAME_WIDTH, FRAME_HEIGHT):
+    if (width, height) == (geometry.width, geometry.height):
         return rows.tobytes(), False
-    out = np.zeros((FRAME_HEIGHT, FRAME_WIDTH * 4), np.uint8)
-    h, w = min(height, FRAME_HEIGHT), min(width, FRAME_WIDTH) * 4
+    out = np.zeros((geometry.height, geometry.width * 4), np.uint8)
+    h, w = min(height, geometry.height), min(width, geometry.width) * 4
     out[:h, :w] = rows[:h, :w]
     return out.tobytes(), True
 
 
-def screen_of(frame: bytes) -> np.ndarray:
+def screen_of(frame: bytes, geometry: Geometry = A500_GEOMETRY) -> np.ndarray:
     """The 320x200 screen (rows x columns x RGB) in a canvas frame."""
-    pixels = np.frombuffer(frame, np.uint8).reshape(FRAME_HEIGHT, FRAME_WIDTH, 4)
-    top, left, scale = SCREEN_TOP, SCREEN_LEFT, SCREEN_SCALE
+    pixels = np.frombuffer(frame, np.uint8).reshape(geometry.height, geometry.width, 4)
+    top, left, scale = geometry.top, geometry.left, geometry.scale
     screen = pixels[
         top : top + SCREEN_HEIGHT * scale : scale, left : left + SCREEN_WIDTH * scale : scale
     ]
@@ -263,7 +323,9 @@ def description(template: str, found: Sequence[Chapter]) -> str:
     return template.replace("{chapters}", "\n".join(chapter_lines(found)))
 
 
-def capture_command(ffmpeg: str, fps: Fraction, out: Path) -> list[str]:
+def capture_command(
+    ffmpeg: str, fps: Fraction, out: Path, geometry: Geometry = A500_GEOMETRY
+) -> list[str]:
     """ffmpeg reading canvas frames from stdin into a lossless FFV1 file."""
     return [
         ffmpeg,
@@ -276,7 +338,7 @@ def capture_command(ffmpeg: str, fps: Fraction, out: Path) -> list[str]:
         "-pix_fmt",
         "bgr0",
         "-video_size",
-        f"{FRAME_WIDTH}x{FRAME_HEIGHT}",
+        f"{geometry.width}x{geometry.height}",
         "-framerate",
         f"{fps.numerator}/{fps.denominator}",
         "-i",
@@ -300,7 +362,7 @@ class Master(NamedTuple):
     path: Path
 
 
-def picture_filter(masters: Sequence[Master]) -> str:
+def picture_filter(masters: Sequence[Master], geometry: Geometry = A500_GEOMETRY) -> str:
     """The filter graph from the capture to each master's picture.
 
     The screen is cut out of the capture (640x400, each lowres pixel 2x2),
@@ -311,8 +373,8 @@ def picture_filter(masters: Sequence[Master]) -> str:
     """
     largest = max(masters, key=lambda m: m.height)
     crop = (
-        f"crop={SCREEN_WIDTH * SCREEN_SCALE}:{SCREEN_HEIGHT * SCREEN_SCALE}:"
-        f"{SCREEN_LEFT}:{SCREEN_TOP}"
+        f"crop={SCREEN_WIDTH * geometry.scale}:{SCREEN_HEIGHT * geometry.scale}:"
+        f"{geometry.left}:{geometry.top}"
     )
     parts = [
         f"[0:v]{crop},scale={largest.picture_width}:{largest.height}:flags=neighbor,"
@@ -338,12 +400,14 @@ def master_command(
     masters: Sequence[Master],
     crf: int = 16,
     delay_ms: int = 0,
+    geometry: Geometry = A500_GEOMETRY,
 ) -> list[str]:
     """ffmpeg making every master in one pass: H.264 High, CRF `crf`, the capture's
     frames one for one, AAC at 256 kb/s, 48 kHz stereo; tagged BT.709. The sound
     starts `delay_ms` late (see audio_delay_ms)."""
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
-    command += ["-i", str(capture), "-i", str(audio), "-filter_complex", picture_filter(masters)]
+    command += ["-i", str(capture), "-i", str(audio)]
+    command += ["-filter_complex", picture_filter(masters, geometry)]
     for i, master in enumerate(masters):
         command += [
             "-map",
@@ -424,6 +488,19 @@ def sound_offset_ms(lags_ms: Sequence[float], frame_ms: float) -> tuple[float, f
     return round(low, 1), round(high, 1)
 
 
+def note_latency3500_ms(first_note_ms: int) -> float:
+    """From the A3500 player stamping a piece's first note to the note's sound, in ms.
+
+    The player makes block n+1 when Paula starts playing block n, and stamps
+    the first note while it makes the block the note falls in; Paula plays
+    that block one block later, and the note sounds at its own sample in it
+    (player3500.py: a note starts at its exact sample). So the delay is one
+    block and the note's place in its block.
+    """
+    within = mixer.sample_of_ms(first_note_ms) % mixer.BLOCK
+    return round((mixer.BLOCK + within) / mixer.MIX_RATE * 1000, 1)
+
+
 def audio_delay_ms(offset_ms: tuple[float, float]) -> int:
     """Whole milliseconds to delay the sound by so the middle of `offset_ms` is zero;
     0 when the sound is not early."""
@@ -456,6 +533,24 @@ def levels(samples: np.ndarray) -> dict:
         "rms_dbfs": round(20 * np.log10(max(rms, 1e-10)), 1),
         "peak_dbfs": round(20 * np.log10(max(peak, 1e-10)), 1),
     }
+
+
+WAV_BYTES_PER_S = SAMPLE_RATE * 4
+# The 4K master: 1.05 GB for the A500's 2,582.8 s (EXP-004).
+MASTER_BYTES_PER_S = 410_000
+
+
+def expected_seconds(lengths_ms: Sequence[int], rotate_s: float, boot_s: float) -> float:
+    """How long a whole recording runs: the boot to the first piece, each piece with
+    the rotation's pause after it, and the tail."""
+    return boot_s + sum(ms / 1000 + rotate_s for ms in lengths_ms) + TAIL_S
+
+
+def space_needed(seconds: float, capture_bytes_per_s: float, margin: float = 1.25) -> int:
+    """Bytes a recording of `seconds` needs on its volume: the lossless capture, the
+    sound and the master, times `margin`, and 2 GB more."""
+    per_s = capture_bytes_per_s + WAV_BYTES_PER_S + MASTER_BYTES_PER_S
+    return round(seconds * per_s * margin) + 2_000_000_000
 
 
 def frame_of(vblank: int, counts: Sequence[int]) -> int | None:
