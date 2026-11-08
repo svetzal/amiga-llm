@@ -99,7 +99,8 @@ Programs for it are prototyped as if they boot from the BlueSCSI: a hard
 disk image in the emulator, which an RDB image (`amiga-env system export`)
 can become on its SD card. No system for it is built yet. Amiberry's
 68030 timing, with its caches, is approximate: timing claims for this
-machine are checked on the real one.
+machine are checked on the real one. The profile runs the CPU at 25.06 MHz
+(`cpu_multiplier=7`) with the data cache emulated; see EXP-005.
 
 ### a3000-dev: the A3000 as a development machine
 

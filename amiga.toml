@@ -37,11 +37,18 @@ purpose = "boot the A3000 (Kickstart 3.2, Workbench 3.2): desktop applications"
 # RAM and 16 MB fast RAM on the motherboard (Stacey, 2026-11-07). Amiberry's
 # A3000 model is the same design. Workbench 2.1 is the last release for
 # Kickstart 2.04.
+# Its CPU runs at the real machine's speed, for timing: cpu_multiplier=7 is
+# 7 x 3.58 MHz = 25.06 MHz (Amiberry's default, 8, is 28.6 MHz; "max" runs
+# the CPU as fast as the host can), with the 68030's data cache emulated.
+# Amiberry's 68030 timing is approximate even so (EXP-005).
 [machines.a3500]
 model = "A3000"
 kickstart = "rom/forever/amiga-os-204-a3000.rom"
 disk = "adf/2.1/workbench.adf"
-settings = ["ntsc=true", "a3000mem_size=16"]
+settings = [
+  "ntsc=true", "a3000mem_size=16",
+  "cpu_speed=real", "cpu_multiplier=7", "cpu_data_cache=true",
+]
 purpose = "boot the A3500 prototype (Kickstart 2.04, Workbench 2.1, 16 MB fast)"
 
 # The A3000 as a development machine: the system built from

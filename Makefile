@@ -4,7 +4,7 @@
 UV  ?= uv
 ENV := $(UV) run --quiet amiga-env
 
-.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3500 a3000-dev system hello piano piano-disk guard test lint
+.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3500 a3000-dev system hello mixbench piano piano-disk guard test lint
 
 SYSTEM ?= a3000-dev
 
@@ -20,6 +20,7 @@ help:
 	@echo "make system        build runs/systems/$(SYSTEM) from systems/$(SYSTEM).toml"
 	@echo "make a3000-dev     boot the A3000 development system (build it first)"
 	@echo "make hello         assemble examples/hello into a boot disk, build/hello.adf"
+	@echo "make mixbench      EXP-005's 68030 mixing timing test, build/mixbench.adf (A3500)"
 	@echo "make piano         build EXP-004's Paula piano and render its pieces to runs/exp004"
 	@echo "make piano-disk    put EXP-004's 68000 player and its pieces on build/piano/piano.adf"
 	@echo "make guard         fail if git tracks licensed media or .env"
@@ -57,6 +58,9 @@ a3000-dev:
 
 hello:
 	$(ENV) bootdisk examples/hello/hello.s
+
+mixbench:
+	$(ENV) bootdisk examples/mixbench/mixbench.s
 
 piano:
 	$(ENV) piano examples/piano/piano.toml

@@ -36,13 +36,19 @@ def test_the_a3000_is_an_ntsc_a3000_on_3_2_with_8_mb_of_motherboard_fast_ram():
     assert _settings(args) == ["ntsc=true", "a3000mem_size=8"]
 
 
-def test_the_a3500_is_an_ntsc_a3000_on_kickstart_2_04_and_workbench_2_1_with_16_mb_of_fast_ram():
+def test_the_a3500_is_an_ntsc_a3000_at_25_mhz_on_kickstart_2_04_and_workbench_2_1_with_16_mb_fast():
     args = machine_args(MACHINES["a3500"], media=MEDIA)
 
     assert _value(args, "--model") == "A3000"
     assert _value(args, "-r") == "/project/media/rom/forever/amiga-os-204-a3000.rom"
     assert _value(args, "-0") == "/project/media/adf/2.1/workbench.adf"
-    assert _settings(args) == ["ntsc=true", "a3000mem_size=16"]
+    assert _settings(args) == [
+        "ntsc=true",
+        "a3000mem_size=16",
+        "cpu_speed=real",
+        "cpu_multiplier=7",
+        "cpu_data_cache=true",
+    ]
 
 
 def test_the_a3000_dev_boots_its_built_system_as_dh0_and_work_as_dh1():
