@@ -108,7 +108,14 @@ model (`tools/amiga_env/piano/player3500.py` and `mixer.py`) and renders
 EXP-004's pieces to `runs/exp006/`. The 68030 player,
 `examples/piano3500/player.s`, matches that model's voice log byte for
 byte: `make piano3500-run` boots it on this machine from a host folder
-(DH0:), plays `PIECES` and compares the logs (emulator tier).
+(DH0:), plays `PIECES` and compares the logs (emulator tier), and
+`amiga-env piano3500-run examples/piano3500/piano.toml --screen` drives
+its screen (EXP-004's, with the rotation, keys and filter key).
+`make piano3500-image` writes `build/piano3500/piano3500.hdf`, an RDB
+image for the BlueSCSI that boots Kickstart 2.04 straight into the piano
+(DOS1, the ROM's FFS; no Workbench), and boots it through Amiberry's A3000
+SCSI controller to check it. The image holds the samples and scores:
+keep it out of git.
 
 ### a3000-dev: the A3000 as a development machine
 

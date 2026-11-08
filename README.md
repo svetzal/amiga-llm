@@ -179,6 +179,11 @@ PIECE...`) assembles the 68030 player (`examples/piano3500/player.s`),
 boots it headless on the `a3500` machine from a folder in
 `runs/exp006/machine/volume/`, plays the pieces, compares each voice log
 with the model's byte for byte and reports the CPU share it measured.
+With `--screen` it boots the player's screen instead (EXP-004's picture,
+list, gold line, scopes, rotation and keys) and plays through its checks.
+`make piano3500-image` writes `build/piano3500/piano3500.hdf`, a hard-disk
+image for a BlueSCSI that boots an A3000-family machine with Kickstart 2.04
+straight into the piano, and boots it in the emulator to check it.
 
 `amiga-env run` and the machine commands set `HOME` to `runs/home/` so
 Amiberry's settings, ROM path, save states and screenshots stay inside the

@@ -504,6 +504,140 @@ Not done: audio from the emulator (SDL's disk driver), which the brief made
 optional. The logs, with each block's output checksum, show the mix is the
 model's.
 
+### 2026-11-07: the screen, the rotation and the BlueSCSI image (machine tier)
+
+Amiberry 8.5.0 on the Mac, the `a3500` machine as before. The CPU figures
+are the emulator's approximate 68030.
+
+#### Aligning the samples
+
+The MOVE.L that fetches a sample and the next reads at the sample's base
+plus twice the phase's integer part. That index runs through odd and even
+values, so whatever the base, about half the fetches cross a long boundary.
+To make every fetch long-aligned, each sample would have to be stored twice
+(each long holding a sample and the next), about 22 MB, which does not fit
+the 16 MB of fast RAM. `samples.bin` now starts every sample on a multiple
+of 4 bytes, so the even indexes are aligned. Every padded sample already
+had an even length, so the file did not change.
+
+Measured in the emulator with the nocturne (log run): all bases long-aligned,
+5,179 E-clock ticks a block on average and 5,806 at worst; all bases moved
+to 2 mod 4 (an experiment, not kept), 5,179 and 5,817. The emulator does
+not charge for the misaligned half, or the two halves balance. Only the
+real 68030 can say which.
+
+#### The player's screen
+
+`player` with no arguments opens EXP-004's screen: the same title picture
+with the song list composited on the host (`screen.py`, from EXP-004's
+recipe, which the A3500 recipe now shares with its `rotate_s`), the pixel
+font, the gold user copper line on the playing piece, the dim attribution,
+the "svetzal" signature and five scopes in the floor band. The screen code
+(the ILBM reader, Intuition's screen and backdrop window, the copper list,
+the choices, the rotation, the vertical blank server and the filter key)
+is EXP-004's, copied into the A3500 player and adapted to it; the two
+players do not share a source file. The behaviour is EXP-004's: a click or
+a piece's key plays it or switches to it; 15 s after the screen appears,
+and 15 s after each piece ends, the next piece plays by itself; Space stops
+and holds the rotation; F switches the audio filter and the power LED
+(CIA-A PRA bit 1, by the task); Esc or Q quits. Every score is loaded at
+the start. `player RUN NAME` still plays one piece with no screen.
+
+The scopes. Sixteen voices do not fit five 36-column scopes, so the four
+small scopes show the four loudest voices sounding (by voice volume, in
+voice order), each traced from its own sample at its own phase and step, a
+column every 7.5 output samples (960 Paula clocks, as on the A500), times
+the mean of its two multipliers. The large scope shows what is heard: the
+left plus the right high bytes of the block Paula is playing, read from
+chip RAM, a column every 4 output samples. The four loudest are what a
+listener hears most; the output is the mix itself, not a model of it.
+
+The cost. The first version drew one of six units (four small scopes and
+the large one in two halves) after every vertical blank. The nocturne's
+worst block then took 50.4% with the screen's work added, over the 50%
+bar: a block (18.3 ms) can hold two vertical blanks, and the large
+scope's halves were 60 and 48 points. What changed: the scopes go in a
+cycle of eight steps (make the traces, then draw each of seven units: the
+four small scopes and the large one in three parts of 36, 40 and 32
+points), and at most one step a block. Each scope is redrawn about 6.8
+times a second (EXP-004's A500 scopes: 20). The handler adds the screen's
+E-clock ticks since the last block, less its own, to its own count, so
+"worst total" is the most mixing and screen work in one block's time.
+
+#### Results with the screen
+
+`amiga-env piano3500-run examples/piano3500/piano.toml --screen` boots the
+test build (LOG=1) on the screen and plays through the checks, touching
+nothing until the rotation starts piece 1. Warp is on between the steps
+and off for every key, click and screenshot; the times are the player's
+own (vertical blanks). Run `runs/exp006/machine/screen/screen-run.json`:
+
+| Step | Found |
+| --- | --- |
+| Boot, touch nothing | piece 1 (the nocturne) chosen by the rotation 15.00 s (emulated) after the screen appeared; its line gold in 17 ms and its first block made in 17 ms |
+| The nocturne to its end | voice log identical, 12,566 blocks |
+| The gap | BWV 846 started by the rotation 15.03 s after the nocturne ended |
+| 20 s into BWV 846, a click on Debussy's line | gold in 17 ms, first block in 33 ms; BWV 846 stopped, its 1,246 blocks identical to the model's first 1,246 |
+| F, twice | CIA-A bit 1: 0, 1, 0; two presses counted |
+| Key 3 | BWV 802 gold in 17 ms, first block in 33 ms; Debussy stopped, its 251 blocks identical to the model's |
+| BWV 802 to its end | voice log identical, 7,235 blocks |
+| The next by the rotation, Space 5 s in | Scarlatti stopped, the rotation held, no line gold; nothing started in 30 s of quiet |
+| Q | the player ended; the filter bit as it was at the start |
+
+The screenshots (`runs/exp006/machine/screen/screen-*.png`) were checked by
+the run against `title.ilbm` itself (the screen found at (76, 48) in the
+screenshot, a mean difference of 0.08 of 255 when idle), for the gold line
+(none idle, the playing piece's line otherwise) and for the scopes (every
+one of the five with a trace in all its columns). I looked at the idle,
+playing and clicked shots: the picture, the list, Debussy's line gold
+under the pointer, the traces on the floor.
+
+CPU with the screen up and the scopes drawing (test build, which also logs):
+
+| Piece | Mixing, mean | Mixing, worst block | Mixing and screen, worst block | Screen, mean | Most for one screen step |
+| --- | --- | --- | --- | --- | --- |
+| Nocturne Op. 9 No. 2 | 40.4% | 45.5% | 47.1% | 1.72% | 464 E-clock ticks (3.5%) |
+| BWV 802 | 21.8% | 38.7% | 40.5% | 1.69% | 443 ticks |
+
+With the screen open the mixing itself costs about 1% more than without it
+(the nocturne's log run: 39.5% and 44.3%), most likely the display's DMA on
+the chip RAM writes. The test build's log record is part of these figures;
+Stacey's build does not log.
+
+Latency, from the task taking a click or a key: the line gold in 17 ms (one
+frame), the first block made in 17 to 33 ms, and Paula plays it from the
+next block, 18.3 ms later: about 50 ms from the click to the piece's start.
+Its first note follows by the recording's own lead-in (BWV 846: 967 ms),
+as on the A500.
+
+Start-up, from the player starting: the samples (10,972,800 bytes) in 1.37
+s, every score 4 vertical blanks later, the screen up at 1.48 s. That is
+the emulator's SCSI, which reads the image at host speed; how long the
+BlueSCSI takes for 11 MB on the A3500 is not measured.
+
+#### The BlueSCSI image
+
+`amiga-env piano3500-image examples/piano3500/piano.toml --boot` (`make
+piano3500-image`) writes `build/piano3500/piano3500.hdf`, 16,515,072 bytes:
+a Rigid Disk Block (32 heads, 63 sectors, export.py's geometry) and one
+bootable partition, DH0 `Piano3500`, 13 MiB of the Fast File System
+without international mode (DOS1), which Kickstart 2.04 has in ROM, so the
+RDB stores no filesystem and the image needs no Workbench. It holds
+`S/Startup-Sequence` (`player`), Stacey's build of the player (7,724
+bytes), `piano.tab`, `samples.bin`, `title.ilbm`, `scores/` and `Credits`,
+the A3500 edition's full notices (`examples/piano3500/Credits`, also
+written beside the image). It is under `build/` and never committed.
+
+Booted on the `a3500` machine with no floppy, the image attached to the
+A3000's own SCSI controller (Amiberry's `scsi0_a3000`, which the ROM's
+scsi.device drives, as on the real machine): Amiberry reported "Adding
+SCSI HD 'scsi_a3000' unit 0", Kickstart 2.04 booted the partition, and
+the piano's screen was up 1.48 s after the player started, 2.7 s after
+Amiberry did. `runs/exp006/machine/image-boot.png` shows it (looked at).
+
+Not done: the image on the real A3500 and its BlueSCSI; audio from the
+emulator.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
