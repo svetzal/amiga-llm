@@ -18,6 +18,22 @@ Kickstart 2.04) has the speed to mix voices in software and the memory for
 more samples. EXP-005, software mixing on the A3500, measured 16 voices of
 16-bit samples at 22 to 31% of the CPU in the emulator.
 
+The A3500 is Stacey's own machine, not the target. The target is the
+common big-box configuration of the A3000 generation: a 68030 at 25 MHz
+and 16 MB of fast RAM, whichever model it is in (A3000, A3500, A3000T, or
+an A4000 with a 68030). The player depends on no A3000 hardware: it sets
+the data cache through exec's CacheControl and takes chip and fast memory
+from the system. Only the A3500 (in Amiberry) has been tested. What would
+differ elsewhere, not measured:
+
+- the CPU: at 16 MHz (the slower A3000) the worst block would take about
+  74% of its time, over the 50% bar but not an overrun;
+- the memory: the samples, tables and largest score take 11.0 MB of fast
+  RAM, so a machine with less than about 12 MB cannot play it;
+- the disk: the image boots from the A3000's SCSI controller in the
+  emulator; an A4000 boots from IDE, where the same RDB image should
+  serve, untested.
+
 With 16 mixed voices, 8 velocity layers of 16-bit samples and attacks twice
 as long, how close does the same score come to a piano? Does the clipping
 go, does it fit in memory, and does the 14-bit output have the headroom?
