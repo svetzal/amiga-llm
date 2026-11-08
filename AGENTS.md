@@ -93,7 +93,7 @@ piano with several velocity layers and software-mixed voices. Boot it with
 | Video standard | NTSC | Stacey, 2026-11-07 |
 | Kickstart | 2.04 in ROM (`media/rom/forever/amiga-os-204-a3000.rom`, 37.175) | Stacey, 2026-11-07 |
 | Drives | a floppy drive, and a BlueSCSI (SD card disk images) on the built-in SCSI port; no working SCSI hard disk | Stacey, 2026-11-07 |
-| Workbench (profile) | 2.04 (`media/adf/2.04/workbench.adf`) | follows the Kickstart |
+| Workbench (profile) | 2.1 (`media/adf/2.1/`: Workbench, Extras, Fonts, Install, Locale), the last release for Kickstart 2.04 | Stacey's choice, 2026-11-07 |
 
 Programs for it are prototyped as if they boot from the BlueSCSI: a hard
 disk image in the emulator, which an RDB image (`amiga-env system export`)

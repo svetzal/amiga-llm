@@ -16,7 +16,7 @@ help:
 	@echo "make doctor        report what is installed and what is missing"
 	@echo "make a500          boot the A500 to Workbench 1.2 (demos, games, hardware)"
 	@echo "make a3000         boot the A3000 to Workbench 3.2 (desktop applications)"
-	@echo "make a3500         boot the A3500 prototype to Workbench 2.04 (16 MB fast RAM)"
+	@echo "make a3500         boot the A3500 prototype to Workbench 2.1 (16 MB fast RAM)"
 	@echo "make system        build runs/systems/$(SYSTEM) from systems/$(SYSTEM).toml"
 	@echo "make a3000-dev     boot the A3000 development system (build it first)"
 	@echo "make hello         assemble examples/hello into a boot disk, build/hello.adf"

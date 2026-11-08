@@ -531,3 +531,33 @@ size = 412313804
 licence = "CC BY 3.0 (Alexander Holm, Salamander Grand Piano V3)"
 unpack = "tar"
 optional = true
+
+[[item]]
+dest = "adf/2.1/workbench.adf"
+source = "amiga_forever"
+origin = "Shared/adf/amiga-os-210-workbench.adf"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "adf/2.1/extras.adf"
+source = "amiga_forever"
+origin = "Shared/adf/amiga-os-210-extras.adf"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "adf/2.1/fonts.adf"
+source = "amiga_forever"
+origin = "Shared/adf/amiga-os-210-fonts.adf"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "adf/2.1/install.adf"
+source = "amiga_forever"
+origin = "Shared/adf/amiga-os-210-install.adf"
+licence = "Amiga Forever 10 Plus"
+
+[[item]]
+dest = "adf/2.1/locale.adf"
+source = "amiga_forever"
+origin = "Shared/adf/amiga-os-210-locale.adf"
+licence = "Amiga Forever 10 Plus"

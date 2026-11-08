@@ -31,6 +31,46 @@
     "origin": "Shared/adf/amiga-os-204-workbench.adf",
     "licence": "Amiga Forever 10 Plus"
   },
+  "adf/2.1/extras.adf": {
+    "kind": "file",
+    "sha256": "413f6641c68903c4635eb1ea3e65e2ac8e142887708b81702429a29a7abf34c2",
+    "size": 901120,
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-210-extras.adf",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "adf/2.1/fonts.adf": {
+    "kind": "file",
+    "sha256": "41ef824e8f41f9196cbdd967f6a38ccf8fd546f92c537e4806492b0b1d4d6c6f",
+    "size": 901120,
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-210-fonts.adf",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "adf/2.1/install.adf": {
+    "kind": "file",
+    "sha256": "0f8fe84202f6d0e06a0a94bc0d395f8ab16452d388116c7b0f2b0a910e8862a5",
+    "size": 901120,
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-210-install.adf",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "adf/2.1/locale.adf": {
+    "kind": "file",
+    "sha256": "0c624cc9f78446411436439f9a3970d1ae33ea5aa7a2e48b79a5e7a1ccd103cb",
+    "size": 901120,
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-210-locale.adf",
+    "licence": "Amiga Forever 10 Plus"
+  },
+  "adf/2.1/workbench.adf": {
+    "kind": "file",
+    "sha256": "9d47629fc0631d4af33afd402ad3edb1502a494f44a0d0c4e1da4abdaad70eff",
+    "size": 901120,
+    "source": "amiga_forever",
+    "origin": "Shared/adf/amiga-os-210-workbench.adf",
+    "licence": "Amiga Forever 10 Plus"
+  },
   "adf/3.1/workbench.adf": {
     "kind": "file",
     "sha256": "24dbf267a7f7b01757025fa682a173cef4092a915eff36a5844b264c13fc729c",
