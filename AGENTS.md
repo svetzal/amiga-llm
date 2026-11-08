@@ -102,6 +102,12 @@ can become on its SD card. No system for it is built yet. Amiberry's
 machine are checked on the real one. The profile runs the CPU at 25.06 MHz
 (`cpu_multiplier=7`) with the data cache emulated; see EXP-005.
 
+The piano for it is EXP-006, the A3500 piano: 16 voices mixed in software
+and 8 velocity layers of 16-bit samples. `make piano3500` builds its host
+model (`tools/amiga_env/piano/player3500.py` and `mixer.py`) and renders
+EXP-004's pieces to `runs/exp006/`. The 68030 player, still to be written,
+must match that model's voice log byte for byte.
+
 ### a3000-dev: the A3000 as a development machine
 
 The same A3000 profile, booting a system built from

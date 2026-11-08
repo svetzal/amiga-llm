@@ -19,7 +19,7 @@ layers = 8
 # 32767 * volume * gain / 2^32 to a side. The build strikes every run of 16
 # adjacent keys at velocity 127 at once and refuses a volume at which any of
 # them overflows 16 bits; at this volume the worst run (MIDI 77 to 92) peaks
-# at 30,545 of 32,767 (EXP-006).
+# at 30,548 of 32,767 (EXP-006).
 full_volume = 14336
 
 # 0 puts every key in the middle (mono); 1 puts A0 hard left and C8 hard right.
