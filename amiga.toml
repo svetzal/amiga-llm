@@ -32,6 +32,18 @@ disk = "adf/3.2/Install3.2.adf"
 settings = ["ntsc=true", "a3000mem_size=8"]
 purpose = "boot the A3000 (Kickstart 3.2, Workbench 3.2): desktop applications"
 
+# Stacey's A3500, the Commodore prototype that came before the A3000T: a
+# 68030 at 25 MHz with an FPU, ECS, NTSC, Kickstart 2.04, 2 MB chip RAM and
+# 16 MB fast RAM (Stacey, 2026-11-07). Amiberry's A3000 model is the same
+# design; where the 16 MB sits on the real machine is not yet known, and the
+# profile puts it on the motherboard.
+[machines.a3500]
+model = "A3000"
+kickstart = "rom/forever/amiga-os-204-a3000.rom"
+disk = "adf/2.04/workbench.adf"
+settings = ["ntsc=true", "a3000mem_size=16"]
+purpose = "boot the A3500 prototype (Kickstart 2.04, Workbench 2.04, 16 MB fast)"
+
 # The A3000 as a development machine: the system built from
 # systems/a3000-dev.toml boots as DH0: (System:), and the project's work/
 # folder is Work:. Build it with `make system`; boot it with `make a3000-dev`.

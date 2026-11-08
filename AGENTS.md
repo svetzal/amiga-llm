@@ -81,16 +81,24 @@ registration (`media/mui/README.txt`).
 **Stacey's Amiga 3500**, a Commodore prototype that came before the A3000T.
 She rescued it from Commodore Canada, where she worked in the 1990s. It is
 the target for programs that need more memory than the A3000 has, such as a
-piano with several velocity layers and software-mixed voices. It has no
-profile in `amiga.toml` yet: the facts below are not enough to choose one.
+piano with several velocity layers and software-mixed voices. Boot it with
+`make a3500`. The profile is Amiberry's A3000 model, the same design.
 
 | Fact | Value | Source |
 | --- | --- | --- |
+| CPU and FPU | 68030 at 25 MHz, with an FPU | Stacey, 2026-11-07 |
+| Chipset | ECS | Stacey, 2026-11-07 |
 | Chip RAM | 2 MB | Stacey, 2026-11-07 |
 | Fast RAM | 16 MB | Stacey, 2026-11-07 |
+| Video standard | NTSC | Stacey, 2026-11-07 |
+| Kickstart | 2.04 (`media/rom/forever/amiga-os-204-a3000.rom`, 37.175) | Stacey, 2026-11-07 |
+| Workbench (profile) | 2.04 (`media/adf/2.04/workbench.adf`) | follows the Kickstart |
 
-Not yet known: CPU and FPU, chipset, Kickstart, video standard, drives.
-Being a prototype, it may differ from a production A3000T in any of them.
+Not yet known: the FPU's model (the profile uses the A3000's 68882), where
+the 16 MB sits (the profile puts it on the motherboard), the drives, and
+whether the Kickstart is in ROM or loaded from disk as on early A3000s.
+Amiberry's 68030 timing, with its caches, is approximate: timing claims for
+this machine are checked on the real one.
 
 ### a3000-dev: the A3000 as a development machine
 

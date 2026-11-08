@@ -95,6 +95,7 @@ To boot one of the target machines in a window:
 ```sh
 make a500     # Kickstart 1.2, Workbench 1.2, NTSC
 make a3000    # Kickstart 3.2, the 3.2 Install floppy, 8 MB fast RAM
+make a3500    # the A3500 prototype: Kickstart 2.04, Workbench 2.04, 16 MB fast RAM
 ```
 
 The machines are defined in `amiga.toml`; `uv run amiga-env <machine>

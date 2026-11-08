@@ -36,6 +36,15 @@ def test_the_a3000_is_an_ntsc_a3000_on_3_2_with_8_mb_of_motherboard_fast_ram():
     assert _settings(args) == ["ntsc=true", "a3000mem_size=8"]
 
 
+def test_the_a3500_is_an_ntsc_a3000_on_2_04_with_16_mb_of_fast_ram():
+    args = machine_args(MACHINES["a3500"], media=MEDIA)
+
+    assert _value(args, "--model") == "A3000"
+    assert _value(args, "-r") == "/project/media/rom/forever/amiga-os-204-a3000.rom"
+    assert _value(args, "-0") == "/project/media/adf/2.04/workbench.adf"
+    assert _settings(args) == ["ntsc=true", "a3000mem_size=16"]
+
+
 def test_the_a3000_dev_boots_its_built_system_as_dh0_and_work_as_dh1():
     args = machine_args(MACHINES["a3000-dev"], media=MEDIA, root=Path("/project"))
 
@@ -64,8 +73,8 @@ def test_the_a3000_dev_060_runs_the_same_system_on_a_68060_with_its_fpu_and_mmu(
     assert "filesystem2=rw,DH0:System:/project/runs/systems/a3000-dev,0" in settings
 
 
-def test_amiga_llm_defines_its_four_machines():
-    assert list(MACHINES) == ["a500", "a3000", "a3000-dev", "a3000-dev-060"]
+def test_amiga_llm_defines_its_five_machines():
+    assert list(MACHINES) == ["a500", "a3000", "a3500", "a3000-dev", "a3000-dev-060"]
 
 
 @pytest.mark.parametrize("name", MACHINES)
