@@ -142,6 +142,11 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         "piano", help="build a Paula piano from RECIPE.toml: samples, scores, voice logs, WAVs"
     )
     piano.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    piano3500 = sub.add_parser(
+        "piano3500",
+        help="model the A3500's 68030 piano from RECIPE.toml: 16 mixed voices, voice logs, WAVs",
+    )
+    piano3500.add_argument("recipe", type=Path, metavar="RECIPE.toml")
     disks = sub.add_parser(
         "piano-disk", help="assemble the recipe's 68000 player onto a boot floppy per piece"
     )
@@ -265,6 +270,7 @@ COMMANDS = {
     "system": lambda args: _system(args),
     "exec": lambda args: _exec(args),
     "piano": lambda args: _piano(args.recipe),
+    "piano3500": lambda args: _piano3500(args.recipe),
     "piano-disk": lambda args: _piano_disk(args.recipe, args.out),
     "piano-survey": lambda args: _piano_survey(args),
     "piano-run": lambda args: _piano_run(args),
@@ -320,6 +326,25 @@ def _piano(recipe: Path) -> None:
             f"{name:<16} {piece['bytes']} score bytes, {piece['steals_per_minute']} steals/min, "
             f"stolen volume median {piece['stolen_volume_median']}"
         )
+
+
+def _piano3500(recipe: Path) -> None:
+    from .piano import build3500  # numpy and mido load only for this command
+
+    report = build3500.build(recipe)
+    memory = report["memory"]
+    print(f"piano3500 {len(report['samples'])} samples in {len(report['layers'])} layers")
+    print(
+        f"memory    {memory['total_bytes']} of {memory['budget_bytes']} bytes "
+        f"(samples {memory['samples_bytes_padded']}, headroom {memory['headroom_bytes']})"
+    )
+    for name, piece in report["pieces"].items():
+        print(
+            f"{name:<18} {piece['clips']['cut_while_held_per_minute']} cut while held/min, "
+            f"peak {piece['peak_dbfs']} dBFS, {piece['overflows']} overflows, "
+            f"{piece['seconds_to_render']} s"
+        )
+    print(f"done      in {report['seconds_total']} s")
 
 
 def _piano_disk(recipe: Path, out: Path | None) -> None:
