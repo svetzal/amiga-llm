@@ -8,7 +8,9 @@ Time runs in output samples at 27,965.2 Hz (see mixer.py), in blocks of
 2. handles the score's events that fall in the block, in score order, each
    at its own sample;
 3. mixes the block, voice by voice (mixer.py), splitting a voice's block
-   where a note starts or a cut's fade steps;
+   where a note starts or a cut's fade steps, into a 32-bit sum per side
+   and output sample; then shifts and clamps the sums to 16-bit output
+   values (mixer.output16);
 4. writes the block's record to the voice log (see "The voice log").
 
 So nothing is quantised to blocks except volume changes: a note starts at
@@ -47,8 +49,8 @@ set again from its volume and pan gains.
 The voice log (`log_bytes`), big-endian as the 68030 writes it. A header of
 LOG_HEADER_BYTES: the four bytes "P35L", version (word, 1), voices (word,
 16), samples a block (word, 512), a zero word, and the number of blocks
-(long). Then one record a block, of LOG_BLOCK_BYTES: the block's checksum
-(two longs, mixer.checksum) and one record of LOG_VOICE_BYTES for each
+(long). Then one record a block, of LOG_BLOCK_BYTES: the checksum of the
+block's 16-bit output values (two longs, mixer.checksum) and one record of LOG_VOICE_BYTES for each
 voice in order, as the voice is at the end of the block:
 
     key (byte, 0-87, 0xFF when free), sample (byte, 0xFF when silent),
@@ -161,7 +163,7 @@ class Voice:
 
 @dataclass
 class Result:
-    left: np.ndarray  # int16 sums, as the 68030's registers hold them
+    left: np.ndarray  # int16 output values, as the 68030's out step makes them
     right: np.ndarray
     log: bytes
     blocks: int
@@ -170,8 +172,9 @@ class Result:
     notes: int = 0
     restrikes: int = 0
     superseded: int = 0  # replaced while waiting for a fade, so never sounded
-    peak: int = 0  # largest true sum on either side, before any wrap
-    overflows: int = 0  # output samples whose true sum does not fit 16 bits
+    peak: int = 0  # largest true sum on either side, shifted to output units, before clamping
+    clamped: int = 0  # output values (both sides) the out step clamps
+    wraps: int = 0  # 32-bit sums whose true value does not fit 32 bits
 
 
 def decay_factor(db_per_s: float, block_hz: float = mixer.BLOCK_HZ) -> int:
@@ -237,7 +240,7 @@ class _State:
         self.steals: list[Steal] = []
         self.endings: list[Ending] = []
         self.notes = self.restrikes = self.superseded = 0
-        self.peak = self.overflows = 0
+        self.peak = self.clamped = self.wraps = 0
 
     def sounding(self) -> bool:
         return any(v.active or v.tone is not None for v in self.voices)
@@ -255,7 +258,8 @@ class _State:
             restrikes=self.restrikes,
             superseded=self.superseded,
             peak=self.peak,
-            overflows=self.overflows,
+            clamped=self.clamped,
+            wraps=self.wraps,
         )
 
     # 1. Decay
@@ -361,10 +365,12 @@ class _State:
         right = np.zeros(mixer.BLOCK, dtype=np.int64)
         for voice in self.voices:
             self.mix_voice(voice, begin, left, right)
-        self.peak = max(self.peak, int(np.abs(left).max()), int(np.abs(right).max()))
-        self.overflows += int(np.count_nonzero((left < -32768) | (left > 32767)))
-        self.overflows += int(np.count_nonzero((right < -32768) | (right > 32767)))
-        left16, right16 = mixer.wrap16(left), mixer.wrap16(right)
+        for true in (left, right):
+            self.peak = max(self.peak, int(np.abs(true >> mixer.OUTPUT_SHIFT).max()))
+            self.wraps += int(np.count_nonzero(mixer.wrap32(true) != true))
+        held_left, held_right = mixer.wrap32(left), mixer.wrap32(right)
+        self.clamped += mixer.clamped(held_left) + mixer.clamped(held_right)
+        left16, right16 = mixer.output16(held_left), mixer.output16(held_right)
         self.left.append(left16)
         self.right.append(right16)
         self.log += struct.pack(">LL", *mixer.checksum(left16, right16))

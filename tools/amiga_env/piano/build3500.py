@@ -127,8 +127,6 @@ def build(recipe_path: Path, clock: Callable[[], float] = time.monotonic) -> dic
     (out / "instrument.json").write_text(json.dumps(instrument_tables(piano), indent=2) + "\n")
     mixing = piano.mix_samples()
     worst = worst_case(piano, mixing)
-    if worst["overflows"]:
-        raise SystemExit(f"{recipe_path}: the worst case overflows 16 bits: {worst}")
     pieces = {}
     for piece in recipe.pieces:
         start = clock()
@@ -163,9 +161,11 @@ def build(recipe_path: Path, clock: Callable[[], float] = time.monotonic) -> dic
         "largest_step": round(max_step(piano) / mixer.ONE, 4),
         "memory": memory(piano, pieces, recipe),
         "worst_case": worst,
-        "clamping": "none: the 68030 adds with ADD.W and does not saturate",
+        "output_shift": mixer.OUTPUT_SHIFT,
         "peak_sum": max(p["peak_sum"] for p in pieces.values()),
-        "overflows": sum(p["overflows"] for p in pieces.values()),
+        "peak_dbfs": dbfs(max(p["peak_sum"] for p in pieces.values())),
+        "clamped": sum(p["clamped"] for p in pieces.values()),
+        "wraps": sum(p["wraps"] for p in pieces.values()),
         "seconds_to_prepare_samples": round(prepared - began, 1),
         "seconds_total": round(clock() - began, 1),
         "pieces": pieces,
@@ -298,8 +298,9 @@ def tables(
 def worst_case(piano: Piano, mixing: list[player3500.MixSample]) -> dict:
     """The loudest sum 16 adjacent keys make, all struck at velocity 127 at once.
 
-    No piece plays this; it bounds what a real one can reach, so a recipe
-    whose worst case overflows is refused.
+    No piece plays this. It shows how far past full scale a performance could
+    go at this volume: how many output values it clamps, and whether a 32-bit
+    sum wraps.
     """
     worst = {"peak_sum": -1}
     for low in range(len(piano.instrument.sounds) - player3500.VOICES + 1):
@@ -312,7 +313,8 @@ def worst_case(piano: Piano, mixing: list[player3500.MixSample]) -> dict:
                 "keys": f"{low + samples.LOWEST_KEY}-{low + samples.LOWEST_KEY + 15}",
                 "peak_sum": result.peak,
                 "peak_dbfs": dbfs(result.peak),
-                "overflows": result.overflows,
+                "clamped": result.clamped,
+                "wraps": result.wraps,
             }
     return worst
 
@@ -406,7 +408,8 @@ def play_report(result: player3500.Result, length_ms: int, full_volume: int) -> 
         ),
         "peak_sum": result.peak,
         "peak_dbfs": dbfs(result.peak),
-        "overflows": result.overflows,
+        "clamped": result.clamped,
+        "wraps": result.wraps,
     }
 
 

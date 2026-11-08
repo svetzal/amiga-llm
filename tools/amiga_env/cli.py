@@ -341,9 +341,14 @@ def _piano3500(recipe: Path) -> None:
     for name, piece in report["pieces"].items():
         print(
             f"{name:<18} {piece['clips']['cut_while_held_per_minute']} cut while held/min, "
-            f"peak {piece['peak_dbfs']} dBFS, {piece['overflows']} overflows, "
+            f"peak {piece['peak_dbfs']} dBFS, {piece['clamped']} clamped, "
             f"{piece['seconds_to_render']} s"
         )
+    worst = report["worst_case"]
+    print(
+        f"worst     keys {worst['keys']} at velocity 127: {worst['peak_dbfs']} dBFS, "
+        f"{worst['clamped']} clamped, {worst['wraps']} wrapped"
+    )
     print(f"done      in {report['seconds_total']} s")
 
 

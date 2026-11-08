@@ -105,3 +105,16 @@ and MULS.W) is the design: it is cheaper than way A on the 68030 and keeps
 Pending the real machine. If its worst 16-voice block is under 50%, the
 A3500 piano is built on software mixing. The chip RAM writes (the fixed
 8.6%) can be cut by writing words or longwords instead of bytes.
+
+### 2026-11-07: way B changed after these runs
+
+EXP-006, the A3500 piano, needs more headroom than a 16-bit sum gives, so
+way B in `mixbench.s` changed to the piano's mixer: MULS.W, then ADD.L of
+the 32-bit product to a longword sum (no SWAP), and an out step that shifts
+each sum right by 14 and clamps it to 16 bits before the 14-bit split. The
+instruction count per voice-sample is the same. The sums buffer is twice
+the size, and the out step does more work per output sample. Way A is
+unchanged.
+
+The emulator numbers above were measured before this change. They are not
+yet measured again; the real machine run will measure the changed program.

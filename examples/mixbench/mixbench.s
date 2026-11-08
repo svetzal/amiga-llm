@@ -23,12 +23,15 @@
 ;   A  8-bit samples and a volume table: one 256-word table per volume
 ;      level (65 levels, 33 KB), indexed by the sample byte. The voice
 ;      keeps 8 bits of detail at any volume, as on a Paula channel.
-;   B  16-bit samples and MULS.W by the volume, then SWAP.
+;   B  16-bit samples and MULS.W by the volume, then ADD.L of the 32-bit
+;      product to a longword sum (the A3500 piano's mixer, EXP-006).
 ;
-; Each side sums into a 16-bit word per output sample, with headroom for 8
-; voices at full volume, and goes out as 14 bits: the high byte on a channel
-; at volume 64 and the next 6 bits on a channel at volume 1 (left: channels
-; 0 and 3; right: 1 and 2).
+; Way A sums each side into a 16-bit word per output sample, with headroom
+; for 8 voices at full volume. Way B sums into a longword per output sample;
+; its out step shifts each sum right by 14 and clamps it to 16 bits. Either
+; way the sum goes out as 14 bits: the high byte on a channel at volume 64
+; and the next 6 bits on a channel at volume 1 (left: channels 0 and 3;
+; right: 1 and 2).
 ;
 ; How it is timed. Paula plays blocks of 512 samples at period 128 (27,965
 ; Hz on NTSC, 18.3 ms a block) from two buffers in chip RAM. Channel 0's
@@ -108,7 +111,7 @@ VO_FRAC         equ 8           ; fraction, of 65,536
 VO_STEPF        equ 10
 VO_STEPI        equ 12
 VO_TABLE        equ 16          ; A: the middle of its level's table
-VO_VOL          equ 20          ; B: MULS.W factor, then SWAP
+VO_VOL          equ 20          ; B: MULS.W factor
 VO_ACC          equ 22          ; its side's sums
 VO_BASEA        equ 26
 VO_BASEB        equ 30
@@ -285,8 +288,8 @@ SAMPLES_A       equ 0
 SAMPLES_B       equ SAMPLES_A+VOICES*VOICE_BYTES
 TABLES          equ SAMPLES_B+VOICES*VOICE_BYTES*2
 ACC_L           equ TABLES+65*512
-ACC_R           equ ACC_L+N*2
-DATA_BYTES      equ ACC_R+N*2
+ACC_R           equ ACC_L+N*4       ; longwords for way B, words for way A
+DATA_BYTES      equ ACC_R+N*4
 
 ; make_data: the waveforms, the tables and the voices.
 make_data:
@@ -352,7 +355,7 @@ make_data:
         move.l  d0,VO_STEPI(a1)
         lea     TABLES+LEVEL*512+256(a0),a3
         move.l  a3,VO_TABLE(a1)
-        move.w  #LEVEL<<7,VO_VOL(a1)
+        move.w  #LEVEL<<5,VO_VOL(a1)    ; the same level as LEVEL<<7 and SWAP
         lea     ACC_L(a0),a3
         btst    #0,d7
         beq.s   .left
@@ -569,13 +572,13 @@ handler:
         lea     ACC_L(a0),a2
         move.l  BUFFER(a5),a3           ; channel 0
         lea     3*N(a3),a1              ; channel 3
-        bsr     out14
+        bsr     out
         move.l  FASTMEM(a5),a0
         lea     ACC_R(a0),a2
         move.l  BUFFER(a5),a3
         lea     2*N(a3),a1              ; channel 2
         lea     N(a3),a3                ; channel 1
-        bsr     out14
+        bsr     out
 
         move.l  TIMERBASE(a5),a6
         lea     T1(a5),a0
@@ -617,19 +620,23 @@ mix_a:
         dbra    d7,.turn
         rts
 
-; Way B, as way A with 16-bit samples and d6 the volume.
+; Way B, as way A with 16-bit samples, d6 the volume and longword sums.
 mix_b:
 .turn:
         rept    4
         move.w  (a0,d0.l*2),d4
         muls.w  d6,d4
-        swap    d4
-        add.w   d4,(a2)+
+        add.l   d4,(a2)+
         add.w   d1,d2
         addx.l  d3,d0
         endr
         dbra    d7,.turn
         rts
+
+; out: the out step for the test's way, from the sums at a2.
+out:    cmp.l   #'A',WAY(a5)
+        beq.s   out14
+        bra.s   out14l
 
 ; out14: N sums at a2 (cleared as read) -> high bytes at a3, low 6 bits at a1.
 out14:
@@ -637,6 +644,31 @@ out14:
 .s:     move.w  (a2),d0
         clr.w   (a2)+
         move.w  d0,d1
+        asr.w   #8,d0
+        move.b  d0,(a3)+
+        lsr.b   #2,d1
+        move.b  d1,(a1)+
+        dbra    d7,.s
+        rts
+
+; out14l: N longword sums at a2 (cleared as read), each shifted right by 14
+; and clamped to 16 bits -> high bytes at a3, low 6 bits at a1.
+out14l:
+        move.w  #N-1,d7
+        moveq   #14,d3
+        move.l  #32767,d4
+        move.l  #-32768,d5
+.s:     move.l  (a2),d0
+        clr.l   (a2)+
+        asr.l   d3,d0
+        cmp.l   d4,d0
+        ble.s   .nothigh
+        move.l  d4,d0
+.nothigh:
+        cmp.l   d5,d0
+        bge.s   .split
+        move.l  d5,d0
+.split: move.w  d0,d1
         asr.w   #8,d0
         move.b  d0,(a3)+
         lsr.b   #2,d1

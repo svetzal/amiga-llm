@@ -11,11 +11,10 @@ Samples are signed 16-bit, in fast RAM. A voice reads its sample at a
 bits. For each output sample and each voice, in this order:
 
 1. fetch the sample at the phase's integer part (no interpolation);
-2. for each side, MULS.W the sample by the side's 16-bit multiplier and
-   SWAP: the high word of the 32-bit product, which is the product divided
-   by 65536 and rounded down (`(value * multiplier) >> 16`);
-3. ADD.W that to the side's 16-bit sum, which wraps at 16 bits;
-4. advance the phase by the voice's 16.16 step: ADD.W of the fractions,
+2. for each side, MULS.W the sample by the side's multiplier (0 to 32,767)
+   and ADD.L the 32-bit product to the side's 32-bit sum for that output
+   sample, in fast RAM; the sum wraps at 32 bits;
+3. advance the phase by the voice's 16.16 step: ADD.W of the fractions,
    then ADDX.L of the integer parts.
 
 A voice's multipliers are `volume * gain >> 16` for each side (one MULU.W a
@@ -30,7 +29,14 @@ samples past the end. The 68030 copies PAD samples of the loop after each
 sample's end (going round the loop again when it is shorter than PAD), so
 the inner loop never checks a bound.
 
-Output is 14-bit stereo. Each side's 16-bit sum S goes out on two Paula
+Once a block, each side's 32-bit sums become 16-bit values: shifted right
+by OUTPUT_SHIFT (arithmetic, so rounded down) and clamped to -32,768 to
+32,767 (`output16`). A multiplier is a signed word, so a voice can add at
+most 32767 * 32767 to a sum; the shift of 14, two less than taking the high
+word, lets a piece reach full scale. A sum wraps at 32 bits only above four
+times full scale.
+
+Output is 14-bit stereo. Each side's 16-bit value S goes out on two Paula
 channels: its high byte (S >> 8) on a channel at volume 64, and its bits 7
 to 2 ((S >> 2) & 63) on a channel at volume 1. Paula adds them: 64 * high
 + low = S >> 2. Left is channels 0 and 3, right is channels 1 and 2.
@@ -50,6 +56,7 @@ BLOCK_HZ = MIX_RATE / BLOCK  # 54.6 blocks a second
 ONE = 1 << 16  # 1.0 in 16.16
 MAX_STEP = 2 * ONE  # every key's step is below this
 PAD = BLOCK * MAX_STEP // ONE  # samples the 68030 copies after each sample's end
+OUTPUT_SHIFT = 14  # a 32-bit sum's shift to a 16-bit output value
 GAIN_ONE = 65535  # a pan gain of 1.0
 LEFT_CHANNELS, RIGHT_CHANNELS = (0, 3), (1, 2)  # (volume 64, volume 1) a side
 
@@ -113,19 +120,30 @@ def wrap_phase(phase: int, length: int, loop_start: int) -> int:
 def mix_run(
     data: np.ndarray, phase: int, step_: int, left: int, right: int, count: int
 ) -> tuple[np.ndarray, np.ndarray, int]:
-    """One voice's contribution to `count` output samples, and its phase after them.
+    """One voice's products for `count` output samples, and its phase after them.
 
-    Contributions are int64 so the caller can see the true sums; wrap them
-    with `wrap16` for what the 68030's ADD.W gives.
+    Products are int64 so the caller can see the true sums; `wrap32` gives
+    what the 68030's ADD.L leaves.
     """
     positions = phase + step_ * np.arange(count, dtype=np.int64)
     values = data[positions >> 16].astype(np.int64)
-    return values * left >> 16, values * right >> 16, phase + step_ * count
+    return values * left, values * right, phase + step_ * count
 
 
-def wrap16(values: np.ndarray) -> np.ndarray:
-    """Sums as 16-bit registers hold them: wrapped, not clamped."""
-    return ((values + 32768) % 65536 - 32768).astype(np.int16)
+def wrap32(values: np.ndarray) -> np.ndarray:
+    """Sums as 32-bit longwords hold them: wrapped."""
+    return (values + 2**31) % 2**32 - 2**31
+
+
+def output16(sums: np.ndarray) -> np.ndarray:
+    """A side's 32-bit sums as 16-bit output values: shifted, then clamped."""
+    return np.clip(sums >> OUTPUT_SHIFT, -32768, 32767).astype(np.int16)
+
+
+def clamped(sums: np.ndarray) -> int:
+    """How many of a side's 32-bit sums `output16` clamps."""
+    shifted = sums >> OUTPUT_SHIFT
+    return int(np.count_nonzero((shifted < -32768) | (shifted > 32767)))
 
 
 def split14(sums: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -140,7 +158,7 @@ def paula_output(high: np.ndarray, low: np.ndarray) -> np.ndarray:
 
 
 def checksum(left: np.ndarray, right: np.ndarray) -> tuple[int, int]:
-    """A Fletcher-style checksum of a block's sums, for the voice log.
+    """A Fletcher-style checksum of a block's output values, for the voice log.
 
     The words are taken as unsigned, left then right for each sample in turn.
     a is their sum and b the sum of the running values of a, both modulo

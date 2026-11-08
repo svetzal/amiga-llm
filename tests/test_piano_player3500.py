@@ -50,9 +50,9 @@ def off(ms, key):
     return Event(ms, "off", key)
 
 
-def contribution(volume=8000, gain=HALF_GAIN):
-    """What one voice adds to a side for each output sample."""
-    return LEVEL * mixer.multiplier(volume, gain) >> 16
+def contribution(voices=1, volume=8000, gain=HALF_GAIN):
+    """A side's output value with this many voices sounding."""
+    return voices * LEVEL * mixer.multiplier(volume, gain) >> mixer.OUTPUT_SHIFT
 
 
 def blocks(result):
@@ -89,7 +89,7 @@ class TestChoosingAVoice:
         result = play([on(0, k) for k in range(VOICES)], instrument(), samples())
 
         assert result.steals == []
-        assert result.left[0] == VOICES * contribution()
+        assert result.left[0] == contribution(VOICES)
 
     def test_a_seventeenth_note_steals_a_key_up_voice_before_a_quieter_held_one(self):
         events = [on(0, k, 100) for k in range(VOICES)]
@@ -125,7 +125,7 @@ class TestCutting:
 
         cut = mixer.sample_of_ms(100)
         full = mixer.multiplier(8000, HALF_GAIN)
-        expected = [LEVEL * mixer.faded(full, q) >> 16 for q in (4, 3, 2, 1)]
+        expected = [LEVEL * mixer.faded(full, q) >> mixer.OUTPUT_SHIFT for q in (4, 3, 2, 1)]
         heard = [result.left[cut - 1]] + [result.left[cut + i * FADE_STEP] for i in (0, 1, 2)]
         assert heard == expected
         assert result.left[cut + 3 * FADE_STEP] == contribution()
@@ -136,7 +136,9 @@ class TestCutting:
 
         cut = mixer.sample_of_ms(cut_ms)
         assert cut + 3 * FADE_STEP > mixer.BLOCK
-        assert result.left[cut + 2 * FADE_STEP] == LEVEL * mixer.faded(4000, 1) >> 16
+        assert (
+            result.left[cut + 2 * FADE_STEP] == LEVEL * mixer.faded(4000, 1) >> mixer.OUTPUT_SHIFT
+        )
         assert result.left[cut + 3 * FADE_STEP] == contribution()
 
     def test_a_note_for_a_waiting_voice_replaces_the_waiting_note(self):
@@ -194,17 +196,22 @@ class TestPanAndSums:
 
         assert np.array_equal(result.left, result.right)
 
-    def test_a_sum_that_does_not_fit_16_bits_wraps_and_is_counted(self):
-        events = [on(0, k) for k in range(VOICES)]
+    LOUD = staticmethod(lambda: instrument(volume=32767, pan=(65535, 65535), attack_blocks=FOREVER))
+    PRODUCT = 32767 * mixer.multiplier(32767, 65535)
 
-        loud = instrument(volume=32767, pan=(65535, 65535), attack_blocks=FOREVER)
+    def test_an_output_value_past_full_scale_is_clamped_and_counted(self):
+        result = play([on(0, 1), on(0, 2)], self.LOUD(), samples(level=32767))
 
-        result = play(events, loud, samples(level=32767))
+        assert result.peak == 2 * self.PRODUCT >> mixer.OUTPUT_SHIFT
+        assert int(result.left[0]) == 32767
+        assert result.clamped > 0
+        assert result.wraps == 0
 
-        true_sum = VOICES * (32767 * mixer.multiplier(32767, 65535) >> 16)
-        assert result.peak == true_sum
-        assert result.overflows > 0
-        assert int(result.left[0]) == (true_sum + 32768) % 65536 - 32768
+    def test_a_sum_past_32_bits_wraps_and_is_counted(self):
+        result = play([on(0, k) for k in range(3)], self.LOUD(), samples(level=32767))
+
+        assert result.wraps > 0
+        assert int(result.left[0]) == mixer.output16(mixer.wrap32(np.array([3 * self.PRODUCT])))[0]
 
 
 class TestLog:

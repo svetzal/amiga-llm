@@ -64,16 +64,16 @@ class TestPan:
 class TestMixRun:
     DATA = np.array([100, -100, 32767, -32768, 7, -7], dtype=np.int16)
 
-    def test_products_take_the_high_word_rounded_down(self):
-        left, right, _ = mixer.mix_run(self.DATA, 0, mixer.ONE, 0x4000, 0x8000 - 1, 6)
+    def test_a_run_gives_each_samples_full_32_bit_product(self):
+        left, right, _ = mixer.mix_run(self.DATA, 0, mixer.ONE, 0x4000, 0x7FFF, 6)
 
-        assert left.tolist() == [25, -25, 8191, -8192, 1, -2]
-        assert right.tolist() == [49, -50, 16383, -16384, 3, -4]
+        assert left.tolist() == [v * 0x4000 for v in self.DATA.tolist()]
+        assert right.tolist() == [v * 0x7FFF for v in self.DATA.tolist()]
 
     def test_the_phase_fraction_carries_into_the_index(self):
-        left, _, phase = mixer.mix_run(self.DATA, 0, 0xC000, 0x7FFF, 0, 4)
+        left, _, phase = mixer.mix_run(self.DATA, 0, 0xC000, 1, 0, 4)
 
-        assert left.tolist() == [49, 49, -50, 16383]  # phases 0, 0.75, 1.5 and 2.25
+        assert left.tolist() == [100, 100, -100, 32767]  # phases 0, 0.75, 1.5 and 2.25
         assert phase == 4 * 0xC000
 
     def test_a_run_reads_past_the_end_into_the_pad(self):
@@ -87,13 +87,23 @@ class TestMixRun:
         assert mixer.wrap_phase((10 << 16) + 5, 10, 6) == (6 << 16) + 5
         assert mixer.wrap_phase(17 << 16, 10, 6) == 9 << 16  # more than one loop past
 
-    def test_sums_wrap_as_16_bit_registers_do(self):
-        assert mixer.wrap16(np.array([32767, 32768, -32769, 70000])).tolist() == [
-            32767,
-            -32768,
-            32767,
-            4464,
-        ]
+    def test_sums_wrap_as_32_bit_longwords_do(self):
+        sums = np.array([2**31 - 1, 2**31, -(2**31) - 1, 2**32 + 5])
+
+        assert mixer.wrap32(sums).tolist() == [2**31 - 1, -(2**31), 2**31 - 1, 5]
+
+
+class TestOutput:
+    def test_a_sum_is_shifted_right_by_14_rounding_down(self):
+        sums = np.array([0, 1 << 14, (1 << 14) - 1, -1, -(1 << 14) - 1])
+
+        assert mixer.output16(sums).tolist() == [0, 1, 0, -1, -2]
+
+    def test_a_sum_past_full_scale_is_clamped_and_counted(self):
+        sums = np.array([32767 << 14, 32768 << 14, -(32768 << 14), (-32769) << 14, 2**31 - 1])
+
+        assert mixer.output16(sums).tolist() == [32767, 32767, -32768, -32768, 32767]
+        assert mixer.clamped(sums) == 3
 
 
 class TestFourteenBits:
