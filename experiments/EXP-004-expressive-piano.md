@@ -1347,6 +1347,11 @@ recordings' own lead-in.
 `runs/video/youtube-description.generated.txt` is the generated draft;
 Stacey edits `youtube-description.txt`, which the command never writes.
 
+Published 2026-11-08 as "Expressive Piano Playthrough, Paula Optimized,
+Amiga 500": https://youtu.be/yBTHO0fcXG8. Stacey wrote the description on
+YouTube; `runs/video/youtube-description.txt` is now a copy of that text,
+with the Schubert chapter corrected to "D. 960, III" (the next entry).
+
 Open:
 
 - Two boots of the same disk opened the screen 4 frames apart. Each
@@ -1383,7 +1388,9 @@ tick for tick up to the switch, each line gold in 17 to 33 ms; the player
 
 ### 2026-11-08: a listener's notes, the Schubert, and the attacks (host tier)
 
-A listener wrote to Stacey after the videos: "Some work better than
+A listener wrote to Stacey after watching the A500 video
+(https://youtu.be/yBTHO0fcXG8), so these notes are about the four-voice
+player: "Some work better than
 others." The Haydn and Mozart were the most successful, the Debussy a
 surprise, the Chopin lacking, and "is it the attack on the sound that
 causes runs to 'stumble' in places?" The listener also named the Schubert:

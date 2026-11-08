@@ -759,6 +759,12 @@ draft from `examples/piano3500/video-description.txt`; Stacey edits a copy
 named `youtube-description.txt`, which the command never writes. I looked
 at master frames at 0:30, 10:00, 25:00 and 40:50.
 
+Published 2026-11-08 as "Expressive Piano Playthrough, CPU Mixing, A3000":
+https://youtu.be/Gj2lQXOR1cc. Stacey wrote the description on YouTube from
+the draft, with her own account of the design; `runs/video3500/youtube-description.txt`
+is a copy of that text, with the Schubert chapter corrected to "D. 960, III"
+(EXP-004, 2026-11-08). The picture still shows "D. 962" until the next build.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
