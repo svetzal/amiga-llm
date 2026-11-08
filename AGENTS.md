@@ -86,18 +86,18 @@ piano with several velocity layers and software-mixed voices. Boot it with
 
 | Fact | Value | Source |
 | --- | --- | --- |
-| CPU and FPU | 68030 at 25 MHz, with an FPU | Stacey, 2026-11-07 |
+| CPU and FPU | 68030 at 25 MHz and 68882 | Stacey, 2026-11-07 |
 | Chipset | ECS | Stacey, 2026-11-07 |
 | Chip RAM | 2 MB | Stacey, 2026-11-07 |
-| Fast RAM | 16 MB | Stacey, 2026-11-07 |
+| Fast RAM | 16 MB, on the motherboard | Stacey, 2026-11-07 |
 | Video standard | NTSC | Stacey, 2026-11-07 |
-| Kickstart | 2.04 (`media/rom/forever/amiga-os-204-a3000.rom`, 37.175) | Stacey, 2026-11-07 |
+| Kickstart | 2.04 in ROM (`media/rom/forever/amiga-os-204-a3000.rom`, 37.175) | Stacey, 2026-11-07 |
+| Drives | a floppy drive, and a BlueSCSI (SD card disk images) on the built-in SCSI port; no working SCSI hard disk | Stacey, 2026-11-07 |
 | Workbench (profile) | 2.04 (`media/adf/2.04/workbench.adf`) | follows the Kickstart |
 
-Not yet known: the FPU's model (the profile uses the A3000's 68882), where
-the 16 MB sits (the profile puts it on the motherboard), the drives, and
-whether the Kickstart is in ROM or loaded from disk as on early A3000s.
-Amiberry's 68030 timing, with its caches, is approximate: timing claims for
+Programs for it are prototyped as if they boot from the BlueSCSI: a hard
+disk image in the emulator, which an RDB image (`amiga-env system export`)
+can become on its SD card. No system for it is built yet. Amiberry's 68030 timing, with its caches, is approximate: timing claims for
 this machine are checked on the real one.
 
 ### a3000-dev: the A3000 as a development machine
