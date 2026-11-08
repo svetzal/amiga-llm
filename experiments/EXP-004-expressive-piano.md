@@ -1380,3 +1380,40 @@ lit, with the CIA bit 0, 1, 0, and the voice traces still cyan above it
 --switch-after-s 10`: Debussy's voice log identical, BWV 846's identical
 tick for tick up to the switch, each line gold in 17 to 33 ms; the player
 17.6 to 17.8% of the CPU, 65.7 to 66.0% with the scopes.
+
+### 2026-11-08: a listener's notes, the Schubert, and the attacks (host tier)
+
+A listener wrote to Stacey after the videos: "Some work better than
+others." The Haydn and Mozart were the most successful, the Debussy a
+surprise, the Chopin lacking, and "is it the attack on the sound that
+causes runs to 'stumble' in places?" The listener also named the Schubert:
+"the third movement of the B-flat D. 960."
+
+**The Schubert.** MAESTRO's catalogue gives the 2009 recital
+`MIDI-Unprocessed_21_R2_2009_01_ORIG` four tracks, labelled "D. 960",
+"D. 961", "D. 962" and "D. 963" (tracks 01 to 04). They are the four
+movements of D. 960, numbered as if each were its own work. This disk plays
+track 03, the third movement (Scherzo), 216 s. The title is now "Schubert
+Sonata D. 960, III" in `examples/piano/piano.toml`, for both disks. Its
+name (`schubert-d962`) stays, so the run files keep theirs. Both videos
+recorded so far show the old label.
+
+**The attacks.** Each sample starts 32 samples before the recording first
+passes 1% of its peak (`samples.trim_silence`). That threshold finds the
+start of the sound, not the hammer's moment, and the rise after it differs
+from recording to recording. Measured over each sample's first 0.3 s (2 ms
+envelope; the time to half the attack's peak):
+
+| Samples | Time to half the peak, C4 to C6 (roots 60 to 84) | Whole keyboard |
+| --- | --- | --- |
+| EXP-004, layer v8 | 2.5 to 11.2 ms; neighbouring roots differ by up to 7.7 ms | 2.5 to 34.3 ms |
+| EXP-006, 8 layers | 1.8 to 20.1 ms; at one root the layers differ by up to 18.3 ms (C6) | 1.8 to 34.7 ms |
+
+So a run that crosses from one root's sample to the next (every 3
+semitones), or on the A3500 from one layer to the next, starts its notes
+unevenly by several milliseconds that the pianist did not play. On the A500
+a note that takes a sounding voice is also 5 ms late (the fade), and the
+Chopin nocturnes take the most voices. That these are the stumble the
+listener hears is inferred, not tested. A test: trim every sample so its
+attack reaches half its peak at the same time, render a run both ways, and
+listen.

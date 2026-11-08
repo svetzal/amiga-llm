@@ -81,7 +81,9 @@ off = "311"   # while it is off: an unlit LED
 # `amiga-env piano-survey`; see EXP-004, "More pieces". The titles are written
 # here, not taken from MAESTRO's catalogue, which has slips: BWV 846 is in the
 # Well-Tempered Clavier Book I (MAESTRO says WTC II), Haydn's says "in in".
-# Schubert's "D. 962" is MAESTRO's and is not verified (see EXP-004).
+# Schubert: MAESTRO labels this recording "D. 962", but it numbers the four
+# movements of one 2009 recital of D. 960 as D. 960 to D. 963; this is the
+# third movement (EXP-004). The name stays as it was, so run files keep theirs.
 [[piece]]
 name = "nocturne-op9-2"
 title = "Chopin  Nocturne Op. 9 No. 2"
@@ -119,7 +121,7 @@ midi = "maestro/maestro-v3.0.0/2008/MIDI-Unprocessed_09_R1_2008_01-05_ORIG_MID--
 
 [[piece]]
 name = "schubert-d962"
-title = "Schubert  Sonata D. 962"
+title = "Schubert  Sonata D. 960, III"
 midi = "maestro/maestro-v3.0.0/2009/MIDI-Unprocessed_21_R2_2009_01_ORIG_MID--AUDIO_21_R2_2009_21_R2_2009_03_WAV.midi"
 
 [[piece]]
