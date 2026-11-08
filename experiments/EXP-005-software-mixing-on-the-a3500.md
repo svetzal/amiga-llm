@@ -96,6 +96,12 @@ and reads the six lines off the screen.
 
 ## Decision
 
+2026-11-07: the A3500 is off the bench. Stacey chose to build the A3500
+piano on the emulator's numbers and run this test on the real machine when
+it is back (tracked in her Operations to-do list). Way B (16-bit samples
+and MULS.W) is the design: it is cheaper than way A on the 68030 and keeps
+16 bits of detail. The rest of this section stands until the real run.
+
 Pending the real machine. If its worst 16-voice block is under 50%, the
 A3500 piano is built on software mixing. The chip RAM writes (the fixed
 8.6%) can be cut by writing words or longwords instead of bytes.
