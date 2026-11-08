@@ -249,6 +249,82 @@ s for the 240 samples, then 0.4 to 1.4 s a piece.
 4. The first part holds by construction (`tests/test_piano_layers.py`). The
    tone is for the ear.
 
+### 2026-11-07: more headroom, 32-bit sums (host tier)
+
+The first results left the pieces at -16 to -26 dBFS, about 10 to 11.5 of
+the 14 output bits, because `full_volume` was sized for 16 adjacent keys at
+velocity 127. The coordinator asked for this change, which costs the 68030
+nothing per voice-sample:
+
+- The mixer has no SWAP. Each MULS.W product is added with ADD.L to a
+  32-bit sum per output sample and side. With the pan it is still two MULS
+  and two adds a voice-sample.
+- Once per output sample and side, the out step shifts the sum right by 14
+  and clamps it to 16 bits, then makes the 14-bit split as before. The model
+  does exactly that and counts the clamped values (`mixer.output16`).
+
+Two facts changed the request a little:
+
+- It asked for the sum's high word (a shift of 16). A MULS.W multiplier is
+  a signed word, at most 32,767, so a voice adds at most 16,383 to the high
+  word. BWV 846 needed about 5.6 times its old level, which is a
+  `full_volume` of about 80,000. That is not possible. A shift of 14 gives
+  the two bits of gain that are missing.
+- It said a 32-bit sum cannot overflow with 16 voices. It can: one product
+  is up to 2^30, and 16 of them come to 2^34. A sum wraps only above four
+  times full scale (+12 dB). No piece comes near that, but the worst case
+  does. The model counts wraps as well.
+
+How `full_volume` was chosen: a render at 14,336 with the new mixer peaked at
+20,737 (BWV 846, -4.0 dBFS). For a peak of -1 dBFS (29,205):
+14,336 * 29,205 / 20,737 = 20,190. At 20,190 BWV 846 peaks at 29,204.
+
+| Piece | Peak | Peak, dBFS | Clamped | Wrapped | Cut while held a minute | Render, s |
+| --- | --- | --- | --- | --- | --- | --- |
+| Nocturne Op. 9 No. 2 | 22,302 | -3.3 | 0 | 0 | 154.4 | 1.4 |
+| BWV 846 | 29,204 | -1.0 | 0 | 0 | 0.3 | 1.0 |
+| BWV 802 | 11,630 | -9.0 | 0 | 0 | 0.0 | 0.5 |
+| Scarlatti K. 145 | 28,815 | -1.1 | 0 | 0 | 8.7 | 0.9 |
+| Haydn Hob. XVI:23 | 21,239 | -3.8 | 0 | 0 | 6.6 | 0.8 |
+| Mozart K. 333 | 16,607 | -5.9 | 0 | 0 | 5.0 | 1.3 |
+| Beethoven Op. 31 No. 3 | 28,156 | -1.3 | 0 | 0 | 51.4 | 1.5 |
+| Schubert D. 962 | 28,196 | -1.3 | 0 | 0 | 5.5 | 1.0 |
+| Nocturne in C# minor | 18,244 | -5.1 | 0 | 0 | 73.9 | 1.2 |
+| Debussy, Des pas sur la neige | 9,157 | -11.1 | 0 | 0 | 15.3 | 0.9 |
+
+No piece clamps. The worst case is now a report, not a refusal. The 16 keys
+MIDI 77 to 92 struck at velocity 127 at once would reach 172,144, 14.4 dB
+over full scale. The out step clamps 1,879 values, and 4 sums wrap at 32
+bits. A wrapped sum comes out with the wrong sign: a click. No performance
+in MAESTRO is likely to do this, but it is possible.
+
+The clip counts hardly change. The volume scale changed and the stop level
+(volume 8) did not, so notes ring a little longer relative to full: the
+C-sharp minor nocturne goes from 73.4 to 73.9 cuts a minute. All ten pieces
+together: 33.7 cut while held a minute, 30.5 of them restrikes and 3.2
+steals, 20.8 audible.
+
+Which measure. The counts in these tables are `clips.py`'s: every steal and
+restrike of a note its key or the pedal still held, at any volume ("cut
+while held"), and the same at volume 4/64 of full or more ("audible"). The
+conversation's sweep (49.0 a minute at 4 voices to 1.3 at 16) counted only
+steal-key and steal-pedal endings at Paula volume 4 or more, with
+`player.py`'s rules and EXP-004's samples. On that measure this model gives
+0.8 a minute (31 steals in 39.5 minutes).
+
+The renders in `runs/exp006/` are this version, louder than the first by
+the change in level. The build took 16.5 s: 5.1 s for the samples, then 0.5
+to 1.5 s a piece.
+
+EXP-005's `mixbench.s` way B now runs the same inner loop and out step, so
+its timing test measures what the piano will run (see EXP-005).
+
+#### Where the hypotheses stand
+
+3. Changed design, supported at the host tier: the sums are 32-bit, and the
+   out step clamps. No piece clamps or wraps. A worst case far louder than
+   any piece clamps, and wraps only at the extreme.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
@@ -270,9 +346,12 @@ For each block, in this order:
    (`m * q >> 2`), then the new tone starts at phase 0.
 3. Mixing. At the block's start, bring each tone's phase back round its
    loop (subtract the loop length while the integer part is at or past the
-   end). Then each voice in runs, split where a change falls.
-4. The output: the high byte of each sum to channels 0 (left) and 1 (right)
-   at volume 64, bits 7 to 2 to channels 3 (left) and 2 (right) at volume 1.
+   end). Then each voice in runs, split where a change falls. Each product
+   goes into a 32-bit sum (ADD.L, which wraps).
+4. The output: each sum shifted right by 14 and clamped to 16 bits. Its high
+   byte goes to channels 0 (left) and 1 (right) at volume 64, its bits 7 to
+   2 to channels 3 (left) and 2 (right) at volume 1. The log's checksum is
+   of these 16-bit values.
 
 Its data, in `runs/exp006/`:
 
@@ -284,7 +363,7 @@ Its data, in `runs/exp006/`:
 - `<piece>.score`: EXP-004's score stream, unchanged.
 
 CPU: EXP-005 measured about 1.1% of the CPU a voice with one MULS and one
-sum. The pan adds a MULS, a SWAP and an ADD a voice-sample. If that doubles
+sum. The pan adds a MULS and an ADD.L a voice-sample. If that doubles
 the per-voice cost, 16 voices and EXP-005's fixed 8.6% come to about 44%.
 That is an estimate, not a measurement. `pan_width = 0` is the fallback.
 
