@@ -57,22 +57,31 @@ def cause(ending: Ending, released: int) -> str:
     return f"{ending.cause}-held"
 
 
-def report(events: Sequence[Event], endings: Sequence[Ending], length_ms: int) -> dict:
-    """Counts of note endings by cause, per piece and per minute."""
+def report(
+    events: Sequence[Event],
+    endings: Sequence[Ending],
+    length_ms: int,
+    audible: int = AUDIBLE_VOLUME,
+) -> dict:
+    """Counts of note endings by cause, per piece and per minute.
+
+    A cut counts as audible from `audible` up, in the units of Ending.volume
+    (Paula volume for the A500 player).
+    """
     released = release_ms(events)
     minutes = max(length_ms, 1) / 60000
     counts: Counter[str] = Counter()
-    audible = 0
+    loud = 0
     for ending in endings:
         name = cause(ending, released[ending.note])
         counts[name] += 1
-        audible += name in CUTS and ending.volume >= AUDIBLE_VOLUME
+        loud += name in CUTS and ending.volume >= audible
     held = sum(counts[name] for name in CUTS)
     return {
         "endings": dict(sorted(counts.items())),
         "endings_per_minute": {k: round(v / minutes, 1) for k, v in sorted(counts.items())},
         "cut_while_held": held,
         "cut_while_held_per_minute": round(held / minutes, 1),
-        "cut_while_held_at_volume_4_up": audible,
-        "cut_while_held_at_volume_4_up_per_minute": round(audible / minutes, 1),
+        "cut_while_held_at_volume_4_up": loud,
+        "cut_while_held_at_volume_4_up_per_minute": round(loud / minutes, 1),
     }

@@ -29,6 +29,7 @@ class TestParse:
             lovel=57,
             hivel=64,
             ampeg_release=1.0,
+            amp_veltrack=73.0,
         )
         assert regions[2].ampeg_release == 5.0
         assert regions[2].tune == -13

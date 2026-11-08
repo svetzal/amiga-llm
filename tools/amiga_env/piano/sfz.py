@@ -1,9 +1,9 @@
 """Read the parts of an SFZ instrument that a Paula player needs.
 
 Only these opcodes are read: sample, key, lokey, hikey, pitch_keycenter,
-lovel, hivel, tune, volume, offset, trigger and ampeg_release, with
-<control> default_path, the <global>, <master> and <group> headers they can
-sit under, and the #define and #include directives. Everything else is
+lovel, hivel, tune, volume, offset, trigger, ampeg_release and amp_veltrack,
+with <control> default_path, the <global>, <master> and <group> headers they
+can sit under, and the #define and #include directives. Everything else is
 ignored. A region inherits from the headers above it, as in the SFZ format.
 """
 
@@ -31,6 +31,7 @@ class Region:
     offset: int = 0  # samples skipped at the start
     trigger: str = "attack"
     ampeg_release: float = 0.001  # seconds
+    amp_veltrack: float = 100.0  # percent: how much velocity changes the gain
 
     def plays(self, key: int, velocity: int) -> bool:
         return self.lokey <= key <= self.hikey and self.lovel <= velocity <= self.hivel
@@ -38,7 +39,7 @@ class Region:
 
 INT_OPCODES = {"lokey", "hikey", "pitch_keycenter", "lovel", "hivel", "tune", "offset"}
 KEY_OPCODES = {"lokey", "hikey", "pitch_keycenter"}
-FLOAT_OPCODES = {"volume", "ampeg_release"}
+FLOAT_OPCODES = {"volume", "ampeg_release", "amp_veltrack"}
 
 
 def parse_key(value: str) -> int:

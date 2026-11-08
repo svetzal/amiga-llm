@@ -209,6 +209,12 @@ def quantise(y: np.ndarray, scale: float, rng: np.random.Generator) -> np.ndarra
     return np.clip(np.round(y * scale + noise), -128, 127).astype(np.int8)
 
 
+def quantise16(y: np.ndarray, scale: float, rng: np.random.Generator) -> np.ndarray:
+    """Signed 16-bit with triangular (TPDF) dither of one step either way."""
+    noise = rng.random(len(y)) - rng.random(len(y))
+    return np.clip(np.round(y * scale + noise), -32768, 32767).astype(np.int16)
+
+
 def attack_seconds(root: int, spec: SampleSpec) -> float:
     position = (root - LOWEST_KEY) / (HIGHEST_KEY - LOWEST_KEY)
     return spec.attack_bass_s + (spec.attack_treble_s - spec.attack_bass_s) * position
@@ -244,11 +250,45 @@ def prepare(
 ) -> Prepared:
     """Resample, cut and loop one root's recording (mono, floats)."""
     root = region.pitch_keycenter
-    x = trim_silence(recording[region.offset :])
     ratios = [2 ** ((k - root) / 12 + region.tune / 1200) for k in keys]
-    wanted = min(max(2 * spec.harmonics * pitch_hz(root), spec.min_rate), spec.max_rate)
-    period, by_index, error = choose_period(ratios, NTSC_CLOCK / wanted)
-    rate = NTSC_CLOCK / period
+    period, by_index, error = choose_period(ratios, NTSC_CLOCK / wanted_rate(root, spec))
+    looped = loop_recording(region, recording, rate_in, NTSC_CLOCK / period, spec)
+    return Prepared(
+        root=root,
+        keys=tuple(keys),
+        signal=looped.signal,
+        loop_start=looped.loop_start,
+        period=period,
+        periods={keys[i]: p for i, p in by_index.items()},
+        decay_db_per_s=looped.decay_db_per_s,
+        loop_similarity=looped.loop_similarity,
+        max_cents_error=error,
+        gain=10 ** (region.volume / 20),
+    )
+
+
+def wanted_rate(root: int, spec: SampleSpec) -> float:
+    """The rate a root is stored at: 2 * harmonics * its pitch, within the spec's bounds."""
+    return min(max(2 * spec.harmonics * pitch_hz(root), spec.min_rate), spec.max_rate)
+
+
+@dataclass(frozen=True)
+class Looped:
+    """A root's recording at its stored rate: the attack, then a loop to the end."""
+
+    signal: np.ndarray  # float, the recording's scale
+    loop_start: int
+    decay_db_per_s: float
+    loop_similarity: float
+
+
+def loop_recording(
+    region: Region, recording: np.ndarray, rate_in: float, rate: float, spec: SampleSpec
+) -> Looped:
+    """Resample one root's recording (mono, floats) to rate, cut it after its attack and
+    make a loop that ends there."""
+    root = region.pitch_keycenter
+    x = trim_silence(recording[region.offset :])
     attack = attack_seconds(root, spec)
     end = 2 * round(attack * rate / 2)
     loop = spec.loop_s * rate
@@ -262,18 +302,7 @@ def prepare(
     flat = flatten_loop(y, start, rate, db_per_s)
     seam = similarity(flat, start, end, window)
     looped = crossfade_seam(flat, start, end, fade)[:end]
-    return Prepared(
-        root=root,
-        keys=tuple(keys),
-        signal=looped,
-        loop_start=start,
-        period=period,
-        periods={keys[i]: p for i, p in by_index.items()},
-        decay_db_per_s=db_per_s,
-        loop_similarity=seam,
-        max_cents_error=error,
-        gain=10 ** (region.volume / 20),
-    )
+    return Looped(looped, start, db_per_s, seam)
 
 
 def finish(prepared: list[Prepared], spec: SampleSpec) -> list[PaulaSample]:
