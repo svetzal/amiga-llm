@@ -7,15 +7,45 @@ in blocks of BLOCK samples from two buffers in chip RAM. The channel 0
 audio interrupt mixes the next block.
 
 Samples are signed 16-bit, in fast RAM. A voice reads its sample at a
-16.16 phase: the integer part is the sample's index, the fraction is 16
-bits. For each output sample and each voice, in this order:
+16.16 phase: the integer part is the sample's index, the fraction f is 16
+bits. Each output sample is the linear interpolation between the sample at
+the integer part, s0, and the next one, s1 (`interpolate`):
 
-1. fetch the sample at the phase's integer part (no interpolation);
-2. for each side, MULS.W the sample by the side's multiplier (0 to 32,767)
-   and ADD.L the 32-bit product to the side's 32-bit sum for that output
-   sample, in fast RAM; the sum wraps at 32 bits;
-3. advance the phase by the voice's 16.16 step: ADD.W of the fractions,
-   then ADDX.L of the integer parts.
+    v = s0 + (((s1 - s0) * (f >> 1)) >> 15)
+
+The fraction is taken as 15 bits so that MULS.W, which is signed, sees it
+as positive. s1 - s0 must fit a signed word; the build checks every sample
+(`largest_difference`). The result lies between s0 and s1, so it fits a
+word too. For each output sample and each voice, the 68030 does, with d0
+the phase's integer part, d2 its fraction, d1 and d3 the step's fraction
+and integer part, d7 the two multipliers (left in the low word, right in
+the high word), a0 the sample, a2 and a3 the left and right sums:
+
+    move.l  (a0,d0.l*2),d4   ; s0 in the high word, s1 in the low word
+    move.l  d4,d6
+    swap    d6               ; d6.w = s0
+    sub.w   d6,d4            ; d4.w = s1 - s0
+    move.w  d2,d5
+    lsr.w   #1,d5            ; f >> 1
+    muls.w  d5,d4            ; (s1 - s0) * (f >> 1)
+    add.l   d4,d4
+    swap    d4               ; >> 15: the high word of twice the product
+    add.w   d6,d4            ; v
+    move.w  d4,d6
+    muls.w  d7,d4            ; v * left multiplier
+    add.l   d4,(a2)+         ; to the left sum, 32 bits
+    swap    d7
+    muls.w  d7,d6            ; v * right multiplier
+    add.l   d6,(a3)+         ; to the right sum
+    add.w   d1,d2            ; the step: fraction, then integer part
+    addx.l  d3,d0
+
+18 instructions a voice-sample with a pan. The next sample does the right
+side first, so one SWAP of d7 a sample keeps the multipliers in step; the
+loop is unrolled by an even number and ends on a compare of a2 with the
+end of the sums (CMPA.L and BNE), which frees d7 from counting. In mono
+(pan width 0) one multiplier serves both sides: the MOVE.W copy, the second
+MULS.W, its ADD.L and the SWAP go, and 14 instructions remain.
 
 A voice's multipliers are `volume * gain >> 16` for each side (one MULU.W a
 side), set once a block. With a pan width of 0 the two gains are equal, so
@@ -24,8 +54,8 @@ same.
 
 The phase is checked against the loop only at the start of a block: while
 its integer part is at or past the sample's end, the loop's length is
-subtracted. Every step is below MAX_STEP, so one block reads less than PAD
-samples past the end. The 68030 copies PAD samples of the loop after each
+subtracted. Every step is below MAX_STEP, so in one block s0 is read less
+than PAD - 1 samples past the end, and s1 less than PAD. The 68030 copies PAD samples of the loop after each
 sample's end (going round the loop again when it is shorter than PAD), so
 the inner loop never checks a bound.
 
@@ -43,7 +73,6 @@ to 2 ((S >> 2) & 63) on a channel at volume 1. Paula adds them: 64 * high
 """
 
 import math
-from collections.abc import Sequence
 
 import numpy as np
 
@@ -117,6 +146,19 @@ def wrap_phase(phase: int, length: int, loop_start: int) -> int:
     return phase
 
 
+def interpolate(data: np.ndarray, positions: np.ndarray) -> np.ndarray:
+    """The interpolated sample at each 16.16 position, as the 68030 makes it."""
+    index = positions >> 16
+    s0 = data[index].astype(np.int64)
+    difference = data[index + 1].astype(np.int64) - s0
+    return s0 + ((difference * ((positions & 0xFFFF) >> 1)) >> 15)
+
+
+def largest_difference(data: np.ndarray) -> int:
+    """The largest step between neighbouring samples; SUB.W needs it below 32,768."""
+    return int(np.abs(np.diff(data.astype(np.int64))).max(initial=0))
+
+
 def mix_run(
     data: np.ndarray, phase: int, step_: int, left: int, right: int, count: int
 ) -> tuple[np.ndarray, np.ndarray, int]:
@@ -125,8 +167,7 @@ def mix_run(
     Products are int64 so the caller can see the true sums; `wrap32` gives
     what the 68030's ADD.L leaves.
     """
-    positions = phase + step_ * np.arange(count, dtype=np.int64)
-    values = data[positions >> 16].astype(np.int64)
+    values = interpolate(data, phase + step_ * np.arange(count, dtype=np.int64))
     return values * left, values * right, phase + step_ * count
 
 
@@ -169,17 +210,3 @@ def checksum(left: np.ndarray, right: np.ndarray) -> tuple[int, int]:
     words[1::2] = right.astype(np.int64) & 0xFFFF
     running = np.cumsum(words)
     return int(running[-1]) & 0xFFFFFFFF, int(running.sum()) & 0xFFFFFFFF
-
-
-def hold(output: np.ndarray, rate: int) -> np.ndarray:
-    """Paula's output read at `rate`: each mixed sample held for its period, then
-    read at the nearest earlier instant (as paula.render reads the A500)."""
-    count = len(output) * MIX_PERIOD * rate // NTSC_CLOCK
-    index = np.arange(count, dtype=np.int64) * NTSC_CLOCK // (MIX_PERIOD * rate)
-    return output[np.minimum(index, len(output) - 1)]
-
-
-def stereo_wav_frames(left: Sequence[int], right: Sequence[int], rate: int) -> np.ndarray:
-    """16-bit stereo frames at `rate` from the two sides' 14-bit Paula output."""
-    frames = np.stack([hold(np.asarray(left), rate), hold(np.asarray(right), rate)], axis=1)
-    return np.clip(frames * 4, -32768, 32767).astype(np.int16)

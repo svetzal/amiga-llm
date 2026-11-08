@@ -62,18 +62,18 @@ class TestPan:
 
 
 class TestMixRun:
-    DATA = np.array([100, -100, 32767, -32768, 7, -7], dtype=np.int16)
+    DATA = np.array([100, -100, 20000, -10000, 7, -7], dtype=np.int16)
 
     def test_a_run_gives_each_samples_full_32_bit_product(self):
-        left, right, _ = mixer.mix_run(self.DATA, 0, mixer.ONE, 0x4000, 0x7FFF, 6)
+        left, right, _ = mixer.mix_run(self.DATA, 0, mixer.ONE, 0x4000, 0x7FFF, 5)
 
-        assert left.tolist() == [v * 0x4000 for v in self.DATA.tolist()]
-        assert right.tolist() == [v * 0x7FFF for v in self.DATA.tolist()]
+        assert left.tolist() == [v * 0x4000 for v in self.DATA.tolist()[:5]]
+        assert right.tolist() == [v * 0x7FFF for v in self.DATA.tolist()[:5]]
 
     def test_the_phase_fraction_carries_into_the_index(self):
         left, _, phase = mixer.mix_run(self.DATA, 0, 0xC000, 1, 0, 4)
 
-        assert left.tolist() == [100, 100, -100, 32767]  # phases 0, 0.75, 1.5 and 2.25
+        assert left.tolist() == [100, -50, 9950, 12500]  # phases 0, 0.75, 1.5 and 2.25
         assert phase == 4 * 0xC000
 
     def test_a_run_reads_past_the_end_into_the_pad(self):
@@ -91,6 +91,34 @@ class TestMixRun:
         sums = np.array([2**31 - 1, 2**31, -(2**31) - 1, 2**32 + 5])
 
         assert mixer.wrap32(sums).tolist() == [2**31 - 1, -(2**31), 2**31 - 1, 5]
+
+
+class TestInterpolation:
+    def test_it_takes_the_fraction_as_15_bits_and_rounds_down(self):
+        data = np.array([10, 9, 9, 9], dtype=np.int16)
+
+        values = mixer.interpolate(data, np.array([0x8000, 0x8001, 0xFFFF, 0x10000]))
+
+        assert values.tolist() == [9, 9, 9, 9]  # 10 - 0.5 rounds down to 9
+        assert mixer.interpolate(data, np.array([0x0001])).tolist() == [10]  # f >> 1 is 0
+
+    def test_it_stays_between_its_two_samples(self):
+        data = np.array([-32768, 0, 32767, -1], dtype=np.int16)
+        positions = np.arange(0, 3 << 16, 997)
+
+        values = mixer.interpolate(data, positions)
+        low = np.minimum(data[positions >> 16], data[(positions >> 16) + 1])
+        high = np.maximum(data[positions >> 16], data[(positions >> 16) + 1])
+        assert np.all((low <= values) & (values <= high))
+
+    def test_the_next_sample_after_a_block_at_the_largest_step_is_in_the_pad(self):
+        data = mixer.padded(np.arange(3000, dtype=np.int16), loop_start=2000)
+        phase = (3000 << 16) - 1  # just short of the end, after the block start's wrap
+
+        mixer.mix_run(data, phase, mixer.MAX_STEP - 1, 1, 1, mixer.BLOCK)
+
+    def test_largest_difference_is_the_biggest_step_between_neighbours(self):
+        assert mixer.largest_difference(np.array([0, 30000, -2767, -2767], dtype=np.int16)) == 32767
 
 
 class TestOutput:
@@ -113,16 +141,6 @@ class TestFourteenBits:
 
         assert 0 <= int(low[0]) <= 63
         assert mixer.paula_output(high, low).tolist() == [value >> 2]
-
-    def test_the_render_holds_each_mixed_sample_and_scales_to_16_bits(self):
-        output = np.array([1000, -1000] * 50, dtype=np.int32)
-
-        frames = mixer.stereo_wav_frames(output, -output, 44100)
-
-        assert frames.shape == (len(output) * 44100 * 128 // 3_579_545, 2)
-        assert frames[0].tolist() == [4000, -4000]
-        assert frames[1].tolist() == [4000, -4000]  # 44.1 kHz reads each sample 1.6 times
-        assert frames[2].tolist() == [-4000, 4000]
 
 
 class TestChecksum:

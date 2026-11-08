@@ -17,8 +17,8 @@ Files written:
   pan gains and, for each layer, its sample, step, decay factors and attack
   blocks.
 - for each piece: `<name>.score` (score.py's stream), `<name>.voices.bin`
-  (player3500's voice log) and `<name>.wav` (the 14-bit Paula output, held
-  and read at 44.1 kHz);
+  (player3500's voice log) and `<name>.wav` (the 14-bit Paula output,
+  held and made band-limited at 44.1 kHz by zoh.py);
 - `report.json`.
 """
 
@@ -33,7 +33,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import project
-from . import clips, layers, mixer, paula, player3500, samples, score, sfz
+from . import clips, layers, mixer, paula, player3500, samples, score, sfz, zoh
 from .build import Piece
 
 KEY_BYTES_FIXED = 6  # root index and two pan gains
@@ -127,6 +127,7 @@ def build(recipe_path: Path, clock: Callable[[], float] = time.monotonic) -> dic
     (out / "instrument.json").write_text(json.dumps(instrument_tables(piano), indent=2) + "\n")
     mixing = piano.mix_samples()
     worst = worst_case(piano, mixing)
+    errors = interpolation_errors(piano)
     pieces = {}
     for piece in recipe.pieces:
         start = clock()
@@ -161,6 +162,14 @@ def build(recipe_path: Path, clock: Callable[[], float] = time.monotonic) -> dic
         "largest_step": round(max_step(piano) / mixer.ONE, 4),
         "memory": memory(piano, pieces, recipe),
         "worst_case": worst,
+        "interpolation_error_db": errors,
+        "interpolation_error_worst_db": {
+            "linear": max(r["linear_db"] for r in errors),
+            "nearest": max(r["nearest_db"] for r in errors),
+        },
+        "largest_sample_difference": max(
+            mixer.largest_difference(mixer.padded(m.data, m.loop_start)) for m in piano.made
+        ),
         "output_shift": mixer.OUTPUT_SHIFT,
         "peak_sum": max(p["peak_sum"] for p in pieces.values()),
         "peak_dbfs": dbfs(max(p["peak_sum"] for p in pieces.values())),
@@ -202,6 +211,11 @@ def make_piano(recipe: Recipe) -> Piano:
                 )
             )
     made = finish(looped, recipe.spec)
+    for m in made:
+        if mixer.largest_difference(mixer.padded(m.data, m.loop_start)) > 32767:
+            raise SystemExit(
+                f"root {m.root}, layer {m.layer}: neighbours differ by more than SUB.W holds"
+            )
     return Piano(chosen, roots, made, tables(made, chosen, roots, notes, recipe))
 
 
@@ -295,6 +309,53 @@ def tables(
     )
 
 
+ERROR_ROOTS = (36, 48, 60, 72, 84, 96, 105)  # C2 to A7
+ERROR_SECONDS = 0.6
+
+
+def interpolation_errors(piano: Piano) -> list[dict]:
+    """How far the mixer's playback is from an ideal band-limited resample, in dB.
+
+    For each kept layer and each root in ERROR_ROOTS, the root's highest key
+    (its largest step) plays the first ERROR_SECONDS of the sample. "linear"
+    is the mixer (`mixer.interpolate`); "nearest" is the sample at the
+    integer phase, as the mixer did before it interpolated. The ideal is the
+    sample upsampled 16 times through its FFT and read at the same positions.
+    The error is the energy of the difference over the energy of the ideal.
+    """
+    rows = []
+    for m in piano.made:
+        if m.root not in ERROR_ROOTS:
+            continue
+        key = max(m.keys)
+        step = mixer.step(m.rate, 2 ** ((key - m.root) / 12 + m.region.tune / 1200))
+        data = mixer.padded(m.data, m.loop_start)
+        x = data[: int(m.rate * ERROR_SECONDS)].astype(np.float64)
+        positions = step * np.arange(int((len(x) - 4) * mixer.ONE / step), dtype=np.int64)
+        ideal = ideal_resample(x, positions)
+        rows.append(
+            {
+                "layer": m.layer,
+                "root": m.root,
+                "key": key,
+                "step": round(step / mixer.ONE, 4),
+                "nearest_db": error_db(data[positions >> 16].astype(np.float64), ideal),
+                "linear_db": error_db(mixer.interpolate(data, positions).astype(np.float64), ideal),
+            }
+        )
+    return rows
+
+
+def ideal_resample(x: np.ndarray, positions: np.ndarray, factor: int = 16) -> np.ndarray:
+    """x read at 16.16 positions through its FFT, upsampled `factor` times."""
+    up = np.fft.irfft(np.fft.rfft(x), len(x) * factor) * factor
+    return np.interp(positions / mixer.ONE * factor, np.arange(len(up)), up)
+
+
+def error_db(y: np.ndarray, ideal: np.ndarray) -> float:
+    return round(10 * float(np.log10(((y - ideal) ** 2).sum() / (ideal**2).sum())), 1)
+
+
 def worst_case(piano: Piano, mixing: list[player3500.MixSample]) -> dict:
     """The loudest sum 16 adjacent keys make, all struck at velocity 127 at once.
 
@@ -327,7 +388,7 @@ def wav_frames(result: player3500.Result) -> np.ndarray:
     """The 14-bit output as Paula plays it, from the two channels a side."""
     left = mixer.paula_output(*mixer.split14(result.left))
     right = mixer.paula_output(*mixer.split14(result.right))
-    return mixer.stereo_wav_frames(left, right, WAV_RATE)
+    return zoh.stereo_wav_frames(left, right, WAV_RATE)
 
 
 def max_step(piano: Piano) -> int:
