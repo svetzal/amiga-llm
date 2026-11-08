@@ -706,6 +706,43 @@ the light lit, unlit, lit, with the CIA bit 0, 1, 0
 again with the same figures (voice logs identical, the nocturne's worst
 block 47.5%).
 
+### 2026-11-08: a video of the image playing by itself (machine tier)
+
+Stacey asked for the same unattended playthrough as EXP-004's A500 video,
+of the A3500 image (`build/piano3500/piano3500.hdf`, SHA-1 `185efdfb...`,
+built from `main` just before). `amiga-env piano3500-video
+examples/piano3500/piano.toml` (`make piano3500-video`) records it through
+Amiberry 8.5.0's libretro core into `runs/video3500/`; the workflow is the
+project skill `.claude/skills/piano-video`. The core has no A3000 model, so
+it boots the app's own resolved configuration of the `a3500` profile and
+the image on `scsi0_a3000` as a `.uae`; the core's configuration showed no
+differences from the app's. Nothing was sent to the machine.
+
+| Check | Found |
+| --- | --- |
+| Recording | 152,741 frames at 59.826 a second (NTSC), 42:33.08, boot to 5 s after piece 10 ended; 42:40.5 wall (the core paces the cycle-exact 68030 at real time) |
+| Frames | 756x486, every one kept, none repeated; frames 0 to 24 were 756x484 and put on the canvas with 2 black rows |
+| Sound | 122,545,728 samples at 48 kHz, 802.311 a frame, 2,261 short of the frame count (from the core's start); no frame without sound after the first |
+| Capture | 25.1 GB lossless (FFV1), 0.49 GB WAV |
+| 4K master (`runs/video3500/piano3500-playthrough-4k.mp4`) | 152,741 frames, 3840x2160 H.264 CRF 16, BT.709, AAC 48 kHz stereo; 0.80 GB; made in 23 min |
+| Gold lines | all ten found in the master's own frames, each the frame after the player's own stamp, the same in the capture |
+| Levels | the whole run RMS -31.7 dBFS, peak -7.4; the pieces from -41.5 (Debussy) to -29.1 RMS, peaks -17.4 to -7.4 |
+| Digital silence of 20 ms or more within pieces | every one is in the host model's render of that piece at the same time (Beethoven's six, Schubert's three, the eight short ones near the end of the C# minor nocturne, and the rest): rests, not dropouts |
+
+Sound against picture. The player stamps a piece's first note while it
+mixes the block the note falls in, and Paula plays that block one block
+later, so each note's own delay (19.0 to 33.7 ms here) comes off the
+measured lag first. The ten first notes then bound the core's offset to
++12.6 to +15.4 ms, the sound late by under a frame. They agree with each
+other, so the delay model holds; the master is not shifted.
+
+Chapters (rounded down, each at or before its gold line): 0:00 boot and
+title screen, then 0:17, 4:22, 8:38, 11:05, 14:48, 18:32, 23:50, 29:58,
+33:59 and 38:16. `runs/video3500/youtube-description.generated.txt` is the
+draft from `examples/piano3500/video-description.txt`; Stacey edits a copy
+named `youtube-description.txt`, which the command never writes. I looked
+at master frames at 0:30, 10:00, 25:00 and 40:50.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
