@@ -43,3 +43,12 @@ peak = 32700            # largest sample value after normalising, below 32767 fo
 [scopes]
 left = [80, 160]   # the left channel's scope, then the right's: a quarter of the screen each, centred
 width = 80
+
+# The audio filter's light, in the lower left corner (the signature is in the
+# lower right). A small box in colour register 14 and a label beside it in the
+# picture's dim brown ([screen] attribution_colour). The player sets register
+# 14 to one of these colours (OCS hex) as the filter changes.
+[filter_light]
+label = "filter"
+on = "F42"    # register 14 while the filter is on (CIA-A bit 1 clear): a lit LED
+off = "311"   # while it is off: an unlit LED

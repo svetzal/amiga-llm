@@ -92,6 +92,7 @@ _LVOWrite           equ -48
 _LVOSeek            equ -66
 _LVOReadEClock      equ -60         ; timer.device
 _LVOLoadRGB4        equ -192        ; graphics
+_LVOSetRGB4         equ -288        ; graphics
 _LVOWaitTOF         equ -270
 _LVOCBump           equ -366
 _LVOCMove           equ -372
@@ -193,6 +194,7 @@ BEAM_GUARD      equ 64          ; lines above the band a unit may not start on
 
         include "screen.i"      ; LIST_*, LINE_*, colours, SCOPE_*, line_tops
         include "scopes.i"      ; STEREO_LEFT_L, STEREO_LEFT_R, STEREO_WIDTH
+        include "light.i"       ; FILTER_LIGHT_REGISTER, FILTER_LIGHT_ON, FILTER_LIGHT_OFF
 BAND_BYTES      equ ROW_BYTES*SCOPE_ROWS
 HALF_WIDTH      equ STEREO_WIDTH/2  ; a unit: half a scope, ending on a byte boundary
         if      STEREO_WIDTH*SCOPE_STRIDE>BLOCK
@@ -1728,6 +1730,29 @@ write:
 ; The clock, the filter, the pieces (as EXP-004's player has them).
 ; ---------------------------------------------------------------------------
 
+; show_filter: the screen's filter light (register FILTER_LIGHT_REGISTER,
+; drawn by the host beside the word "filter") lit while the filter is on
+; (the CIA-A bit clear), dark while it is off.
+show_filter:
+        movem.l d2-d3/a6,-(sp)
+        move.w  #FILTER_LIGHT_OFF,d1
+        btst    #LED_BIT,ciaapra
+        bne.s   .set
+        move.w  #FILTER_LIGHT_ON,d1
+.set:   move.w  d1,d3
+        and.w   #$f,d3                  ; blue
+        move.w  d1,d2
+        lsr.w   #4,d2
+        and.w   #$f,d2                  ; green
+        lsr.w   #8,d1
+        and.w   #$f,d1                  ; red
+        move.l  screen,a0
+        lea     sc_ViewPort(a0),a0
+        moveq   #FILTER_LIGHT_REGISTER,d0
+        CALLGFX SetRGB4
+        movem.l (sp)+,d2-d3/a6
+        rts
+
 ; Put the filter back as it was when the program started.
 restore_filter:
         tst.w   led_known
@@ -1956,6 +1981,7 @@ open_display:
         lea     palette,a1
         moveq   #16,d0
         CALLGFX LoadRGB4
+        bsr     show_filter
         bsr     copy_band
         lea     picture_mem,a0
         move.l  picture_bytes,d0
@@ -2347,6 +2373,7 @@ next_choice:
 .filter:
         bchg    #LED_BIT,ciaapra        ; the filter and the power LED, by the task
         addq.l  #1,STATUS+ST_FILTER_KEYS.w
+        bsr     show_filter
         bra     .next
 .quit:  moveq   #-1,d4
         bra     .next

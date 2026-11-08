@@ -688,6 +688,23 @@ about 30 ms between a click and the sound in the emulator only. Whether it
 cures what Stacey heard is for her ears; the capture cannot show a device
 underrun.
 
+### 2026-11-08: a filter light (machine tier)
+
+Stacey could not tell from the screen whether the audio filter was on. The
+power LED shows it on the real machine, but not where she looks. The host
+now draws a 7 by 7 light in register 14 (free since the scopes became one
+colour) and the word "filter" in the attribution's brown, in the lower left
+corner on the signature's row (light at columns 1 to 7, label at 11 to 31,
+rows 192 to 198; the recipe's `[filter_light]`, `light.i`). The player sets
+register 14 with SetRGB4 from CIA-A bit 1 when the screen opens and after
+each F: $F42 (lit) while the filter is on, $311 (unlit) while it is off.
+
+Checked on the image: three screenshots with F pressed between them showed
+the light lit, unlit, lit, with the CIA bit 0, 1, 0
+(`runs/exp006/glitch/lightcrop*.png`, looked at). The screen run passed
+again with the same figures (voice logs identical, the nocturne's worst
+block 47.5%).
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):

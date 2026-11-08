@@ -24,6 +24,7 @@ Files written:
 
 import json
 import statistics
+import string
 import time
 import tomllib
 from collections.abc import Callable
@@ -87,6 +88,38 @@ def check_scopes(scopes: Scopes) -> None:
 
 
 @dataclass(frozen=True)
+class FilterLight:
+    """The audio filter's light: a box in register 14, which the player sets to
+    `on` or `off` (OCS hex) as the filter changes, and a label beside it."""
+
+    label: str
+    on: str  # register 14 while the filter is on
+    off: str  # register 14 while the filter is off
+
+
+def load_filter_light(table: dict) -> FilterLight:
+    """The recipe's [filter_light] table; SystemExit when a key is missing or a
+    colour is not three hex digits."""
+    try:
+        light = FilterLight(label=table["label"], on=table["on"], off=table["off"])
+    except KeyError as missing:
+        raise SystemExit(f"[filter_light]: no {missing.args[0]}") from None
+    if not isinstance(light.label, str) or not light.label.strip():
+        raise SystemExit("[filter_light]: the label is a word of text")
+    for name in ("on", "off"):
+        colour = getattr(light, name)
+        try:
+            picture.parse_ocs(colour)
+            if not all(c in string.hexdigits for c in colour):
+                raise ValueError(colour)
+        except (TypeError, ValueError):
+            raise SystemExit(
+                f"[filter_light]: {name} = {colour!r} is not an OCS colour (three hex digits)"
+            ) from None
+    return light
+
+
+@dataclass(frozen=True)
 class Recipe:
     sfz: str  # under media/
     out: str  # under the project
@@ -102,6 +135,7 @@ class Recipe:
     rotate_s: int = 15  # seconds of quiet before the player plays the next piece by itself
     credits: str = ""  # the full notices, under the project
     scopes: Scopes | None = None  # the player's two scopes, left and right channel
+    filter_light: FilterLight | None = None  # the audio filter's light, lower left
 
 
 @dataclass(frozen=True)
@@ -160,6 +194,7 @@ def load_recipe(path: Path) -> Recipe:
         rotate_s=shared.get("rotate_s", 15),
         credits=data.get("credits", ""),
         scopes=load_scopes(data["scopes"]) if "scopes" in data else None,
+        filter_light=load_filter_light(data["filter_light"]) if "filter_light" in data else None,
     )
 
 

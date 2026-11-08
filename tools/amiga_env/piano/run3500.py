@@ -27,8 +27,11 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NamedTuple
 
+import numpy as np
+
 from .. import assemble, profile, project, session
-from . import build3500, disk, m68k3500, mixer, player3500, score
+from . import build3500, disk, m68k3500, mixer, picture, player3500, score
+from . import font as font_mod
 from . import screen as screen_mod
 
 PROGRAM = "player"
@@ -284,21 +287,128 @@ def scopes_include(scopes: build3500.Scopes) -> str:
     )
 
 
+FILTER_LIGHT_REGISTER = screen_mod.VOICE_TRACE_REGISTER  # 14: the A3500 player draws no voice trace
+FILTER_LIGHT_GAP = 3  # blank columns between the light's box and its label
+
+
+def light_include(light: build3500.FilterLight) -> str:
+    """`light.i` for the player: the filter light's register and its two colours."""
+    return (
+        "; light.i: made by `amiga-env piano3500-run` (run3500.py); do not edit.\n"
+        f"FILTER_LIGHT_REGISTER equ {FILTER_LIGHT_REGISTER}\n"
+        f"FILTER_LIGHT_ON equ ${picture.parse_ocs(light.on):03X}\n"
+        f"FILTER_LIGHT_OFF equ ${picture.parse_ocs(light.off):03X}\n"
+    )
+
+
+class LightPlace(NamedTuple):
+    box: screen_mod.Box  # the light itself, filled in register 14
+    label: screen_mod.Line
+
+
+def place_filter_light(label: str, font: font_mod.Font, top: int) -> LightPlace:
+    """The light in the lower left corner, the mirror of the signature: the box's
+    left column 1 pixel in from the screen's left edge, the label's line at row
+    `top` (the signature's), and the box (font height - 2 square) centred on
+    the label's ink rows with FILTER_LIGHT_GAP blank columns before the label's ink."""
+    rows, cols = np.nonzero(font.render(label))
+    size = font.height - 2
+    ink_top, ink_rows = top + int(rows.min()), int(rows.max() - rows.min()) + 1
+    box_top = ink_top + (ink_rows - size) // 2
+    box = screen_mod.Box(1, box_top, 1 + size, box_top + size)
+    return LightPlace(
+        box, screen_mod.Line(label, box.right + FILTER_LIGHT_GAP - int(cols.min()), top)
+    )
+
+
+def _meets(a: screen_mod.Box, b: screen_mod.Box) -> bool:
+    return a.left < b.right and b.left < a.right and a.top < b.bottom and b.top < a.bottom
+
+
+def check_filter_light(
+    boxes: dict[str, screen_mod.Box],
+    made: screen_mod.Screen,
+    band: screen_mod.Box,
+    scopes: build3500.Scopes,
+    signature: screen_mod.Box | None,
+) -> None:
+    """SystemExit when a part of the light (`boxes`, by name) sits on a bright part
+    of the screen, meets a stereo scope's columns on the band's rows, or meets
+    the signature."""
+    palette = np.array([picture.rgb_of(w) for w in made.colours], dtype=float)
+    spans = [
+        screen_mod.Box(left, band.top, left + scopes.width, band.bottom) for left in scopes.left
+    ]
+    for name, box in boxes.items():
+        brightest = screen_mod.brightest_under(made.indices, palette, box)
+        if brightest > screen_mod.DARK_LUMINANCE:
+            raise SystemExit(
+                f"the filter light's {name} would sit on the picture (luminance {brightest:.0f})"
+            )
+        for span in spans:
+            if _meets(box, span):
+                raise SystemExit(
+                    f"a scope (columns {span.left} to {span.right - 1}) would draw over the "
+                    f"filter light's {name} (columns {box.left} to {box.right - 1})"
+                )
+        if signature and _meets(box, signature):
+            raise SystemExit(f"the filter light's {name} would overlap the signature")
+
+
+def draw_filter_light(
+    made: screen_mod.Screen,
+    spec: screen_mod.ScreenSpec,
+    scopes: build3500.Scopes,
+    light: build3500.FilterLight,
+    font: font_mod.Font,
+) -> tuple[screen_mod.Screen, LightPlace]:
+    """`made` with the filter light drawn in: the box in register 14 (set to the
+    `off` colour, as the player starts), the label in the attribution's colour."""
+    if not spec.attribution_colour:
+        raise SystemExit("[screen] names no attribution_colour for the filter light's label")
+    signature = made.layout.signature
+    top = signature.top if signature else screen_mod.signature_line(light.label, font).top
+    place = place_filter_light(light.label, font, top)
+    label_box = screen_mod.text_box(place.label, font)
+    check_filter_light(
+        {"box": place.box, "label": label_box},
+        made,
+        spec.scope_band,
+        scopes,
+        screen_mod.text_box(signature, font) if signature else None,
+    )
+    pictures = np.array([picture.rgb_of(w) for w in made.colours[: made.picture_colours]])
+    label_register = screen_mod.register_of(pictures, spec.attribution_colour)
+    indices = made.indices.copy()
+    box = place.box
+    indices[box.top : box.bottom, box.left : box.right] = FILTER_LIGHT_REGISTER
+    indices = screen_mod.draw(indices, [place.label], font, label_register)
+    colours = list(made.colours)
+    colours[FILTER_LIGHT_REGISTER] = picture.parse_ocs(light.off)
+    return made._replace(indices=indices, colours=colours), place
+
+
 def screen_data(recipe: build3500.Recipe, data: Path) -> Path:
-    """title.ilbm, screen.i and menu.i (EXP-004's screen and keys) and scopes.i
-    (the two channels' scopes) into `data`; returns the picture."""
+    """title.ilbm, screen.i and menu.i (EXP-004's screen and keys), scopes.i
+    (the two channels' scopes) and light.i (the filter light) into `data`;
+    returns the picture."""
     if recipe.screen is None:
         raise SystemExit("the recipe shares no [screen] table (pieces = ...)")
     if recipe.scopes is None:
         raise SystemExit("the recipe has no [scopes] table")
+    if recipe.filter_light is None:
+        raise SystemExit("the recipe has no [filter_light] table")
     data.mkdir(parents=True, exist_ok=True)
     root = project.root()
     names = disk.titles(recipe)
     made = screen_mod.make(names, recipe.screen, root)
-    picture = screen_mod.write(made, recipe.screen, root, data, data)
+    font = font_mod.load(root / recipe.screen.font)
+    made, _ = draw_filter_light(made, recipe.screen, recipe.scopes, recipe.filter_light, font)
+    title = screen_mod.write(made, recipe.screen, root, data, data)
     (data / "menu.i").write_text(disk.menu_include(len(names), recipe.rotate_s), encoding="ascii")
     (data / "scopes.i").write_text(scopes_include(recipe.scopes), encoding="ascii")
-    return picture
+    (data / "light.i").write_text(light_include(recipe.filter_light), encoding="ascii")
+    return title
 
 
 def write_files(
