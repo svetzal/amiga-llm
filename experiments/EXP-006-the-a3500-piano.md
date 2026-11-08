@@ -325,6 +325,86 @@ its timing test measures what the piano will run (see EXP-005).
    out step clamps. No piece clamps or wraps. A worst case far louder than
    any piece clamps, and wraps only at the extreme.
 
+### 2026-11-07: linear interpolation, and a band-limited render (host tier)
+
+Stacey heard a metallic overtone, like aliasing, in the renders. The
+coordinator measured it: the mixer read the sample at the integer phase
+only, and against an ideal band-limited resample that gives an error of -7
+to -20 dB, worst in the treble and where the step is near 1. A/B clips in
+`runs/exp006/ab/` (1 the render as it was, 2 the same mix written at
+27,965 Hz, 3 with linear interpolation at 27,965 Hz): Stacey heard clip 3 as
+much better.
+
+What changed:
+
+- The mixer interpolates between the sample at the phase and the next:
+  `v = s0 + (((s1 - s0) * (f >> 1)) >> 15)`, with f the 16-bit fraction
+  taken as 15 bits so MULS.W, which is signed, sees it as positive. One
+  MOVE.L fetches s0 and s1 together. SUB.W makes s1 - s0, so neighbouring
+  samples must differ by less than 32,768: the build checks every sample.
+  The largest difference is 29,624 (C8 in layer v16). The pad still covers
+  the next sample: in one block s0 is read less than 1,023 samples past a
+  sample's end, so s1 is within the 1,024. The inner loop is in "What the
+  68030 player must match".
+- The host render no longer reads Paula's output at the nearest instant at
+  44.1 kHz, which added aliasing of its own. `zoh.py` models Paula's hold
+  (each value held for one period) and passes it through a 20 kHz low-pass
+  kernel, a Blackman-windowed sinc 16 periods either side, before it
+  samples at 44.1 kHz. The hold's images below 20 kHz stay in, as they are
+  in Paula's output. Above that they are removed, not folded back: an image
+  at 24,965 Hz comes out below -60 dB at its alias frequency (a unit test).
+  The A3000's fixed output filter is not modelled, because its corner
+  frequency is not known. EXP-004's renders and `paula.py` do not change.
+
+The error now goes in `report.json` (`interpolation_error_db`) so a
+regression shows. For each kept layer and the roots C2 to A7, the root's
+highest key plays the first 0.6 s of the sample. The error is the energy
+of the difference from an ideal resample (the sample upsampled 16 times
+through its FFT, read at the same positions) over the ideal's energy. This
+is the coordinator's method, with the mixer's own integer arithmetic. The
+range is over the 8 layers:
+
+| Root | Key | Step | Nearest sample, dB | Linear, dB |
+| --- | --- | --- | --- | --- |
+| C2 (36) | 37 | 0.418 | -25.8 to -16.9 | -58.6 to -33.8 |
+| C3 (48) | 49 | 0.418 | -25.1 to -20.9 | -56.4 to -38.1 |
+| C4 (60) | 61 | 0.418 | -17.2 to -14.1 | -44.0 to -30.3 |
+| C5 (72) | 73 | 0.418 | -15.0 to -8.7 | -40.1 to -21.6 |
+| C6 (84) | 85 | 0.418 | -10.0 to -6.7 | -30.3 to -21.8 |
+| C7 (96) | 97 | 0.634 | -7.9 to -7.0 | -26.0 to -24.9 |
+| A7 (105) | 106 | 1.059 | -17.8 to -6.8 | -37.5 to -24.5 |
+
+The worst is -6.7 dB with the nearest sample and -21.6 dB with linear
+interpolation. Linear interpolation is weakest where the stored rate is low
+for the pitch (C5 and C6 at 11,025 Hz). A higher stored rate there, or a
+better interpolator, would help, and both cost memory or CPU.
+
+Peaks fall a little, because interpolation smooths the samples' extremes.
+`full_volume` stays 20,190:
+
+| Piece | Peak | Peak, dBFS | Clamped | Wrapped | Render, s |
+| --- | --- | --- | --- | --- | --- |
+| Nocturne Op. 9 No. 2 | 21,793 | -3.5 | 0 | 0 | 4.4 |
+| BWV 846 | 28,707 | -1.1 | 0 | 0 | 3.8 |
+| BWV 802 | 11,095 | -9.4 | 0 | 0 | 2.0 |
+| Scarlatti K. 145 | 27,142 | -1.6 | 0 | 0 | 3.2 |
+| Haydn Hob. XVI:23 | 21,307 | -3.7 | 0 | 0 | 3.2 |
+| Mozart K. 333 | 15,944 | -6.3 | 0 | 0 | 4.7 |
+| Beethoven Op. 31 No. 3 | 27,453 | -1.5 | 0 | 0 | 5.5 |
+| Schubert D. 962 | 27,279 | -1.6 | 0 | 0 | 3.5 |
+| Nocturne in C# minor | 17,534 | -5.4 | 0 | 0 | 4.0 |
+| Debussy, Des pas sur la neige | 9,086 | -11.1 | 0 | 0 | 3.7 |
+
+The 16-key worst case now goes 13.8 dB over full scale: 1,743 clamped
+values and 4 wraps. The clip counts do not change. The whole build took 44.8
+s, 5.1 s of it for the samples; most of a piece's time is now the render.
+
+The cost on the 68030. The inner loop goes from 7 instructions a
+voice-sample (with the pan) to 18, or from 5 to 14 in mono. EXP-005's
+`mixbench.s` has a way C with this loop, 16 voices, data cache off and on,
+for the coordinator to run. Until then, whether 16 voices fit in the
+CPU's time with interpolation is not known.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
@@ -346,8 +426,11 @@ For each block, in this order:
    (`m * q >> 2`), then the new tone starts at phase 0.
 3. Mixing. At the block's start, bring each tone's phase back round its
    loop (subtract the loop length while the integer part is at or past the
-   end). Then each voice in runs, split where a change falls. Each product
-   goes into a 32-bit sum (ADD.L, which wraps).
+   end). Then each voice in runs, split where a change falls. Each output
+   sample of a voice is `s0 + (((s1 - s0) * (f >> 1)) >> 15)`, the sample at
+   the phase's integer part and the next, with f the phase's 16-bit
+   fraction (`mixer.interpolate`). It is multiplied by each side's
+   multiplier and goes into a 32-bit sum (ADD.L, which wraps).
 4. The output: each sum shifted right by 14 and clamped to 16 bits. Its high
    byte goes to channels 0 (left) and 1 (right) at volume 64, its bits 7 to
    2 to channels 3 (left) and 2 (right) at volume 1. The log's checksum is
@@ -362,10 +445,43 @@ Its data, in `runs/exp006/`:
   release factors and attack blocks.
 - `<piece>.score`: EXP-004's score stream, unchanged.
 
-CPU: EXP-005 measured about 1.1% of the CPU a voice with one MULS and one
-sum. The pan adds a MULS and an ADD.L a voice-sample. If that doubles
-the per-voice cost, 16 voices and EXP-005's fixed 8.6% come to about 44%.
-That is an estimate, not a measurement. `pan_width = 0` is the fallback.
+The inner loop, as `mixer.py`'s docstring gives it, with d0 and d2 the
+phase's integer part and fraction, d1 and d3 the step's, d7 the left
+multiplier in the low word and the right in the high word, a0 the sample,
+a2 and a3 the left and right sums:
+
+```text
+move.l  (a0,d0.l*2),d4   ; s0 in the high word, s1 in the low word
+move.l  d4,d6
+swap    d6               ; s0
+sub.w   d6,d4            ; s1 - s0
+move.w  d2,d5
+lsr.w   #1,d5            ; f >> 1
+muls.w  d5,d4
+add.l   d4,d4
+swap    d4               ; >> 15
+add.w   d6,d4            ; v
+move.w  d4,d6
+muls.w  d7,d4
+add.l   d4,(a2)+         ; left
+swap    d7
+muls.w  d7,d6
+add.l   d6,(a3)+         ; right
+add.w   d1,d2
+addx.l  d3,d0
+```
+
+18 instructions a voice-sample. The next sample does the right side first,
+so one SWAP of d7 a sample keeps the multipliers in step. The loop is
+unrolled by four and ends on CMPA.L and BLO.W against the end of the sums,
+which leaves d7 free for the multipliers. In mono, 14 instructions (no copy,
+no second MULS.W and ADD.L, no SWAP). A run that is not a multiple of four
+samples needs its own entry into the unrolled loop; that is the 68030
+player's to solve, and the model does not depend on it.
+
+CPU: EXP-005 measured about 1.1% of the CPU a voice for the old 5- to
+6-instruction loop. This one is about three times as long. `mixbench.s` way
+C will measure it. `pan_width = 0` (14 instructions) is a fallback.
 
 ## Not done
 
