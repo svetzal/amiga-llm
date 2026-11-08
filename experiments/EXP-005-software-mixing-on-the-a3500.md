@@ -108,6 +108,23 @@ mixes each voice to one side; the A3500 piano pans each voice to both sides,
 a second MULS.W and ADD.L per voice-sample, which this test does not yet
 measure.
 
+### 2026-11-07: way C, the A3500 piano's loop, emulator tier
+
+Way C is the loop EXP-006's player will run: linear interpolation (one
+MOVE.L fetches both samples), then a volume MULS.W and ADD.L for each side,
+18 instructions a voice-sample. Same profile; loop count 57,434.
+
+| Test | Mean | Worst |
+| --- | --- | --- |
+| C, 16 voices, data cache off | 41.2% | 41.5% |
+| C, 16 voices, data cache on | 37.9% | 38.3% |
+
+Ways A and B gave the same numbers as before, within 0.1 points. Way C
+costs about 2.0% of the CPU a voice (data cache off) against B's 1.1%, and
+the fixed part per block is unchanged. 16 voices fit under the 50% limit
+at the emulator tier, with 8 to 12 points to spare for the player's own
+work, the screen and the operating system.
+
 ### Real machine tier
 
 Not yet run. Stacey boots `build/mixbench.adf` on the A3500 from a floppy
