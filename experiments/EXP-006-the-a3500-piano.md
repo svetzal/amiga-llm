@@ -695,7 +695,8 @@ power LED shows it on the real machine, but not where she looks. The host
 now draws a 7 by 7 light in register 14 (free since the scopes became one
 colour) and the word "filter" in the attribution's brown, in the lower left
 corner on the signature's row (light at columns 1 to 7, label at 11 to 31,
-rows 192 to 198; the recipe's `[filter_light]`, `light.i`). The player sets
+rows 192 to 198; `[filter_light]`, since moved to EXP-004's shared recipe
+when the A500 disk got the same light, and `light.i`). The player sets
 register 14 with SetRGB4 from CIA-A bit 1 when the screen opens and after
 each F: $F42 (lit) while the filter is on, $311 (unlit) while it is off.
 

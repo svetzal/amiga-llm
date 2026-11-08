@@ -2,7 +2,7 @@
 
 The player (the recipe's `player` source) is assembled twice from the data
 `amiga-env piano` wrote to `<out>/m68k/` and the screen made here
-(screen.py): the player Stacey boots, and a test build (`LOG=1`) that also
+(screen.py, with the filter light from light.py): the player Stacey boots, and a test build (`LOG=1`) that also
 writes the voice log. The program holds the samples and tables; the
 picture, the credits and each piece's score are files, so a piece is added
 by rebuilding the disk:
@@ -29,6 +29,7 @@ from typing import NamedTuple
 
 from .. import adf, assemble, project
 from . import font as font_mod
+from . import light as light_mod
 from . import picture
 from . import screen as screen_mod
 from .build import Recipe
@@ -151,21 +152,49 @@ def scope_regions(recipe: Recipe) -> tuple[tuple, tuple[int, int]]:
     return scopes, (spec.scope_band.top, spec.scope_band.bottom)
 
 
+def screen_data(recipe: Recipe, root: Path, data: Path) -> tuple[Path, screen_mod.Screen]:
+    """title.ilbm, screen.i, menu.i and light.i (the filter light) into `data`, the
+    player's include folder, and title-preview.png into the recipe's `out`;
+    returns the picture and the screen.
+
+    The light's box is in register 14, the voice traces' register, which the
+    picture keeps as the trace colour: the player's copper list changes it on
+    the light's rows only."""
+    if recipe.screen is None:
+        raise SystemExit("the recipe has no [screen] table")
+    if recipe.filter_light is None:
+        raise SystemExit("the recipe has no [filter_light] table")
+    spec = recipe.screen
+    data.mkdir(parents=True, exist_ok=True)
+    (root / recipe.out).mkdir(parents=True, exist_ok=True)
+    names = titles(recipe)
+    made = screen_mod.make(names, spec, root)
+    font = font_mod.load(root / spec.font)
+    # Only the mix scope is checked against the light: the voice scopes share its
+    # columns, but their traces stop above its rows, which the player checks when
+    # it is assembled (SCOPE_CENTRE + VOICE_HALF < FILTER_LIGHT_TOP).
+    mix = (spec.mix_scope[0], spec.mix_scope[0] + spec.mix_scope[1])
+    made, place = light_mod.draw(made, spec, [mix], recipe.filter_light, font)
+    picture = screen_mod.write(made, spec, root, data, root / recipe.out)
+    (data / "menu.i").write_text(menu_include(len(names), recipe.rotate_s), encoding="ascii")
+    light_i = light_mod.include(recipe.filter_light, place.box, made.colours[light_mod.REGISTER])
+    (data / "light.i").write_text(light_i, encoding="ascii")
+    return picture, made
+
+
 def build_disks(recipe: Recipe, root: Path | None = None, out: Path | None = None) -> list[Path]:
     """Assemble both builds and write both disks into `out` (build/piano)."""
     root = root or project.root()
     data = root / recipe.out / "m68k"
     if not (data / "samples.bin").is_file():
         raise SystemExit(f"no player data in {data}; run `amiga-env piano` first")
-    if recipe.screen is None or not recipe.credits:
-        raise SystemExit("the recipe needs a [screen] table and `credits`")
+    if not recipe.credits:
+        raise SystemExit("the recipe needs `credits`")
     names = titles(recipe)
     entries = menu([(p.name, t) for p, t in zip(recipe.pieces, names, strict=True)])
     out = out or project.build_dir() / "piano"
     out.mkdir(parents=True, exist_ok=True)
-    made = screen_mod.make(names, recipe.screen, root)
-    picture = screen_mod.write(made, recipe.screen, root, data, root / recipe.out)
-    (data / "menu.i").write_text(menu_include(len(entries), recipe.rotate_s), encoding="ascii")
+    picture, made = screen_data(recipe, root, data)
     credits = root / recipe.credits
     check_credits(credits.read_text(encoding="ascii"))
     index = out / "index"

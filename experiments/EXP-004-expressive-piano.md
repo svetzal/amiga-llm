@@ -1354,3 +1354,29 @@ Open:
 - The lossless capture is 24.6 GB (FFV1 codes every frame whole). An
   encoder that codes the differences between frames losslessly would be far
   smaller; not tried.
+
+### 2026-11-08: a filter light on the screen (host and machine tier)
+
+Stacey could not tell from the screen whether the audio filter was on, so
+the A500 disk now has the light the A3500 piano got the same day (EXP-006):
+a 7 by 7 light at columns 1 to 7, rows 192 to 198, and the word "filter" in
+the attribution's brown beside it, on the signature's row. The host draws
+both (`light.py`, the recipe's `[filter_light]`, now shared with the A3500
+recipe, and `light.i`).
+
+All 16 registers are taken here, so the light is drawn in register 14, the
+voice traces' colour, and the user copper list changes that register on
+the light's rows only: $F42 (lit) while the filter is on, $311 while it is
+off, and the trace colour ($5BC) again from row 199. The copper list that
+turned the playing piece's line gold now always exists and carries both;
+F remakes it. The voice traces reach rows 158 to 190 and the light starts
+on row 192; the player fails to assemble if a trace could reach the light,
+so the host checks only the mix scope's columns against it.
+
+Checked on the `a500` machine (`runs/exp004/light/`): with piece 1 playing,
+three screenshots with F pressed between them showed the light lit, unlit,
+lit, with the CIA bit 0, 1, 0, and the voice traces still cyan above it
+(looked at). `amiga-env piano-run ... bwv846 debussy-neige --log --click
+--switch-after-s 10`: Debussy's voice log identical, BWV 846's identical
+tick for tick up to the switch, each line gold in 17 to 33 ms; the player
+17.6 to 17.8% of the CPU, 65.7 to 66.0% with the scopes.

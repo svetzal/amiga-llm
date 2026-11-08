@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .. import project
 from . import clips, m68k, paula, player, samples, score, sfz
+from . import light as light_mod
 from . import screen as screen_mod
 from . import survey as survey_mod
 
@@ -46,6 +47,7 @@ class Recipe:
     credits: str = ""  # the disk's full notices, under the project
     screen: screen_mod.ScreenSpec | None = None  # the player's screen
     rotate_s: int = 15  # seconds of quiet before the player plays the next piece by itself
+    filter_light: light_mod.FilterLight | None = None  # the audio filter's light, lower left
 
 
 def load_recipe(path: Path) -> Recipe:
@@ -68,6 +70,7 @@ def load_recipe(path: Path) -> Recipe:
         credits=data.get("credits", ""),
         screen=screen_mod.load_spec(data["screen"]) if "screen" in data else None,
         rotate_s=data.get("rotate_s", 15),
+        filter_light=light_mod.load(data["filter_light"]) if "filter_light" in data else None,
     )
 
 

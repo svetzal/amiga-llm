@@ -23,7 +23,8 @@
 ;                    A to Z without F and Q), plays it, or switches to it
 ;                    while another plays. Left alone, it plays the pieces
 ;                    in turn (choose, below). Space stops; F switches the
-;                    audio filter (and the power LED); Esc or Q quits.
+;                    audio filter (and the power LED, and the screen's
+;                    filter light); Esc or Q quits.
 ;   piano 3 1        plays pieces 3 and 1 (their keys), then ends; no screen
 ;
 ; The screen is an Intuition custom screen with a borderless backdrop
@@ -165,6 +166,7 @@ INTENA          equ $09a
 INTREQ          equ $09c
 AUD0LC          equ $0a0        ; then LEN +4, PER +6, VOL +8; channels $10 apart
 COLOR13         equ custom+$19a
+COLOR14         equ custom+$19c
 
 ciaapra         equ $bfe001         ; bit 1: the power LED and the audio filter, 0 = on
 LED_BIT         equ 1
@@ -195,7 +197,13 @@ MIX_HALF        equ 21          ; the mixed trace: half the voices' sum, at most
 BEAM_GUARD      equ 64          ; lines above the band a unit may not start on
 
         include "screen.i"      ; LIST_*, LINE_*, colours, SCOPE_*, line_tops
+        include "light.i"       ; FILTER_LIGHT_*: the filter light's rows and colours
 BAND_BYTES      equ ROW_BYTES*SCOPE_ROWS
+; The light is in the voice traces' register; the copper list changes it on
+; the light's rows only, so no voice trace may reach them.
+        if      SCOPE_CENTRE+VOICE_HALF>=FILTER_LIGHT_TOP
+        fail    "the voice traces would reach the filter light's rows"
+        endif
 ; The mixed scope is drawn in two units split at a byte, so no two units
 ; share a byte of the screen (screen.py checks the voice scopes).
 MIX_SPLIT       equ ((((MIX_SCOPE_LEFT+64)/8)*8)-MIX_SCOPE_LEFT)
@@ -734,6 +742,7 @@ open_display:
         lea     palette,a1
         moveq   #16,d0
         CALLGFX LoadRGB4
+        bsr     show_filter             ; the light, by the user copper list
         bsr     copy_band
 
         move.l  picture_mem,a1          ; the file is not needed any more
@@ -759,7 +768,8 @@ open_display:
 ; Close whatever open_display opened; safe to call twice.
 close_display:
         moveq   #-1,d0
-        bsr     highlight               ; no user copper list left on the viewport
+        moveq   #0,d1
+        bsr     make_copper             ; no user copper list left on the viewport
         move.l  window,d0
         beq.s   .screen
         move.l  d0,a0
@@ -1162,6 +1172,7 @@ next_choice:
 .filter:                                ; the A500's audio filter, and the power
         bchg    #LED_BIT,ciaapra        ; LED with it: only that bit, by the task
         addq.l  #1,STATUS+ST_FILTER_KEYS.w
+        bsr     show_filter
         bra     .next
 .quit:  moveq   #-1,d4
         bra     .next
@@ -1170,64 +1181,85 @@ next_choice:
         movem.l (sp)+,d2-d5/a2
         rts
 
-; Put line d0 in gold with a user copper list on the screen's viewport:
-; colour 13 is HIGHLIGHT_COLOUR on its rows and TEXT_COLOUR again after
-; them. d0 = -1 takes the highlight away. The old list is freed once the
-; display has been remade without it.
+; Put line d0 in gold (-1 for none): the user copper list remade with it.
 highlight:
-        movem.l d2-d3/a2-a3,-(sp)
         move.l  screen,d1
-        beq     .out
+        beq.s   .out
         cmp.l   STATUS+ST_HIGHLIGHT.w,d0
-        beq     .already
+        beq.s   .already
+        moveq   #1,d1
+        bra     make_copper
+.out:   rts
+.already:                               ; that line is gold already: since
+        tst.l   d0                      ; this choice, unless it is the piece
+        bmi.s   .out                    ; that was playing, chosen again
+        move.l  STATUS+ST_GOLD_AT.w,d1
+        cmp.l   STATUS+ST_CHOSEN_AT.w,d1
+        bcc.s   .out
+        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_GOLD_AT.w
+        rts
+
+; show_filter: the user copper list remade for the filter as it is now.
+show_filter:
+        move.l  STATUS+ST_HIGHLIGHT.w,d0
+        moveq   #1,d1
+        bra     make_copper
+
+; make_copper: a user copper list on the screen's viewport. Line d0 (-1 for
+; none) in gold: colour 13 is HIGHLIGHT_COLOUR on its rows and TEXT_COLOUR
+; again after them. With d1 not 0, the filter light: colour 14 (the voice
+; traces') is FILTER_LIGHT_ON while the filter is on (CIA-A bit clear) or
+; FILTER_LIGHT_OFF on the light's rows, and FILTER_LIGHT_BACK after them.
+; With d1 = 0 there is no list at all. The old list is freed once the
+; display has been remade without it. With no memory nothing changes.
+make_copper:
+        movem.l d2-d4/a2-a3,-(sp)
+        move.l  screen,d2
+        beq     .out
         move.l  d0,d2
-        sub.l   a2,a2                   ; the new list, none for -1
-        tst.l   d2
-        bmi     .set
+        move.l  d1,d4
+        sub.l   a2,a2                   ; the new list, none for d1 = 0
+        tst.l   d4
+        beq     .set
         moveq   #ucl_SIZEOF,d0
         move.l  #MEMF_PUBLIC|MEMF_CLEAR,d1
         jsr     _LVOAllocMem(a6)
         tst.l   d0
-        beq     .out                    ; no memory: no highlight
+        beq     .out                    ; no memory: as it was
         move.l  d0,a2
         move.l  a2,a0
-        moveq   #5,d0
+        moveq   #9,d0
         CALLGFX UCopperListInit
+        tst.l   d2
+        bmi     .light
         lea     line_tops(pc),a0
-        add.w   d2,d2
-        move.w  0(a0,d2.w),d3           ; the line's first row
-        move.l  a2,a1
+        move.w  d2,d0
+        add.w   d0,d0
+        move.w  0(a0,d0.w),d3           ; the line's first row
         move.w  d3,d0
-        moveq   #0,d1
-        CALLGFX CWait
-        move.l  a2,a1
-        CALLGFX CBump
-        move.l  a2,a1
-        move.l  #COLOR13,d0
-        move.w  #HIGHLIGHT_COLOUR,d1
-        CALLGFX CMove
-        move.l  a2,a1
-        CALLGFX CBump
-        move.l  a2,a1
+        move.l  #COLOR13,d1
+        move.w  #HIGHLIGHT_COLOUR,d4
+        bsr     .change
         move.w  d3,d0
         add.w   #LINE_ROWS,d0
-        moveq   #0,d1
-        CALLGFX CWait
-        move.l  a2,a1
-        CALLGFX CBump
-        move.l  a2,a1
-        move.l  #COLOR13,d0
-        move.w  #TEXT_COLOUR,d1
-        CALLGFX CMove
-        move.l  a2,a1
-        CALLGFX CBump
+        move.w  #TEXT_COLOUR,d4
+        bsr     .change
+.light: move.w  #FILTER_LIGHT_OFF,d4
+        btst    #LED_BIT,ciaapra
+        bne.s   .dark
+        move.w  #FILTER_LIGHT_ON,d4
+.dark:  move.w  #FILTER_LIGHT_TOP,d0
+        move.l  #COLOR14,d1
+        bsr     .change
+        move.w  #FILTER_LIGHT_END,d0
+        move.w  #FILTER_LIGHT_BACK,d4
+        bsr     .change
         move.l  a2,a1                   ; CEND
         move.w  #10000,d0
         move.w  #255,d1
         CALLGFX CWait
         move.l  a2,a1
         CALLGFX CBump
-        lsr.w   #1,d2
 .set:   jsr     _LVOForbid(a6)
         move.l  screen,a0
         move.l  sc_ViewPort+vp_UCopIns(a0),a3   ; the old list
@@ -1236,11 +1268,12 @@ highlight:
         move.l  screen,a0
         CALLINT MakeScreen
         CALLINT RethinkDisplay
+        cmp.l   STATUS+ST_HIGHLIGHT.w,d2
+        beq.s   .same                   ; the line was gold already
         move.l  d2,STATUS+ST_HIGHLIGHT.w
-        bmi.s   .gone
+        bmi.s   .same
         move.l  STATUS+ST_VBLANKS.w,STATUS+ST_GOLD_AT.w
-.gone:
-        move.l  a3,d0
+.same:  move.l  a3,d0
         beq.s   .out
         CALLGFX WaitTOF                 ; the copper has the new list now
         move.l  ucl_FirstCopList(a3),a0
@@ -1248,16 +1281,23 @@ highlight:
         move.l  a3,a1
         moveq   #ucl_SIZEOF,d0
         jsr     _LVOFreeMem(a6)
-.out:   movem.l (sp)+,d2-d3/a2-a3
+.out:   movem.l (sp)+,d2-d4/a2-a3
         rts
-.already:                               ; that line is gold already: since
-        tst.l   d0                      ; this choice, unless it is the piece
-        bmi.s   .out                    ; that was playing, chosen again
-        move.l  STATUS+ST_GOLD_AT.w,d1
-        cmp.l   STATUS+ST_CHOSEN_AT.w,d1
-        bcc.s   .out
-        move.l  STATUS+ST_VBLANKS.w,STATUS+ST_GOLD_AT.w
-        bra.s   .out
+; .change: wait for row d0, then register d1 (an address) to colour d4.
+.change:
+        move.l  d1,-(sp)
+        move.l  a2,a1
+        moveq   #0,d1
+        CALLGFX CWait
+        move.l  a2,a1
+        CALLGFX CBump
+        move.l  a2,a1
+        move.l  (sp)+,d0
+        move.w  d4,d1
+        CALLGFX CMove
+        move.l  a2,a1
+        CALLGFX CBump
+        rts
 
 ; ---------------------------------------------------------------------------
 ; One piece: load its score, start it, end it.

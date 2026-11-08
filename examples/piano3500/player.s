@@ -13,7 +13,8 @@
 ;                    screen appears, and each next one ROTATE_S seconds after
 ;                    the last ends. Space stops and holds the rotation until
 ;                    the next choice; F switches the audio filter (and the
-;                    power LED); Esc or Q quits.
+;                    power LED, and the screen's filter light); Esc or Q
+;                    quits.
 ;   player RUN NAME  one piece, scores/NAME.score, with no screen; RUN is a
 ;                    number the host waits for.
 ;

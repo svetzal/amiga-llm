@@ -8,6 +8,8 @@
   lower right corner are drawn in colours of the picture itself, so the
   copper list that turns register 13 gold never touches them;
 - registers 14 and 15 are the scopes' traces (the player draws them);
+- the filter light (light.py) is drawn in register 14 after, in the lower
+  left corner;
 - the result is an uncompressed IFF ILBM for the disk, a preview PNG, and
   an include file (`screen.i`) that tells the player where each line is,
   which colours to use and where the scopes go.
@@ -164,15 +166,19 @@ def signature_line(text: str, font: font_mod.Font) -> Line:
     return Line(text, picture.WIDTH - 2 - int(cols.max()), picture.HEIGHT - 2 - int(rows.max()))
 
 
+def scope_spans(spec: ScreenSpec) -> list[tuple[int, int]]:
+    """The columns of each scope, left and right (exclusive): the voices', then the mix's."""
+    spans = [(x, x + spec.voice_scope_width) for x in spec.voice_scopes]
+    return [*spans, (spec.mix_scope[0], spec.mix_scope[0] + spec.mix_scope[1])]
+
+
 def check_signature(box: Box, spec: ScreenSpec) -> None:
     """No scope may draw where the signature is: SystemExit when a scope's columns
     meet the signature's on rows of the scope band."""
     band = spec.scope_band
     if box.bottom <= band.top or box.top >= band.bottom:
         return
-    spans = [(x, x + spec.voice_scope_width) for x in spec.voice_scopes]
-    spans.append((spec.mix_scope[0], spec.mix_scope[0] + spec.mix_scope[1]))
-    for left, right in spans:
+    for left, right in scope_spans(spec):
         if left < box.right and box.left < right:
             raise SystemExit(
                 f"a scope (columns {left} to {right - 1}) would draw over the signature "
@@ -250,8 +256,7 @@ def check_scopes(spec: ScreenSpec) -> None:
     """The scopes fit the band and the screen, and no two share a byte of a row
     (the player takes back and redraws each on its own); SystemExit otherwise."""
     band = spec.scope_band
-    spans = [(x, x + spec.voice_scope_width) for x in spec.voice_scopes]
-    spans.append((spec.mix_scope[0], spec.mix_scope[0] + spec.mix_scope[1]))
+    spans = scope_spans(spec)
     for left, right in spans:
         if left < 0 or right > picture.WIDTH:
             raise SystemExit(f"a scope from column {left} to {right} leaves the screen")

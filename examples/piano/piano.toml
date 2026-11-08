@@ -66,6 +66,17 @@ bright_weight = 6.0
 seed = 1
 iterations = 40
 
+# The audio filter's light, in the lower left corner (the signature is in the
+# lower right): a small box in colour register 14 and a label beside it in the
+# picture's dim brown ([screen] attribution_colour). Shared with the A3500
+# recipe (its `pieces`). As the filter changes, the A3500 player sets register
+# 14 to one of these colours (OCS hex); the A500 player, whose voice traces
+# are register 14, changes it on the light's rows only, with its copper list.
+[filter_light]
+label = "filter"
+on = "F42"    # while the filter is on (CIA-A bit 1 clear): a lit LED
+off = "311"   # while it is off: an unlit LED
+
 # The pieces, in list order (keys 1 to 9, then letters). Chosen with
 # `amiga-env piano-survey`; see EXP-004, "More pieces". The titles are written
 # here, not taken from MAESTRO's catalogue, which has slips: BWV 846 is in the

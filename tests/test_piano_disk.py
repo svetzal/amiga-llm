@@ -1,9 +1,12 @@
+from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
-from amiga_env.piano import build, disk
+from amiga_env.piano import build, disk, font, picture
 from amiga_env.piano.build import Piece, Recipe
 from amiga_env.piano.samples import SampleSpec
+from PIL import Image
 
 PLAYER = Path(__file__).parents[1] / "examples" / "piano" / "player.s"
 RECIPE = PLAYER.parent / "piano.toml"
@@ -148,3 +151,66 @@ class TestScreen:
         assert 'include "screen.i"' in source and "SCREEN_TABLES" in source
         assert 'include "menu.i"' in source
         assert f'menu_keys:      dc.b "{disk.MENU_KEYS}"' in source
+        assert 'include "light.i"' in source
+
+
+FONT_PATH = PLAYER.parent / "font.txt"
+
+
+class TestScreenData:
+    def test_a_recipe_without_a_filter_light_is_refused(self, tmp_path):
+        bare = replace(build.load_recipe(RECIPE), filter_light=None, out=str(tmp_path))
+
+        with pytest.raises(SystemExit, match=r"no \[filter_light\]"):
+            disk.screen_data(bare, PLAYER.parents[2], tmp_path / "m68k")
+
+    def test_a_recipe_without_a_screen_is_refused(self, tmp_path):
+        bare = replace(build.load_recipe(RECIPE), screen=None, out=str(tmp_path))
+
+        with pytest.raises(SystemExit, match=r"no \[screen\]"):
+            disk.screen_data(bare, PLAYER.parents[2], tmp_path / "m68k")
+
+
+@pytest.fixture(scope="module")
+def written(tmp_path_factory):
+    """The A500 screen data, as `piano-disk` writes it: the include folder and `out`."""
+    out = tmp_path_factory.mktemp("exp004")
+    recipe = replace(build.load_recipe(RECIPE), out=str(out))
+    disk.screen_data(recipe, PLAYER.parents[2], out / "m68k")
+    return out
+
+
+class TestWrittenScreen:
+    def test_the_picture_has_the_light_in_the_lower_left_in_register_14(self, written):
+        indices, colours = picture.read_ilbm((written / "m68k" / "title.ilbm").read_bytes())
+
+        assert (indices[192:199, 1:8] == 14).all()
+        brown = colours.index(0x654)
+        rows, cols = np.nonzero(font.load(FONT_PATH).render("filter"))
+        assert (indices[rows + 192, cols + 11] == brown).all()
+
+    def test_register_14_stays_the_voice_trace_colour(self, written):
+        _, colours = picture.read_ilbm((written / "m68k" / "title.ilbm").read_bytes())
+
+        assert colours[14] == 0x5BC
+
+    def test_light_i_is_written_beside_screen_i_and_menu_i(self, written):
+        data = written / "m68k"
+
+        assert (data / "light.i").read_text(encoding="ascii") == (
+            "; light.i: made by `amiga-env piano-disk` or `piano3500-run` (light.py); "
+            "do not edit.\n"
+            "FILTER_LIGHT_REGISTER equ 14\n"
+            "FILTER_LIGHT_ON equ $F42\n"
+            "FILTER_LIGHT_OFF equ $311\n"
+            "FILTER_LIGHT_TOP equ 192\n"
+            "FILTER_LIGHT_END equ 199\n"
+            "FILTER_LIGHT_BACK equ $5BC\n"
+        )
+        assert {"title.ilbm", "screen.i", "menu.i", "light.i"} <= {p.name for p in data.iterdir()}
+
+    def test_the_preview_shows_the_light(self, written):
+        preview = np.asarray(Image.open(written / "title-preview.png").convert("RGB"))
+
+        box = preview[693:716, 3:24]  # rows 192 to 198 and columns 1 to 7, enlarged 3.6 and 3 times
+        assert (box == picture.rgb_of(0x5BC)).all()
