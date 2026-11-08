@@ -147,6 +147,17 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         help="model the A3500's 68030 piano from RECIPE.toml: 16 mixed voices, voice logs, WAVs",
     )
     piano3500.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    run3500 = sub.add_parser(
+        "piano3500-run",
+        help="boot the A3500 with the 68030 piano player, play PIECEs, "
+        "compare their voice logs with the model's",
+    )
+    run3500.add_argument("recipe", type=Path, metavar="RECIPE.toml")
+    run3500.add_argument("pieces", nargs="+", metavar="PIECE")
+    run3500.add_argument(
+        "--realtime", action="store_true", help="run at the machine's own speed, not in warp"
+    )
+    run3500.add_argument("--timeout", type=float, default=1800, help="seconds for the run; 1800")
     disks = sub.add_parser(
         "piano-disk", help="assemble the recipe's 68000 player onto a boot floppy per piece"
     )
@@ -271,6 +282,7 @@ COMMANDS = {
     "exec": lambda args: _exec(args),
     "piano": lambda args: _piano(args.recipe),
     "piano3500": lambda args: _piano3500(args.recipe),
+    "piano3500-run": lambda args: _piano3500_run(args),
     "piano-disk": lambda args: _piano_disk(args.recipe, args.out),
     "piano-survey": lambda args: _piano_survey(args),
     "piano-run": lambda args: _piano_run(args),
@@ -350,6 +362,31 @@ def _piano3500(recipe: Path) -> None:
         f"{worst['clamped']} clamped, {worst['wraps']} wrapped"
     )
     print(f"done      in {report['seconds_total']} s")
+
+
+def _piano3500_run(args: argparse.Namespace) -> int:
+    from .piano import build3500, run3500
+
+    recipe = build3500.load_recipe(args.recipe)
+    machines = profile.load_machines(reserved=command_names())
+    if recipe.machine not in machines:
+        raise SystemExit(f"{args.recipe}: no machine {recipe.machine!r} in {project.CONFIG}")
+    machine = machines[recipe.machine]
+    _ready(machine)
+    out = project.root() / recipe.out / "machine"
+    found = run3500.run(machine, recipe, args.pieces, out, not args.realtime, args.timeout)
+    good = True
+    for name, piece in found["pieces"].items():
+        cpu, log = piece["cpu"], piece["log"]
+        same = "identical" if log["identical"] else f"differs: {log['first_difference']}"
+        good &= log["identical"] and piece["done"] and cpu["overruns"] == 0
+        print(
+            f"{name:<18} log {same}, CPU {cpu['mean_percent']}% mean, "
+            f"{cpu['worst_percent']}% worst, {cpu['overruns']} overruns, "
+            f"{piece['wall_seconds']} s"
+        )
+    print(f"done      in {found['wall_seconds']} s; {out / 'piano3500-run.json'}")
+    return 0 if good else 1
 
 
 def _piano_disk(recipe: Path, out: Path | None) -> None:

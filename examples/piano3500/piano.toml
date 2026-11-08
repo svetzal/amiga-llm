@@ -6,6 +6,8 @@
 sfz = "salamander/SalamanderGrandPianoV3_44.1khz16bit/SalamanderGrandPianoV3.sfz"
 out = "runs/exp006"
 pieces = "examples/piano/piano.toml"   # EXP-004's ten pieces, from its recipe
+player = "examples/piano3500/player.s"   # the 68030 player (`amiga-env piano3500-run`)
+machine = "a3500"                        # the amiga.toml machine it runs on
 
 # Fast RAM for the samples (with their loop pads), the tables and the
 # largest score, out of the A3500's 16 MB; the rest is for the system, the

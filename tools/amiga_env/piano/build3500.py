@@ -52,6 +52,8 @@ class Recipe:
     full_volume: int  # voice volume of the loudest sample at velocity 127
     pan_width: float  # 0 is mono, 1 puts the end keys hard left and right
     budget_bytes: int  # fast RAM for the samples, the tables and the score
+    player: str = ""  # the 68030 player's source, under the project
+    machine: str = ""  # the amiga.toml machine it runs on
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,8 @@ def load_recipe(path: Path) -> Recipe:
         full_volume=data["full_volume"],
         pan_width=data.get("pan_width", 0.5),
         budget_bytes=data["budget_bytes"],
+        player=data.get("player", ""),
+        machine=data.get("machine", ""),
     )
 
 
