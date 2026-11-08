@@ -89,6 +89,25 @@ Against the hypothesis: supported at the emulator tier (16 voices take 22
 to 31%). The emulator's 68030 timing is approximate, so this does not
 settle it.
 
+### 2026-11-07: way B with 32-bit sums, emulator tier
+
+Way B rerun after the change for EXP-006 (MULS.W, then ADD.L into a
+longword sum, no SWAP; shift and clamp once per output sample). Same
+profile and loop count (57,436).
+
+| Test | Mean | Worst |
+| --- | --- | --- |
+| B, 8 voices, data cache off | 17.8% | 18.1% |
+| B, 16 voices, data cache off | 26.6% | 26.9% |
+| B, 16 voices, data cache on | 25.1% | 25.4% |
+
+With the data cache off the change costs 0.4 points. With it on, way B
+loses most of its gain from the cache (21.6% before), probably because the
+sums now take 4 KB instead of 2 KB against a 256-byte data cache. The test
+mixes each voice to one side; the A3500 piano pans each voice to both sides,
+a second MULS.W and ADD.L per voice-sample, which this test does not yet
+measure.
+
 ### Real machine tier
 
 Not yet run. Stacey boots `build/mixbench.adf` on the A3500 from a floppy
