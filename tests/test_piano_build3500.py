@@ -9,6 +9,50 @@ from amiga_env.piano.light import FilterLight
 from conftest import REPO
 
 RECIPE = REPO / "examples" / "piano3500" / "piano.toml"
+RECIPE_16K = REPO / "examples" / "piano3500-16k" / "piano.toml"
+MADE = build3500.Made(
+    root=21,
+    layer=0,
+    region=None,
+    keys=(21,),
+    data=np.zeros(0, dtype=np.int16),
+    loop_start=0,
+    rate=11025.0,
+    level=1.0,
+    decay_db_per_s=0.0,
+    loop_similarity=1.0,
+)
+
+
+class TestSamplesBudget:
+    def made(self, lengths):
+        return [replace(MADE, data=np.zeros(n, dtype=np.int16)) for n in lengths]
+
+    def test_samples_that_fit_the_budget_pass(self):
+        made = self.made([1000, 2000])
+        size = sum(m.padded_bytes for m in made)
+
+        build3500.check_samples_budget(made, size)
+
+    def test_samples_over_the_budget_stop_the_build(self):
+        made = self.made([1000, 2000])
+        size = sum(m.padded_bytes for m in made)
+
+        with pytest.raises(SystemExit, match="1 over samples_budget_bytes"):
+            build3500.check_samples_budget(made, size - 1)
+
+    def test_the_projects_recipes_keep_the_measured_limit(self):
+        for path in (RECIPE, RECIPE_16K):
+            assert build3500.load_recipe(path).samples_budget_bytes == 15_409_032
+
+
+class TestEditions:
+    def test_the_16k_edition_differs_only_in_its_rate_floor_and_output(self):
+        a3000, edition = build3500.load_recipe(RECIPE), build3500.load_recipe(RECIPE_16K)
+
+        assert (a3000.spec.min_rate, edition.spec.min_rate) == (11025.0, 16000.0)
+        assert a3000.out != edition.out
+        assert replace(edition, spec=a3000.spec, out=a3000.out) == a3000
 
 
 class TestScopes:
@@ -20,7 +64,7 @@ class TestScopes:
     def test_a_recipe_without_scopes_loads_with_none(self, tmp_path):
         path = tmp_path / "r.toml"
         path.write_text(
-            'sfz = "a.sfz"\nout = "o"\nfull_volume = 1\nbudget_bytes = 1\n'
+            'sfz = "a.sfz"\nout = "o"\nfull_volume = 1\nsamples_budget_bytes = 1\n'
             '[[piece]]\nname = "p"\nmidi = "p.mid"\n'
         )
 
@@ -84,7 +128,7 @@ class TestFilterLight:
     def test_a_recipe_without_one_loads_with_none(self, tmp_path):
         path = tmp_path / "r.toml"
         path.write_text(
-            'sfz = "a.sfz"\nout = "o"\nfull_volume = 1\nbudget_bytes = 1\n'
+            'sfz = "a.sfz"\nout = "o"\nfull_volume = 1\nsamples_budget_bytes = 1\n'
             '[[piece]]\nname = "p"\nmidi = "p.mid"\n'
         )
 

@@ -67,10 +67,16 @@ def tree_bytes(tree: Path) -> int:
     return sum(p.stat().st_size for p in tree.rglob("*") if p.is_file())
 
 
+def default_image(recipe_path: Path) -> Path:
+    """Where a recipe's image goes unless told: build/<the recipe's folder>/piano3500.hdf,
+    so each edition (examples/piano3500, examples/piano3500-16k) has its own."""
+    return project.build_dir() / recipe_path.resolve().parent.name / "piano3500.hdf"
+
+
 def build(recipe_path: Path, image: Path | None = None) -> Path:
-    """Write the image (build/piano3500/piano3500.hdf unless told) and return it."""
+    """Write the image (default_image unless told) and return it."""
     recipe = build3500.load_recipe(recipe_path)
-    image = image or project.build_dir() / "piano3500" / "piano3500.hdf"
+    image = image or default_image(recipe_path)
     image.parent.mkdir(parents=True, exist_ok=True)
     piano = build3500.make_piano(recipe)
     with tempfile.TemporaryDirectory(prefix="image-", dir=image.parent) as work:

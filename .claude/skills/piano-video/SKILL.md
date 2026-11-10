@@ -14,6 +14,7 @@ YouTube API.
 | --- | --- | --- | --- | --- |
 | A500 floppy (EXP-004) | `make piano-video` | `runs/video/` | `piano-playthrough-4k.mp4` | `examples/piano/video-description.txt` |
 | A3500 image (EXP-006) | `make piano3500-video` | `runs/video3500/` | `piano3500-playthrough-4k.mp4` | `examples/piano3500/video-description.txt` |
+| A3500 image, 16 kHz edition (EXP-006) | `make piano3500-16k-video` | `runs/video3500-16k/` | `piano3500-playthrough-4k.mp4` | `examples/piano3500-16k/video-description.txt` |
 
 The make targets take `SECONDS=`, `STEPS=` and `OUT=`. The A500 command
 boots a copy of the floppy (`--floppy`); the A3500 one boots a copy of the
@@ -39,8 +40,8 @@ room without asking.
 
 ## 2. Build what is recorded
 
-Record the disk as it is on `main`, built fresh: `make piano-disk` or `make
-piano3500-image`. Gate first (`set -o pipefail; make test`, `uv run
+Record the disk as it is on `main`, built fresh: `make piano-disk`, `make
+piano3500-image` or `make piano3500-16k-image`. Gate first (`set -o pipefail; make test`, `uv run
 amiga-env guard`). Close any emulator window of yours that has the image
 open; the recorder works on a copy.
 

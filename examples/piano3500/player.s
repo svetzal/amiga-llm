@@ -2,8 +2,10 @@
 ; tools/amiga_env/piano/player3500.py.
 ;
 ; For the A3500 (68030 at 25 MHz, ECS, NTSC, Kickstart 2.04 or later) with
-; about 12 MB of fast RAM free. Two ways to run it, from the folder that
-; holds its files:
+; 16 MB of fast RAM: samples.bin needs one free block that large (11.0 MB
+; at the 11,025 Hz floor, 14.8 MB in the 16 kHz edition), and about 160 KB
+; more after it (EXP-006, 2026-11-09). Two ways to run it, from the folder
+; that holds its files:
 ;
 ;   player           the screen: the title picture with the song list (as
 ;                    EXP-004's A500 disk shows it). A click on a piece's

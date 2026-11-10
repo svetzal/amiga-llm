@@ -4,7 +4,7 @@ A recipe (TOML) names the SFZ piano under media/, the pieces (its own
 [[piece]] tables, or `pieces`, another recipe whose [[piece]] tables to
 use), the sample choices (samples.SampleSpec), the number of velocity
 layers, the volume of the loudest sample at velocity 127, the pan width and
-the fast RAM budget for the samples. Everything goes to the recipe's `out`
+the largest samples.bin the player can load. Everything goes to the recipe's `out`
 folder under the project.
 
 Files written:
@@ -96,7 +96,7 @@ class Recipe:
     layers: int  # velocity layers kept
     full_volume: int  # voice volume of the loudest sample at velocity 127
     pan_width: float  # 0 is mono, 1 puts the end keys hard left and right
-    budget_bytes: int  # fast RAM for the samples, the tables and the score
+    samples_budget_bytes: int  # the largest samples.bin (pads included); the build stops above it
     player: str = ""  # the 68030 player's source, under the project
     machine: str = ""  # the amiga.toml machine it runs on
     screen: screen_mod.ScreenSpec | None = None  # the player's screen (from `pieces`'s recipe)
@@ -155,7 +155,7 @@ def load_recipe(path: Path) -> Recipe:
         layers=data.get("layers", 8),
         full_volume=data["full_volume"],
         pan_width=data.get("pan_width", 0.5),
-        budget_bytes=data["budget_bytes"],
+        samples_budget_bytes=data["samples_budget_bytes"],
         player=data.get("player", ""),
         machine=data.get("machine", ""),
         screen=screen_mod.load_spec(shared["screen"]) if "screen" in shared else None,
@@ -278,12 +278,23 @@ def make_piano(recipe: Recipe) -> Piano:
                 )
             )
     made = finish(looped, recipe.spec)
+    check_samples_budget(made, recipe.samples_budget_bytes)
     for m in made:
         if mixer.largest_difference(mixer.padded(m.data, m.loop_start)) > 32767:
             raise SystemExit(
                 f"root {m.root}, layer {m.layer}: neighbours differ by more than SUB.W holds"
             )
     return Piano(chosen, roots, made, tables(made, chosen, roots, notes, recipe))
+
+
+def check_samples_budget(made: list[Made], budget: int) -> None:
+    """Stop when samples.bin, pads included, would be larger than the player can load."""
+    size = sum(m.padded_bytes for m in made)
+    if size > budget:
+        raise SystemExit(
+            f"samples.bin would be {size:,} bytes, {size - budget:,} over "
+            f"samples_budget_bytes ({budget:,})"
+        )
 
 
 def finish(
@@ -516,8 +527,8 @@ def memory(piano: Piano, pieces: dict, recipe: Recipe) -> dict:
         "tables_bytes": table_bytes,
         "largest_score_bytes": score_bytes,
         "total_bytes": total,
-        "budget_bytes": recipe.budget_bytes,
-        "headroom_bytes": recipe.budget_bytes - total,
+        "samples_budget_bytes": recipe.samples_budget_bytes,
+        "headroom_bytes": recipe.samples_budget_bytes - sample_bytes,
     }
 
 

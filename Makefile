@@ -4,7 +4,7 @@
 UV  ?= uv
 ENV := $(UV) run --quiet amiga-env
 
-.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3500 a3000-dev system hello mixbench piano piano3500 piano3500-run piano3500-image piano-disk piano-video piano3500-video guard test lint
+.PHONY: help tools toolchain media media-verify doctor a500 a3000 a3500 a3000-dev system hello mixbench piano piano3500 piano3500-run piano3500-image piano3500-16k piano3500-16k-image piano3500-16k-video piano-disk piano-video piano3500-video guard test lint
 
 SYSTEM ?= a3000-dev
 PIECES ?= nocturne-op9-2 bwv846
@@ -31,7 +31,10 @@ help:
 	@echo "make piano-disk    put EXP-004's 68000 player and its pieces on build/piano/piano.adf"
 	@echo "make piano-video   record the A500 floppy playing by itself; master in runs/video"
 	@echo "make piano3500-video  record the A3500 image playing by itself; master in runs/video3500"
-	@echo "                   (both take SECONDS=, STEPS= and OUT=)"
+	@echo "make piano3500-16k, piano3500-16k-image, piano3500-16k-video"
+	@echo "                   the same for the 16 kHz edition: runs/exp006-16k,"
+	@echo "                   build/piano3500-16k/piano3500.hdf, runs/video3500-16k"
+	@echo "                   (the videos take SECONDS=, STEPS= and OUT=)"
 	@echo "make guard         fail if git tracks licensed media or .env"
 	@echo "make test          lint and run the host-side tests"
 
@@ -91,6 +94,15 @@ piano-video:
 
 piano3500-video:
 	$(ENV) piano3500-video examples/piano3500/piano.toml $(VIDEO)
+
+piano3500-16k:
+	$(ENV) piano3500 examples/piano3500-16k/piano.toml
+
+piano3500-16k-image:
+	$(ENV) piano3500-image examples/piano3500-16k/piano.toml --boot
+
+piano3500-16k-video:
+	$(ENV) piano3500-video examples/piano3500-16k/piano.toml --out runs/video3500-16k $(VIDEO)
 
 guard:
 	$(ENV) guard

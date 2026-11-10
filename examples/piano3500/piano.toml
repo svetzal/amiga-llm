@@ -10,10 +10,15 @@ credits = "examples/piano3500/Credits" # the full notices, as `Credits` on the i
 player = "examples/piano3500/player.s"   # the 68030 player (`amiga-env piano3500-run`)
 machine = "a3500"                        # the amiga.toml machine it runs on
 
-# Fast RAM for the samples (with their loop pads), the tables and the
-# largest score, out of the A3500's 16 MB; the rest is for the system, the
-# player and its log.
-budget_bytes = 12582912   # 12 MB
+# The largest samples.bin (loop pads included) the player may load; the
+# build stops above it. From EXP-006's 2026-11-09 entry, measured on the
+# emulated A3500 booting the image: the largest free fast block before
+# samples.bin, 16,613,704 bytes, less the 156,096 bytes the later
+# allocations need at their peak (scores, title.ilbm, the screen), less a
+# 1 MiB margin for other A3000-class machines (SuperKickstart, more
+# partitions, more pieces). It is the machine's limit, the same for every
+# edition; at this floor samples.bin is 10,972,800 bytes.
+samples_budget_bytes = 15409032   # 16,613,704 - 156,096 - 1,048,576
 
 # Velocity layers kept from Salamander's 16, spread evenly by centre velocity.
 layers = 8

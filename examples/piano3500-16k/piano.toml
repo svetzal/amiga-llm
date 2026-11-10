@@ -1,0 +1,53 @@
+# EXP-006, the A3500 piano, 16 kHz edition: the recipe for `amiga-env piano3500`.
+# The same as examples/piano3500/piano.toml (the A3000 edition, 11,025 Hz)
+# but for the samples' rate floor and the output folder; a test keeps the two
+# in step. Its image is build/piano3500-16k/piano3500.hdf.
+# A model of a 68030 player that mixes 16 voices of 16-bit samples in software
+# into 14-bit stereo (EXP-005, software mixing on the A3500, way B).
+# Paths are under media/ (sfz) or the project (out, pieces).
+
+sfz = "salamander/SalamanderGrandPianoV3_44.1khz16bit/SalamanderGrandPianoV3.sfz"
+out = "runs/exp006-16k"
+pieces = "examples/piano/piano.toml"   # EXP-004's ten pieces, its screen, rotate_s and filter light
+credits = "examples/piano3500/Credits" # the full notices, as `Credits` on the image
+player = "examples/piano3500/player.s"   # the 68030 player (`amiga-env piano3500-run`)
+machine = "a3500"                        # the amiga.toml machine it runs on
+
+# The largest samples.bin (loop pads included) the player may load; the
+# build stops above it. From EXP-006's 2026-11-09 entry, measured on the
+# emulated A3500 booting the image: the largest free fast block before
+# samples.bin, 16,613,704 bytes, less the 156,096 bytes the later
+# allocations need at their peak (scores, title.ilbm, the screen), less a
+# 1 MiB margin for other A3000-class machines (SuperKickstart, more
+# partitions, more pieces). It is the machine's limit, the same for every
+# edition; at this floor samples.bin is 14,826,112 bytes.
+samples_budget_bytes = 15409032   # 16,613,704 - 156,096 - 1,048,576
+
+# Velocity layers kept from Salamander's 16, spread evenly by centre velocity.
+layers = 8
+
+# Voice volume of the loudest sample at velocity 127, at most 32,767 (a
+# MULS.W operand). Chosen so that the loudest of the ten pieces (BWV 846)
+# peaks at -1 dBFS: a render at 14,336 peaked at 20,737, and 14,336 * 29,205
+# / 20,737 = 20,190 (EXP-006). The build reports how far past full scale 16
+# adjacent keys struck at velocity 127 would go.
+full_volume = 20190
+
+# 0 puts every key in the middle (mono); 1 puts A0 hard left and C8 hard right.
+pan_width = 0.5
+
+[samples]
+spacing = 3
+min_rate = 16000.0     # EXP-006, 2026-11-09
+max_rate = 27965.0      # the mix rate: no root is stored faster than it plays
+harmonics = 4.0
+attack_bass_s = 2.8     # twice EXP-004's
+attack_treble_s = 0.8
+loop_s = 0.1
+fade_s = 0.01
+peak = 32700            # largest sample value after normalising, below 32767 for the dither
+
+# The player's two scopes, in columns; their rows come from the shared [screen].
+[scopes]
+left = [80, 160]   # the left channel's scope, then the right's: a quarter of the screen each, centred
+width = 80

@@ -1,0 +1,36 @@
+One unattended run of the 16 kHz edition of the expressive piano, from the boot to the end of its tenth piece. It is the A3000 edition with its samples stored at 16 kHz or more instead of 11,025 Hz: 14.8 MB of samples in place of 11.0 MB. Everything else is as in the A3000 edition: the same pieces, the same 68030 program, the same machine. Nobody touches the machine. Fifteen seconds after its screen appears it plays the first piece, and fifteen seconds after each piece ends it plays the next.
+
+The A3500 was a Commodore prototype that came before the Amiga 3000T; I rescued one from Commodore Canada. Here it is emulated cycle-exact in Amiberry 8.5.0 as an NTSC Amiga 3000 set up like mine: a 68030 at 25 MHz, the ECS chipset, 2 MB of chip memory, 16 MB of fast memory and Kickstart 2.04, booting from a hard disk image on the A3000's own SCSI controller (on the real machine, a BlueSCSI).
+
+The pieces are human performances, with each note's velocity and the sustain pedal. A 68030 program mixes 16 voices of 16-bit samples of a real grand piano in software, with 8 velocity layers, and plays the mix through Paula, the Amiga's sound chip, as 14-bit stereo. The samples, the scores and the program were made with modern tools on a Mac; the Amiga does the playing. The line of the piece playing turns gold, the two scopes at the bottom show the left and right output, and the light in the lower left corner shows whether the audio filter is on. It starts off.
+
+This is the emulator's own picture and sound, every frame and every sample, with nothing cut: the boot, the gaps between pieces, and every piece in full. Each piece starts about a second after its line turns gold, because each recording starts with that much silence.
+
+The project: https://github.com/svetzal/amiga-llm (EXP-006, the A3500 piano; this edition is examples/piano3500-16k)
+
+Chapters
+{chapters}
+
+Credits and licences
+
+The piano
+Salamander Grand Piano V3 (2016-12-09), a Yamaha C5, by Alexander Holm.
+Licence: Creative Commons Attribution 3.0 (CC BY 3.0), https://creativecommons.org/licenses/by/3.0/
+Source: https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/
+Changed for this disk: 8 of the 16 velocity layers and one sample every three semitones, kept at 16 bits, resampled to between 16 kHz and 27,965 Hz, cut to a recorded attack plus a short crossfaded loop, and set to new levels.
+
+The performances
+MAESTRO dataset v3.0.0 by Google LLC (Magenta), MIDI recorded at the International Piano-e-Competition.
+Licence: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0), https://creativecommons.org/licenses/by-nc-sa/4.0/
+Source: https://magenta.tensorflow.org/datasets/maestro
+Changed for this disk: each performance's notes, velocities and sustain pedal converted to the player's score format. The titles on the screen were written for this disk.
+
+The picture
+Generated with OpenAI's image model from the project's own description, then cropped, reduced to 13 colours and dithered for this screen.
+
+The player and the font
+Copyright (c) 2026 Stacey Vetzal, under the MIT licence (LICENSE in the amiga-llm project).
+
+This video
+Shared under CC BY-NC-SA 4.0, as the performances are: https://creativecommons.org/licenses/by-nc-sa/4.0/
+Not for commercial use. The video is not monetised.

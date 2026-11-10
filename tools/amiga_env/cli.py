@@ -153,7 +153,10 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
     )
     image3500.add_argument("recipe", type=Path, metavar="RECIPE.toml")
     image3500.add_argument(
-        "--out", type=Path, metavar="HDF", help="the image; build/piano3500/piano3500.hdf"
+        "--out",
+        type=Path,
+        metavar="HDF",
+        help="the image; build/<the recipe's folder>/piano3500.hdf",
     )
     image3500.add_argument(
         "--boot", action="store_true", help="then boot it headless and screenshot the screen"
@@ -276,7 +279,8 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]
         "--image",
         type=Path,
         metavar="HDF",
-        help="the piano's image; build/piano3500/piano3500.hdf, written first if missing",
+        help="the piano's image; build/<the recipe's folder>/piano3500.hdf, written first "
+        "if missing",
     )
     film3500.add_argument(
         "--out", type=Path, metavar="DIR", help="where it all goes; runs/video3500"
@@ -397,8 +401,9 @@ def _piano3500(recipe: Path) -> None:
     memory = report["memory"]
     print(f"piano3500 {len(report['samples'])} samples in {len(report['layers'])} layers")
     print(
-        f"memory    {memory['total_bytes']} of {memory['budget_bytes']} bytes "
-        f"(samples {memory['samples_bytes_padded']}, headroom {memory['headroom_bytes']})"
+        f"memory    samples {memory['samples_bytes_padded']} of "
+        f"{memory['samples_budget_bytes']} bytes (headroom {memory['headroom_bytes']}); "
+        f"with the tables and the largest score {memory['total_bytes']}"
     )
     for name, piece in report["pieces"].items():
         print(
@@ -613,7 +618,7 @@ def _piano3500_video(args: argparse.Namespace) -> int:
         raise SystemExit(f"{args.recipe}: no machine {name!r} in {project.CONFIG}")
     out = args.out or project.root() / "runs" / "video3500"
     steps = _steps(args.steps)
-    image = args.image or project.build_dir() / "piano3500" / "piano3500.hdf"
+    image = args.image or image3500.default_image(args.recipe)
     if "record" in steps and not image.is_file():
         if args.image:
             raise SystemExit(f"no image {image}")

@@ -55,3 +55,13 @@ def test_the_boot_reports_the_players_fast_ram_figures():
         "fast_free_after": 3_900_000,
         "fast_largest_after": 3_800_000,
     }
+
+
+def test_each_edition_has_its_own_image():
+    from conftest import REPO
+
+    a3000 = image3500.default_image(REPO / "examples" / "piano3500" / "piano.toml")
+    edition16k = image3500.default_image(REPO / "examples" / "piano3500-16k" / "piano.toml")
+
+    assert (a3000.parent.name, edition16k.parent.name) == ("piano3500", "piano3500-16k")
+    assert a3000.name == edition16k.name == "piano3500.hdf"
