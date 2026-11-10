@@ -1034,8 +1034,11 @@ edition (14.8 MB of samples, everything else as the A3000 edition), names
 the Schubert "D. 960, III" and says the filter starts off. I looked at
 master frames at 0:30, 10:00 and 40:50 (the right line gold, the scopes
 tracing, the light dark) and at a crop at 25:00 (nearest-neighbour pixels).
-Not uploaded. The capture, the WAV and the image copy are kept until
-Stacey says the video is up.
+Published 2026-11-10 as "Expressive Piano Playthrough, CPU Mixing, A3000,
+16kHz Samples": https://youtu.be/HgrF5hPTfbU. Stacey's description on
+YouTube matches `runs/video3500-16k/youtube-description.txt`, which was
+written from the two published descriptions at her request. The capture,
+the WAV and the image copy were deleted once it was up; the master is kept.
 
 ## What the 68030 player must match
 
