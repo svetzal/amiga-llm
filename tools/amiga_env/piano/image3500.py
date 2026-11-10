@@ -114,7 +114,7 @@ def boot(machine, image: Path, out: Path, timeout: float = 120.0) -> dict:
             if status.magic == run3500.MAGIC and status.state == 3:
                 break
             if status.magic == run3500.MAGIC and status.state == run3500.FAILED:
-                raise SystemExit(f"the player failed on the image: {status}")
+                raise SystemExit(f"{run3500.failure(status)}, on the image: {status}")
             if time.monotonic() - began > timeout:
                 raise SystemExit(f"no piano screen within {timeout:g} s: {status}")
             time.sleep(0.5)

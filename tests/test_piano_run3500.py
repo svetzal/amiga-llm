@@ -53,6 +53,25 @@ class TestStatus:
         assert sorted(offsets.values()) == list(range(0, size, 4))
         assert in_order == [field.replace("_", "") for field in run3500.STATUS_FIELDS]
 
+    def test_every_error_the_player_can_stop_with_has_words(self):
+        codes = {
+            int(n) for n in re.findall(r"^ERR_\w+\s+equ\s+(\d+)", PLAYER.read_text(), re.MULTILINE)
+        }
+
+        assert codes == set(run3500.ERRORS)
+
+    def test_a_score_that_did_not_load_is_named_by_its_place_in_the_index(self):
+        values = dict.fromkeys(run3500.STATUS_FIELDS, 0) | {
+            "state": run3500.FAILED,
+            "error": run3500.ERR_SCORE,
+            "mode": 1,
+            "piece": 2,
+        }
+
+        text = run3500.failure(run3500.Status(**values))
+
+        assert text == "the player failed: a score did not load (piece 3 in scores/index)"
+
     def test_the_fast_ram_figures_are_the_last_four_longs(self):
         longs = [0] * len(run3500.STATUS_FIELDS)
         longs[-4:] = [15_000_000, 14_900_000, 3_000_000, 2_900_000]

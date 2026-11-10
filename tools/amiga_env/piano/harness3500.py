@@ -230,7 +230,7 @@ class Screen:
             if status.magic == run3500.MAGIC and ready(status):
                 return status
             if status.state == run3500.FAILED:
-                raise SystemExit(f"the player failed: {status}")
+                raise SystemExit(f"{run3500.failure(status)}: {status}")
             if time.monotonic() > deadline:
                 raise SystemExit(f"not there within {timeout:g} s: {status}")
             time.sleep(0.25)

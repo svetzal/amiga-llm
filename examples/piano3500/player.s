@@ -579,6 +579,9 @@ start:
         tst.l   d0
         beq     failed
         bsr     load_scores
+        moveq   #ERR_SCORE,d7
+        tst.l   d0
+        beq     failed
         bsr     open_display
         moveq   #ERR_SCREEN,d7
         tst.l   d0
@@ -1908,6 +1911,7 @@ read_index:
 .out:   rts
 
 ; load_scores: every piece's score now, so a choice never waits for the disk.
+; d0: 0 when one cannot be loaded (ST_PIECE says which), else 1.
 load_scores:
         movem.l d2-d4/a2,-(sp)
         move.l  STATUS+ST_VBLANKS.w,d3
@@ -1925,13 +1929,19 @@ load_scores:
         bsr     load_file
         move.l  d0,(a2)+
         move.l  d1,(a2)+
+        tst.l   d0
+        beq.s   .bad
         addq.l  #1,d4
         bra.s   .next
 .done:  move.l  STATUS+ST_VBLANKS.w,d0
         sub.l   d3,d0
         move.l  d0,STATUS+ST_PRELOAD_FRAMES.w
-        movem.l (sp)+,d2-d4/a2
+        moveq   #1,d0
+.out:   movem.l (sp)+,d2-d4/a2
         rts
+.bad:   move.l  d4,STATUS+ST_PIECE.w
+        moveq   #0,d0
+        bra.s   .out
 
 free_scores:
         movem.l d2/a2,-(sp)

@@ -39,6 +39,21 @@ QUEUE = 32  # changes a voice can hold queued (the player's own limit)
 STATUS = 0x100
 MAGIC = 0x50333550  # 'P35P'
 DONE, FAILED = 2, 0xFFFFFFFF
+ERR_SCORE = 5
+ERRORS = {  # the player's ERR_ codes: why it stopped
+    1: "dos.library did not open",
+    2: "the command line is not RUN NAME",
+    3: "piano.tab did not load, or is not the player's",
+    4: "samples.bin did not load (no fast RAM block large enough, or no file)",
+    ERR_SCORE: "a score did not load",
+    6: "no chip RAM for Paula's buffers",
+    7: "timer.device did not open",
+    8: "the voice log could not be made",
+    9: "a score has a byte the player does not know",
+    10: "no signal for the interrupt",
+    11: "scores/index did not load",
+    12: "the screen did not open",
+}
 STATUS_FIELDS = (
     "magic",
     "state",
@@ -172,6 +187,14 @@ def startup_sequence(pieces: Sequence[str]) -> str:
     lines = ["; Written by amiga-env piano3500-run.", "FailAt 21"]
     lines += [f"{PROGRAM} {run} {name}" for run, name in enumerate(pieces, 1)]
     return "\n".join(lines) + "\n"
+
+
+def failure(status: Status) -> str:
+    """Why the player stopped, in words, from its status block."""
+    why = ERRORS.get(status.error, f"error {status.error}")
+    if status.error == ERR_SCORE and status.mode:
+        why += f" (piece {status.piece + 1} in scores/index)"
+    return f"the player failed: {why}"
 
 
 def parse_status(data: bytes) -> Status:
