@@ -165,6 +165,10 @@ Memory (fast RAM, the samples with their pads):
 | Largest score (Beethoven) | 19,058 |
 | Total | 11,011,554 of a 12,582,912 budget; 1,571,358 spare |
 
+(2026-11-09: 19,696 is the build's own sum of the tables' contents. The
+piano.tab file the player loads is 20,816 bytes, with its header and the
+player's entry sizes.)
+
 The rates are a choice against memory. At 11,025 Hz most of the keyboard
 keeps nothing above 5.5 kHz. Raising the floor to 16 kHz would need about
 14.8 MB, and 22,050 Hz about 19.7 MB, with these attacks. Not done.
@@ -855,6 +859,96 @@ file is 20,816.
 
 Not done: the figures on the real A3500 (its status block can be read the
 same way once the image runs there); playing a piece from the 16 kHz image.
+
+### 2026-11-09: a 16 kHz floor, on trial (machine tier; awaiting Stacey's listening)
+
+Stacey approved (through the coordinating session) trying a 16,000 Hz floor within the limit measured above
+(a 1 MiB margin). The recipe change is prepared but not committed until
+she has heard the A/B clips: `min_rate = 16000.0`, and `budget_bytes`
+replaced by `samples_budget_bytes = 15409032` (16,613,704 - 156,096 -
+1,048,576), which the build now enforces: `make_piano` stops when
+samples.bin, pads included, would be larger. Everything below was built
+from that working tree on the Mac, Amiberry 8.5.0, the `a3500` profile.
+
+#### The model (host tier)
+
+`make piano3500`: samples.bin 14,826,112 bytes (1,853,264 a layer), 582,920
+under the limit. No piece clamped or wrapped. full_volume needs no change:
+BWV 846, the loudest, peaks at -1.0 dBFS, the level full_volume was chosen
+for.
+
+| Piece | Peak, 11,025 Hz floor (dBFS) | Peak, 16 kHz floor (dBFS) |
+| --- | --- | --- |
+| Nocturne Op. 9 No. 2 | -3.5 | -3.5 |
+| BWV 846 | -1.1 | -1.0 |
+| BWV 802 | -9.4 | -9.4 |
+| Scarlatti K. 145 | -1.6 | -1.5 |
+| Haydn Hob. XVI:23 | -3.7 | -3.7 |
+| Mozart K. 333 | -6.3 | -6.2 |
+| Beethoven Op. 31 No. 3 | -1.5 | -1.5 |
+| Schubert D. 960 | -1.6 | -1.4 |
+| Nocturne in C# minor | -5.4 | -5.1 |
+| Debussy | -11.1 | -11.1 |
+
+Sixteen adjacent keys (77 to 92) at velocity 127, the stress case that no
+piece comes near, peak at 14.0 dBFS with 1,813 values clamped (13.8 and
+1,743 at 11,025 Hz).
+
+A few voice counts moved: the nocturne 509 steals and 860 restrikes (508
+and 861 before) and 12,568 blocks (12,566); BWV 846 939 restrikes (938);
+three other pieces by one to four. The likely cause, not checked, is that
+each sample's decay factor is measured from the resampled recording, so
+voices fall below the stop level a block earlier or later. The player
+matches the model either way (below).
+
+#### The emulator (machine tier)
+
+`make piano3500-image`: 19,611,648 bytes; the samples in memory 1.83 s
+after the player started, the screen up at 1.95 s. Fast RAM before
+samples.bin 16,614,520 free (largest block 16,613,680); with the screen up
+1,664,432 free (largest block 1,631,768).
+
+The image, Stacey's build, left alone on its screen in warp: the rotation
+played the nocturne and then BWV 846 to their ends (status block read over
+the control socket, `runs/exp006/machine/image-play-16k/play-image.json`):
+
+| Piece | Blocks | Mixing, mean | Mixing, worst block | Mixing and screen, worst block | Screen, mean | Overruns |
+| --- | --- | --- | --- | --- | --- | --- |
+| Nocturne Op. 9 No. 2 | 12,568 | 34.3% | 38.6% | 40.1% | 1.42% | 0 |
+| BWV 846 | 13,151 | 22.4% | 37.2% | 39.0% | 1.44% | 0 |
+
+Both under EXP-005's 50% bar. On 2026-11-08 the 11,025 Hz image's nocturne
+had a worst block of 38.3% with the screen up, so the larger samples cost
+about 2 points at most. Notes, steals and restrikes were the 16 kHz
+model's; nothing clamped; no queue was full.
+
+The test build (LOG=1, `amiga-env piano3500-run ... nocturne-op9-2
+bwv846`, no screen): both voice logs identical to the 16 kHz model's, byte
+for byte (2,915,792 and 3,051,048 bytes). The nocturne 39.7% mean and 44.5%
+worst block, BWV 846 24.8% and 43.2%, no overruns (39.5% and 44.3%, 24.8%
+and 43.1% at 11,025 Hz). Its fast RAM from the host folder: 16,626,752 free
+before samples.bin.
+
+#### The A/B clips (host tier)
+
+`runs/exp006/ab-16k/` (not committed): six pairs, 25 s each, cut from the
+model's renders (the WAVs `make piano3500` writes, the 14-bit output at
+44.1 kHz), `NN-piece-11k.wav` and `NN-piece-16k.wav`. Each passage is the
+25 s where the two renders differ most above 4 kHz; the 16 kHz clip is
+scaled to the 11 kHz clip's RMS (0.03 to 0.06 dB). `README.txt` lists them:
+Scarlatti 0:30 to 0:55, Mozart 4:32 to 4:57, Debussy 2:10 to 2:35, the
+Op. 9 No. 2 nocturne 2:53 to 3:18, BWV 846 3:32 to 3:57, Haydn 0:49 to 1:14.
+
+Measured, not heard: in every passage the 16 kHz render has less energy
+above 5.5 kHz than the 11,025 Hz one, 6 to 14 dB less from 5.5 to 8 kHz and
+4 to 5 dB less above 8 kHz. The likely cause, not proven, is that at
+11,025 Hz the linear interpolation leaves images of the content just under
+5.5 kHz above it, and at 16 kHz they move up while the samples hold real
+content to about 7.6 kHz. So the difference to listen for may be a cleaner
+top rather than a brighter one.
+
+Waiting for: Stacey's listening. If she approves, the recipe change lands
+as it is; if not, the floor stays at 11,025 Hz.
 
 ## What the 68030 player must match
 
