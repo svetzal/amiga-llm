@@ -970,6 +970,33 @@ lit (196 pixels); after F again, dark (`runs/exp006/machine/filter-16k/` and
 The test build at 16 kHz played Debussy with its voice log identical to the
 model's (21.1% mean, 38.1% worst block, no overruns).
 
+### 2026-11-10: the 16 kHz floor kept as a separate edition
+
+Stacey asked (through the coordinating session, 2026-11-10) for the 16 kHz
+build to be kept as a third edition beside the A500 floppy and the A3000
+edition at 11,025 Hz, which is on YouTube, and recorded as a video of its
+own. Her A/B listening (2026-11-09, `runs/exp006/ab-16k/`) is still
+pending; this is not a judgement on the sound.
+
+- `examples/piano3500/piano.toml`, the A3000 edition: the 11,025 Hz floor
+  as before. Its budget is now `samples_budget_bytes = 15409032`, the
+  limit measured on 2026-11-09, which the build enforces; the old
+  `budget_bytes` (12 MB, samples plus tables plus the largest score) is
+  gone.
+- `examples/piano3500-16k/piano.toml`, the 16 kHz edition: the same recipe
+  but `min_rate = 16000.0` and `out = "runs/exp006-16k"`. A test fails if
+  the two differ in anything else. Its video description template is
+  beside it.
+- Each recipe's image is `build/<its folder>/piano3500.hdf`:
+  `build/piano3500/` and `build/piano3500-16k/`. `make piano3500-16k`,
+  `piano3500-16k-image` and `piano3500-16k-video` build the edition.
+
+Both images rebuilt and booted headless (machine tier): the 11,025 Hz one
+with the screen up 1.48 s after the player started, 16,613,672 bytes in the
+largest free fast block before samples.bin and 5,517,744 free after; the
+16 kHz one at 1.95 s, 16,613,672 and 1,663,912. Both screens showed the
+filter light dark.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
