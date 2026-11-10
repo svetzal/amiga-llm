@@ -1424,3 +1424,17 @@ Chopin nocturnes take the most voices. That these are the stumble the
 listener hears is inferred, not tested. A test: trim every sample so its
 attack reaches half its peak at the same time, render a run both ways, and
 listen.
+
+### 2026-11-09: the filter off at the start (machine tier)
+
+Stacey asked for the piano to start with the audio filter off. The player
+still saves CIA-A PRA bit 1 first, then sets it: the filter off, the power
+LED dark, and the screen's filter light dark when the screen appears. F
+still switches it, and quitting puts it back as it was.
+
+Checked on the emulated A500 with the rebuilt `build/piano/piano.adf`: with
+the screen up, bit 1 was 1 and the light had no lit ($F42) pixels; after F,
+bit 1 was 0 and the light lit (196 pixels in the doubled screenshot); after
+F again, dark (`runs/exp004/filter-start/`, looked at). The test build
+(`piano-log.adf`) played Debussy with its voice log identical to the
+model's (15,041 ticks).

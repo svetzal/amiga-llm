@@ -950,6 +950,26 @@ top rather than a brighter one.
 Waiting for: Stacey's listening. If she approves, the recipe change lands
 as it is; if not, the floor stays at 11,025 Hz.
 
+### 2026-11-09: the filter off at the start (machine tier)
+
+Stacey asked for every version to start with the audio filter off. The
+player saves CIA-A PRA bit 1 as before, then sets it (the filter off, the
+power LED dark); the title already shows the light unlit, so it is dark from
+the first frame. F still switches it, and quitting puts it back.
+
+Checked headless on the emulated A3500, from both images: with the screen
+up bit 1 was 1 and no lit ($F42) pixels; after F bit 1 was 0 and the light
+lit (196 pixels); after F again, dark (`runs/exp006/machine/filter-16k/` and
+`filter-11k/`, looked at).
+
+| Image | Floor | Fast free before samples.bin (largest) | With the screen up (largest) |
+| --- | --- | --- | --- |
+| `build/piano3500/piano3500.hdf` | 16 kHz (the recipe on trial) | 16,614,512 (16,613,672) | 1,664,424 (1,631,760) |
+| `build/piano3500-11k/piano3500.hdf` | 11,025 Hz (the committed recipe) | 16,614,520 (16,613,672) | 5,517,744 (5,485,072) |
+
+The test build at 16 kHz played Debussy with its voice log identical to the
+model's (21.1% mean, 38.1% worst block, no overruns).
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
