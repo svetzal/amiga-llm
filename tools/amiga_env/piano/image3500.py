@@ -129,4 +129,16 @@ def boot(machine, image: Path, out: Path, timeout: float = 120.0) -> dict:
         "samples_loaded_s": round(status.loaded_at / hz, 2),
         "screen_up_s": round(status.screen_at / hz, 2),
         "screenshot": str(shot),
+        **fast_ram(status),
+    }
+
+
+def fast_ram(status: run3500.Status) -> dict:
+    """The player's fast RAM figures, in bytes: free in all and the largest free block,
+    just before samples.bin's AllocMem and with the screen up."""
+    return {
+        "fast_free_before": status.fast_free_before,
+        "fast_largest_before": status.fast_largest_before,
+        "fast_free_after": status.fast_free_after,
+        "fast_largest_after": status.fast_largest_after,
     }

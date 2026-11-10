@@ -39,8 +39,34 @@ class TestDefines:
 
 
 class TestStatus:
+    def test_the_players_status_offsets_are_the_hosts_fields_in_order(self):
+        offsets = {
+            name: int(value)
+            for name, value in re.findall(
+                r"^ST_(\w+)\s+equ\s+(\d+)", PLAYER.read_text(), re.MULTILINE
+            )
+        }
+        size = offsets.pop("SIZE")
+        in_order = [name.lower().replace("_", "") for name in sorted(offsets, key=offsets.get)]
+
+        assert size == run3500.STATUS_BYTES
+        assert sorted(offsets.values()) == list(range(0, size, 4))
+        assert in_order == [field.replace("_", "") for field in run3500.STATUS_FIELDS]
+
+    def test_the_fast_ram_figures_are_the_last_four_longs(self):
+        longs = [0] * len(run3500.STATUS_FIELDS)
+        longs[-4:] = [15_000_000, 14_900_000, 3_000_000, 2_900_000]
+
+        status = run3500.parse_status(struct.pack(f">{len(longs)}L", *longs))
+
+        assert status.fast_largest_before == 14_900_000
+        assert status.fast_free_after == 3_000_000
+
     def test_the_status_file_reads_as_its_fields(self):
-        data = struct.pack(">48L", 0x50333550, 2, 0, 1, 100, 300000, 5000, 0, *range(40))
+        count = len(run3500.STATUS_FIELDS)
+        data = struct.pack(
+            f">{count}L", 0x50333550, 2, 0, 1, 100, 300000, 5000, 0, *range(count - 8)
+        )
 
         status = run3500.parse_status(data)
 
@@ -48,7 +74,11 @@ class TestStatus:
 
     def test_the_cpu_share_is_e_clock_ticks_over_a_blocks_length(self):
         status = run3500.parse_status(
-            struct.pack(">48L", 0, 2, 0, 1, 10, 10 * 6553, 13107, 1, *[0] * 40)
+            struct.pack(
+                f">{len(run3500.STATUS_FIELDS)}L",
+                *(0, 2, 0, 1, 10, 10 * 6553, 13107, 1),
+                *[0] * (len(run3500.STATUS_FIELDS) - 8),
+            )
         )
 
         cpu = run3500.cpu_report(status)

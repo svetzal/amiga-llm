@@ -433,6 +433,11 @@ def _piano3500_image(args: argparse.Namespace) -> None:
             f"after the player started ({found['wall_s_to_screen']} s wall); "
             f"{found['screenshot']}"
         )
+        print(
+            f"fast RAM  before samples.bin: {found['fast_free_before']:,} free, "
+            f"largest block {found['fast_largest_before']:,}; with the screen up: "
+            f"{found['fast_free_after']:,} free, largest block {found['fast_largest_after']:,}"
+        )
 
 
 def _piano3500_run(args: argparse.Namespace) -> int:

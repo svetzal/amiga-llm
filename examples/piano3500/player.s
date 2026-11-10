@@ -114,6 +114,7 @@ MEMF_PUBLIC     equ 1
 MEMF_CHIP       equ 2
 MEMF_FAST       equ 4
 MEMF_CLEAR      equ $10000
+MEMF_LARGEST    equ $20000
 MODE_OLDFILE    equ 1005
 MODE_NEWFILE    equ 1006
 OFFSET_BEGINNING equ -1
@@ -253,7 +254,14 @@ ST_WORST_TOTAL_E equ 176        ; the most E-clock ticks of mixing and screen wo
 ST_TASK_E       equ 180         ; the screen's E-clock ticks while this piece played
 ST_UNITS        equ 184         ; drawing units drawn
 ST_UNIT_MAX_E   equ 188         ; the most for one
-ST_SIZE         equ 192
+; Fast RAM free (AvailMem), in bytes: just before samples.bin's AllocMem, and
+; when every allocation for the screen is done (with no screen, when the
+; piece has begun).
+ST_FAST_FREE_BEFORE equ 192     ; in all
+ST_FAST_LARGEST_BEFORE equ 196  ; the largest block, which samples.bin must fit
+ST_FAST_FREE_AFTER equ 200
+ST_FAST_LARGEST_AFTER equ 204
+ST_SIZE         equ 208
 
 ERR_DOS         equ 1
 ERR_ARGS        equ 2
@@ -373,6 +381,8 @@ T1              rs.l 2
 W0              rs.l 2          ; the screen's stopwatch
 W1              rs.l 2
 W_MIX           rs.l 1          ; ST_TOTAL_E when the stopwatch started
+LOAD_FREE       rs.l 1          ; fast RAM free just before load_file's AllocMem
+LOAD_LARGEST    rs.l 1          ; and its largest block
 RUNNO           rs.l 1
 NAMEP           rs.l 1
 VOICE_ARRAY     rs.b VOICES*VO_SIZE
@@ -466,6 +476,8 @@ start:
         lea     samname(pc),a0
         moveq   #0,d2
         bsr     load_file
+        move.l  LOAD_FREE(a5),STATUS+ST_FAST_FREE_BEFORE.w
+        move.l  LOAD_LARGEST(a5),STATUS+ST_FAST_LARGEST_BEFORE.w
         moveq   #ERR_SAMPLES,d7
         tst.l   d0
         beq     failed
@@ -547,6 +559,7 @@ start:
         move.l  d0,SCORE(a5)
         bsr     begin_piece
         bne     failed
+        bsr     fast_after
 .wait:  move.l  EXECBASE(a5),a6
         move.l  SIGMASK(a5),d0
         jsr     _LVOWait(a6)
@@ -842,6 +855,9 @@ load_file:
         jsr     _LVOSeek(a6)
         move.l  d0,d5                   ; the end, from the first Seek
         ble.s   .close
+        bsr     fast_free
+        move.l  d0,LOAD_FREE(a5)
+        move.l  d1,LOAD_LARGEST(a5)
         move.l  EXECBASE(a5),a6
         move.l  d5,d0
         add.l   d7,d0
@@ -873,6 +889,28 @@ load_file:
 .out:   move.l  d6,d0
         move.l  d5,d1
         movem.l (sp)+,d2-d7/a6
+        rts
+
+; fast_free: d0 = fast RAM free in all, d1 = its largest free block.
+fast_free:
+        movem.l d2/a0-a1/a6,-(sp)
+        move.l  ExecBase.w,a6
+        move.l  #MEMF_FAST|MEMF_LARGEST,d1
+        jsr     _LVOAvailMem(a6)
+        move.l  d0,d2
+        move.l  #MEMF_FAST,d1
+        jsr     _LVOAvailMem(a6)
+        move.l  d2,d1
+        movem.l (sp)+,d2/a0-a1/a6
+        rts
+
+; fast_after: fast_free into the status block, once the allocations are done.
+fast_after:
+        movem.l d0-d1,-(sp)
+        bsr     fast_free
+        move.l  d0,STATUS+ST_FAST_FREE_AFTER.w
+        move.l  d1,STATUS+ST_FAST_LARGEST_AFTER.w
+        movem.l (sp)+,d0-d1
         rts
 
 ; tables: check piano.tab and find its sections. Z set when good.
@@ -2179,6 +2217,7 @@ make_rows:
 ; choose: take choices until Esc or Q (EXP-004's rules). While a piece
 ; plays, one scope unit is drawn after each vertical blank.
 choose:
+        bsr     fast_after              ; before the state, which the host waits for
         move.l  ExecBase.w,a6
         move.l  #3,STATUS+ST_STATE.w
         move.l  STATUS+ST_VBLANKS.w,STATUS+ST_SCREEN_AT.w

@@ -88,6 +88,10 @@ STATUS_FIELDS = (
     "task_e",
     "units",
     "unit_max_e",
+    "fast_free_before",
+    "fast_largest_before",
+    "fast_free_after",
+    "fast_largest_after",
 )
 STATUS_BYTES = 4 * len(STATUS_FIELDS)
 BLOCK_E = mixer.BLOCK * mixer.MIX_PERIOD / 5  # E-clock ticks a block lasts: Paula's clock / 5
@@ -142,6 +146,10 @@ class Status(NamedTuple):
     task_e: int
     units: int
     unit_max_e: int
+    fast_free_before: int  # fast RAM free just before samples.bin's AllocMem
+    fast_largest_before: int  # its largest block, which samples.bin must fit in
+    fast_free_after: int  # once every allocation for the screen is done
+    fast_largest_after: int
 
 
 def defines(log: bool = True) -> dict[str, int]:

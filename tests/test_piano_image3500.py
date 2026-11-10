@@ -35,3 +35,23 @@ def test_the_image_goes_on_the_a3000s_own_scsi_controller():
 def test_a_path_with_a_comma_is_refused():
     with pytest.raises(SystemExit):
         image3500.hardfile_setting(image3500.Path("/a,b/piano.hdf"))
+
+
+def test_the_boot_reports_the_players_fast_ram_figures():
+    from amiga_env.piano import run3500
+
+    values = dict.fromkeys(run3500.STATUS_FIELDS, 0) | {
+        "fast_free_before": 15_100_000,
+        "fast_largest_before": 15_000_000,
+        "fast_free_after": 3_900_000,
+        "fast_largest_after": 3_800_000,
+    }
+
+    figures = image3500.fast_ram(run3500.Status(**values))
+
+    assert figures == {
+        "fast_free_before": 15_100_000,
+        "fast_largest_before": 15_000_000,
+        "fast_free_after": 3_900_000,
+        "fast_largest_after": 3_800_000,
+    }

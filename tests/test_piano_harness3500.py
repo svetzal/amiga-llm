@@ -1,5 +1,3 @@
-import struct
-
 import numpy as np
 import pytest
 from amiga_env.piano import harness3500, player3500, run3500
@@ -96,11 +94,6 @@ class TestIndex:
     def test_a_name_with_a_space_is_refused(self):
         with pytest.raises(SystemExit):
             run3500.index_text([("two words", "Title")])
-
-
-def test_the_status_file_holds_every_field_the_player_writes():
-    assert run3500.STATUS_BYTES == 192
-    assert len(struct.pack(f">{len(run3500.STATUS_FIELDS)}L", *[0] * 48)) == 192
 
 
 class TestScopeColumns:
