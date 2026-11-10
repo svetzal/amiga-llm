@@ -24,7 +24,8 @@
 ;                    while another plays. Left alone, it plays the pieces
 ;                    in turn (choose, below). Space stops; F switches the
 ;                    audio filter (and the power LED, and the screen's
-;                    filter light); Esc or Q quits.
+;                    filter light), which is off at the start; Esc or Q
+;                    quits, putting the filter back as it was.
 ;   piano 3 1        plays pieces 3 and 1 (their keys), then ends; no screen
 ;
 ; The screen is an Intuition custom screen with a borderless backdrop
@@ -336,6 +337,7 @@ start:
         move.b  ciaapra,d0              ; the filter as it was, for the end
         and.b   #1<<LED_BIT,d0
         move.b  d0,led_start
+        bset    #LED_BIT,ciaapra        ; then off: the piano starts unfiltered
 
         lea     dosname(pc),a1
         moveq   #0,d0

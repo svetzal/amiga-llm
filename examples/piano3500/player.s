@@ -435,6 +435,8 @@ start:
         and.b   #1<<LED_BIT,d0
         move.b  d0,led_start
         move.w  #1,led_known
+        bset    #LED_BIT,ciaapra        ; then off: the piano starts unfiltered (F
+                                        ; switches it; the end puts it back)
 
         bsr     parse_args
         bne     failed
