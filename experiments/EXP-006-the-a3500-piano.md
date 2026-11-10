@@ -765,6 +765,97 @@ the draft, with her own account of the design; `runs/video3500/youtube-descripti
 is a copy of that text, with the Schubert chapter corrected to "D. 960, III"
 (EXP-004, 2026-11-08). The picture still shows "D. 962" until the next build.
 
+### 2026-11-09: how much fast RAM the player gets (machine tier)
+
+The 12 MB budget (`budget_bytes`) had no measured basis. The player now
+records fast RAM in its status block (`ST_FAST_*`, offsets 192 to 204):
+`AvailMem(MEMF_FAST)` and `AvailMem(MEMF_FAST|MEMF_LARGEST)` just before
+samples.bin's `AllocMem` (inside `load_file`, after the file is open), and
+the same two when the screen is up (before the state the host waits for)
+or, with no screen, when the piece has begun. `make piano3500-image`
+prints them. samples.bin is one `AllocMem`, so the figure that limits it
+is the largest free block, not the total.
+
+Run on the Mac, Amiberry 8.5.0, the `a3500` profile: Kickstart 2.04
+37.175 (A3000 ROM, the version Stacey's A3500 has in ROM), 2 MB chip RAM,
+16 MB of fast RAM in one block ("RAMSEY memory (low)" at $07000000 in
+Amiberry's memory map, nothing else), the image on `scsi0_a3000`. The
+image has no Workbench, so the Workbench version does not matter here.
+
+| Image | Fast free before samples.bin | Largest block | Fast free with the screen up | Largest block |
+| --- | --- | --- | --- | --- |
+| Shipped (11,025 Hz floor) | 16,614,552 | 16,613,704 | 5,517,776 | 5,485,104 |
+| 16,000 Hz floor (scratch build) | 16,614,544 | 16,613,704 | 1,663,944 | 1,631,216 |
+
+Before samples.bin, the system, the player (code 6,800, data 112, BSS
+14,988) and piano.tab (20,816) have taken 162,664 bytes of the 16,777,216.
+The 16 kHz image booted to the piano screen (looked at the screenshot).
+The test build from a host folder (`piano3500-run`, LOG=1, Debussy) had
+16,626,768 free and 16,625,936 in the largest block before samples.bin,
+12 KB more than the image, and its voice log was still identical to the
+model's.
+
+What the player allocates, in order (the screen; Stacey's build):
+
+| Allocation | Memory | Bytes |
+| --- | --- | --- |
+| piano.tab (before the figure) | fast | 20,816 |
+| samples.bin, one block | fast | 10,972,800 |
+| Paula's buffers, `8*BLOCK` | chip | 4,096 |
+| The log, `2*LOG_HALF` (test build only) | fast | 29,696 |
+| scores/index, plus a 0 | fast | 407 |
+| Ten scores, one block each | fast | 113,609 (3,031 to 19,058) |
+| title.ilbm, freed when the screen is up | fast | 32,116 |
+| The floor band's copy, `BAND_BYTES*DEPTH` | any (fast first) | 7,200 |
+| The screen's bitplanes, 320x200x4 | chip | 32,000 |
+| Intuition's screen and window, DOS handles | any | about 2,700 (the rest of the measured drop) |
+| The gold line's user copper list, while it plays | any and chip | tens of bytes, replaced at each change |
+
+After samples.bin, the screen keeps 123,976 bytes of fast RAM (the drop
+from before to after, less samples.bin), and while it opens it also holds
+title.ilbm, 32,120 with exec's rounding: 156,096 at the peak. So the
+largest samples.bin with nothing to spare is 16,613,704 - 156,096 =
+16,457,608 bytes. Chip RAM is not a limit (36 KB of 2 MB).
+
+A margin is needed because the target is any A3000-class 68030 with
+16 MB, not this emulator:
+
+- an A3000 with SuperKickstart holds Kickstart in the top 512 KB of its
+  fast RAM (not checked here); the A3500 has 2.04 in ROM;
+- each further partition the BlueSCSI card mounts costs its handler and
+  buffers;
+- more pieces cost their scores (the index takes up to 33);
+- other machines (an A4000 with a 68030, Kickstart 3.x) were not measured.
+
+With a 1 MiB margin, samples.bin can be up to 15,409,032 bytes; with
+128 KiB (Stacey's A3500 only, one partition), 16,326,536.
+
+samples.bin by rate floor (8 layers, 30 roots, the same attacks, pads
+included; `2*4*pitch` within the floor and 27,965 Hz), made with
+`build3500.make_piano` and `m68k3500.samples_bytes`, the shipped recipe
+unchanged. piano.tab is 20,816 bytes at every floor. "Total" is the
+budget's sum: samples, tables and the largest score (19,058).
+
+| Floor (Hz) | samples.bin | Total | Spare with a 1 MiB margin | Fits |
+| --- | --- | --- | --- | --- |
+| 11,025 (shipped) | 10,972,800 | 11,012,674 | 4,436,232 | yes |
+| 12,000 | 11,708,352 | 11,748,226 | 3,700,680 | yes |
+| 13,000 | 12,479,008 | 12,518,882 | 2,930,024 | yes |
+| 14,000 | 13,249,632 | 13,289,506 | 2,159,400 | yes |
+| 15,000 | 14,037,152 | 14,077,026 | 1,371,880 | yes |
+| 16,000 | 14,826,112 | 14,865,986 | 582,920 | yes (booted) |
+| 22,050 | 19,725,120 | 19,764,994 | -4,316,088 | no: 3,267,512 over even with no margin |
+
+From 14 kHz on the total is over today's 12 MB budget (13 kHz is 64,030
+bytes under it), so raising the floor that far means raising
+`budget_bytes` too. Neither is changed
+here; that is Stacey's choice. The memory table of 2026-11-07 gives the
+tables as 19,696 bytes, the build's sum of their contents; the piano.tab
+file is 20,816.
+
+Not done: the figures on the real A3500 (its status block can be read the
+same way once the image runs there); playing a piece from the 16 kHz image.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
