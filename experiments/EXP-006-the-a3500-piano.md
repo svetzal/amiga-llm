@@ -1025,8 +1025,9 @@ to 29.3 ms here), the ten first notes bound the core's offset to +12.6 to
 
 Chapters (rounded down, each at or before its gold line): 0:00 boot and
 title screen, then 0:17, 4:22, 8:38, 11:06, 14:48, 18:32, 23:50, 29:59,
-33:59 and 38:17. Three are a second later than the A3000 video's; the
-pieces before them end a block or two later at 16 kHz (see 2026-11-09).
+33:59 and 38:17. Every gold line is about 0.5 s later than in the A3000
+video (the first at 17.72 s against 17.25 s), because the larger samples
+take that much longer to load; three chapters round down a second later.
 `runs/video3500-16k/youtube-description.generated.txt` is the draft from
 `examples/piano3500-16k/video-description.txt`: it says this is the 16 kHz
 edition (14.8 MB of samples, everything else as the A3000 edition), names
