@@ -997,6 +997,45 @@ largest free fast block before samples.bin and 5,517,744 free after; the
 16 kHz one at 1.95 s, 16,613,672 and 1,663,912. Both screens showed the
 filter light dark.
 
+### 2026-11-10: a video of the 16 kHz edition playing by itself (machine tier)
+
+Stacey asked for the 16 kHz edition to be recorded like the A3000 one.
+`amiga-env piano3500-video examples/piano3500-16k/piano.toml --image
+build/piano3500-16k/piano3500.hdf --out runs/video3500-16k` (`make
+piano3500-16k-video`) recorded the image built from `main` just before
+(SHA-1 `bec93d4a...`), with the same settings as the 2026-11-08 video.
+The core's configuration showed no differences from the app's. Nothing was
+sent to the machine.
+
+| Check | Found |
+| --- | --- |
+| Recording | 152,772 frames at 59.826 a second (NTSC), 42:33.60, boot to 5 s after piece 10 ended; 42:33.9 wall |
+| Frames | 756x486, every one kept, none repeated; frames 0 to 24 were 756x484 and put on the canvas with 2 black rows |
+| Sound | 122,570,761 samples at 48 kHz, 802.312 a frame, 2,100 short of the frame count; no frame without sound after the first |
+| Capture | 25.1 GB lossless (FFV1), 0.49 GB WAV |
+| 4K master (`runs/video3500-16k/piano3500-playthrough-4k.mp4`) | 3840x2160 H.264, BT.709, AAC 48 kHz stereo, 2,553.6 s; 0.80 GB; made in 22.6 min |
+| Gold lines | all ten found in the master's own frames, each the frame after the player's own stamp, the same in the capture |
+| Levels | the whole run RMS -31.5 dBFS, peak -7.2; the pieces from -41.4 (Debussy) to -28.9 RMS (Schubert), peaks -17.2 to -7.2 |
+| Digital silence of 20 ms or more within pieces | 23; at every one the 16 kHz model's render of that piece (`runs/exp006-16k/`) is at most 16 of 32,768 (-66 dBFS) over the same time: rests, not dropouts |
+| Filter | the light dark in every frame looked at; nobody pressed F |
+
+Sound against picture, as on 2026-11-08: after each note's own delay (15.4
+to 29.3 ms here), the ten first notes bound the core's offset to +12.6 to
++15.4 ms, the sound late by under a frame. The master is not shifted.
+
+Chapters (rounded down, each at or before its gold line): 0:00 boot and
+title screen, then 0:17, 4:22, 8:38, 11:06, 14:48, 18:32, 23:50, 29:59,
+33:59 and 38:17. Three are a second later than the A3000 video's; the
+pieces before them end a block or two later at 16 kHz (see 2026-11-09).
+`runs/video3500-16k/youtube-description.generated.txt` is the draft from
+`examples/piano3500-16k/video-description.txt`: it says this is the 16 kHz
+edition (14.8 MB of samples, everything else as the A3000 edition), names
+the Schubert "D. 960, III" and says the filter starts off. I looked at
+master frames at 0:30, 10:00 and 40:50 (the right line gold, the scopes
+tracing, the light dark) and at a crop at 25:00 (nearest-neighbour pixels).
+Not uploaded. The capture, the WAV and the image copy are kept until
+Stacey says the video is up.
+
 ## What the 68030 player must match
 
 The voice log, byte for byte (`player3500.py`'s docstring has the format):
